@@ -1,15 +1,21 @@
 import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Flame, Plus, Repeat, Trash2 } from "lucide-react";
 import { addDays, formatDay, type ISODate } from "../domain/dates";
 import { useStore } from "../state/store";
-import { Button, Card, Empty, Input, SectionTitle } from "./ui";
+import { Button, Chip, Empty, Input, Panel, SectionTitle } from "./ui";
 
-export function HabitsView({ date, onDateChange }: { date: ISODate; onDateChange: (d: ISODate) => void }) {
+export function HabitsView({
+  date,
+  onDateChange,
+}: {
+  date: ISODate;
+  onDateChange: (date: ISODate) => void;
+}) {
   const { data, actions } = useStore();
   const [title, setTitle] = useState("");
   const [cadence, setCadence] = useState<"daily" | "weekly">("daily");
 
-  const window = Array.from({ length: 7 }, (_, index) => addDays(date, index - 6));
+  const week = Array.from({ length: 7 }, (_, index) => addDays(date, index - 6));
 
   function addHabit() {
     if (!title.trim()) return;
@@ -27,90 +33,134 @@ export function HabitsView({ date, onDateChange }: { date: ISODate; onDateChange
     return count;
   }
 
+  const completedToday = data.habits.filter((habit) =>
+    habit.completedDates.includes(date),
+  ).length;
+
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <Card>
-        <SectionTitle>Habits</SectionTitle>
+    <div className="mx-auto max-w-4xl space-y-5">
+      <SectionTitle
+        eyebrow="Consistency"
+        action={
+          <Chip tone="mint">
+            {completedToday}/{data.habits.length} today
+          </Chip>
+        }
+      >
+        Habits
+      </SectionTitle>
+
+      <Panel className="!p-4">
         <div className="flex flex-wrap items-center gap-2">
-          <Input
-            value={title}
-            placeholder="New habit (e.g. Read 20 pages)"
-            onChange={(event) => setTitle(event.target.value)}
-            onKeyDown={(event) => event.key === "Enter" && addHabit()}
-            className="min-w-56 flex-1"
-          />
+          <div className="relative min-w-52 flex-1">
+            <Plus
+              size={15}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint"
+            />
+            <Input
+              value={title}
+              placeholder="New habit — e.g. Read 20 pages"
+              onChange={(event) => setTitle(event.target.value)}
+              onKeyDown={(event) => event.key === "Enter" && addHabit()}
+              className="pl-9"
+            />
+          </div>
           <select
             value={cadence}
             onChange={(event) => setCadence(event.target.value as "daily" | "weekly")}
-            className="rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-sm text-slate-300 outline-none"
+            className="inset-field bg-surface-2 px-3 py-2 text-xs text-muted focus:outline-none"
           >
             <option value="daily">Daily</option>
             <option value="weekly">Weekly</option>
           </select>
-          <Button onClick={addHabit}>
-            <Plus size={16} /> Add habit
+          <Button variant="primary" onClick={addHabit}>
+            <Plus size={15} /> Add habit
           </Button>
         </div>
-      </Card>
+      </Panel>
 
-      <Card>
-        <div className="mb-5 flex items-center justify-between">
-          <h3 className="text-sm font-medium text-slate-300">Week ending {formatDay(date)}</h3>
-          <input
-            type="date"
-            value={date}
-            onChange={(event) => event.target.value && onDateChange(event.target.value)}
-            className="rounded-lg border border-white/10 bg-slate-800 px-2 py-1 text-xs text-slate-300 outline-none"
-          />
+      <div className="mb-3 flex items-center justify-between">
+        <div className="flex items-center gap-2 text-[11px] text-faint">
+          <Repeat size={13} className="text-mint" /> Rolling 7 days ending{" "}
+          {formatDay(date)}
         </div>
+        <input
+          type="date"
+          value={date}
+          onChange={(event) => event.target.value && onDateChange(event.target.value)}
+          className="inset-field bg-surface-2 px-2.5 py-1.5 text-[11px] text-muted focus:outline-none"
+        />
+      </div>
 
-        {data.habits.length === 0 ? (
-          <Empty>No habits yet. Add one above to start tracking.</Empty>
-        ) : (
-          <div className="space-y-3">
-            {data.habits.map((habit) => (
-              <div
-                key={habit.id}
-                className="flex flex-wrap items-center gap-4 rounded-xl border border-white/10 bg-white/[0.02] p-3"
-              >
-                <div className="min-w-36 flex-1">
-                  <div className="text-sm font-medium text-slate-200">{habit.title}</div>
-                  <div className="text-xs text-slate-500">
-                    {habit.cadence} · {streak(habit.completedDates)} day streak
+      {data.habits.length === 0 ? (
+        <Panel>
+          <Empty
+            icon={<Repeat size={26} />}
+            title="No habits yet"
+            hint="Add one above and start checking off days."
+          />
+        </Panel>
+      ) : (
+        <div className="space-y-3">
+          {data.habits.map((habit) => {
+            const currentStreak = streak(habit.completedDates);
+            const weekCount = week.filter((day) =>
+              habit.completedDates.includes(day),
+            ).length;
+            return (
+              <Panel key={habit.id} className="group !p-4">
+                <div className="flex flex-wrap items-center gap-4">
+                  <div className="min-w-44 flex-1">
+                    <div className="text-sm font-medium text-ink">{habit.title}</div>
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <Chip tone="slate">{habit.cadence}</Chip>
+                      {currentStreak > 0 && (
+                        <Chip tone="amber">
+                          <Flame size={10} /> {currentStreak} day streak
+                        </Chip>
+                      )}
+                      <span className="text-[10px] text-faint">{weekCount}/7 this week</span>
+                    </div>
                   </div>
+
+                  <div className="flex items-center gap-1.5">
+                    {week.map((day) => {
+                      const done = habit.completedDates.includes(day);
+                      return (
+                        <button
+                          key={day}
+                          onClick={() => actions.toggleHabitDate(habit.id, day)}
+                          title={formatDay(day)}
+                          className={`flex h-10 w-10 flex-col items-center justify-center rounded-xl border transition-all ${
+                            done
+                              ? "border-mint/40 bg-mint/15 text-mint shadow-[0_0_18px_-10px_var(--color-mint)]"
+                              : "border-line bg-white/[0.02] text-faint hover:border-line-2 hover:text-muted"
+                          }`}
+                        >
+                          <span className="text-[9px] uppercase opacity-70">
+                            {formatDay(day).split(" ")[0]}
+                          </span>
+                          <span className="text-xs font-semibold tabular-nums">
+                            {Number(day.slice(-2))}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <button
+                    onClick={() => actions.deleteHabit(habit.id)}
+                    className="text-faint opacity-0 transition-opacity hover:text-rose group-hover:opacity-100"
+                    title="Delete habit"
+                  >
+                    <Trash2 size={15} />
+                  </button>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  {window.map((day) => {
-                    const done = habit.completedDates.includes(day);
-                    return (
-                      <button
-                        key={day}
-                        onClick={() => actions.toggleHabitDate(habit.id, day)}
-                        title={formatDay(day)}
-                        className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs ring-1 ring-inset transition-colors ${
-                          done
-                            ? "bg-emerald-500/20 text-emerald-300 ring-emerald-400/30"
-                            : "bg-white/5 text-slate-500 ring-white/10 hover:text-slate-300"
-                        }`}
-                      >
-                        {Number(day.slice(-2))}
-                      </button>
-                    );
-                  })}
-                </div>
-                <Button
-                  variant="ghost"
-                  onClick={() => actions.deleteHabit(habit.id)}
-                  title="Delete habit"
-                  className="px-2 text-slate-500 hover:text-rose-300"
-                >
-                  <Trash2 size={15} />
-                </Button>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
+              </Panel>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

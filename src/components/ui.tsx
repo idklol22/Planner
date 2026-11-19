@@ -1,29 +1,26 @@
-import type {
-  ButtonHTMLAttributes,
-  InputHTMLAttributes,
-  ReactNode,
-} from "react";
+import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from "react";
 
-type Variant = "default" | "ghost" | "outline" | "danger";
+type Variant = "primary" | "secondary" | "ghost" | "danger";
 
-const buttonVariants: Record<Variant, string> = {
-  default: "bg-indigo-500 text-white hover:bg-indigo-400",
-  ghost: "text-slate-300 hover:bg-white/10",
-  outline: "border border-white/15 text-slate-200 hover:bg-white/5",
-  danger: "bg-rose-500/15 text-rose-300 hover:bg-rose-500/25",
+const buttonStyles: Record<Variant, string> = {
+  primary:
+    "primary-button text-white shadow-lg shadow-accent/20 hover:brightness-110",
+  secondary:
+    "border border-line-2 bg-white/[0.035] text-slate-200 hover:border-white/20 hover:bg-white/[0.07]",
+  ghost: "text-muted hover:bg-white/[0.06] hover:text-ink",
+  danger:
+    "border border-rose/20 bg-rose/10 text-rose hover:bg-rose/20",
 };
 
+const base =
+  "inline-flex items-center justify-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition-all duration-150 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60";
+
 export function Button({
-  variant = "default",
+  variant = "secondary",
   className = "",
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant }) {
-  return (
-    <button
-      className={`inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${buttonVariants[variant]} ${className}`}
-      {...props}
-    />
-  );
+  return <button className={`${base} ${buttonStyles[variant]} ${className}`} {...props} />;
 }
 
 export function IconButton({
@@ -32,7 +29,7 @@ export function IconButton({
 }: ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button
-      className={`inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white/10 hover:text-slate-100 disabled:opacity-40 ${className}`}
+      className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-faint transition-colors hover:bg-white/[0.07] hover:text-ink disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 ${className}`}
       {...props}
     />
   );
@@ -41,20 +38,20 @@ export function IconButton({
 export function Input({ className = "", ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
-      className={`w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-indigo-400/60 ${className}`}
+      className={`inset-field w-full bg-transparent px-3 py-2 text-sm text-ink placeholder:text-faint focus:outline-none ${className}`}
       {...props}
     />
   );
 }
 
-export function Card({ className = "", children }: { className?: string; children: ReactNode }) {
-  return (
-    <section
-      className={`rounded-2xl border border-white/10 bg-slate-900/60 p-5 shadow-xl shadow-black/20 ${className}`}
-    >
-      {children}
-    </section>
-  );
+export function Panel({
+  className = "",
+  children,
+}: {
+  className?: string;
+  children: ReactNode;
+}) {
+  return <section className={`panel p-5 ${className}`}>{children}</section>;
 }
 
 export function Chip({
@@ -63,38 +60,142 @@ export function Chip({
   className = "",
 }: {
   children: ReactNode;
-  tone?: "slate" | "indigo" | "emerald" | "amber" | "rose";
+  tone?: "slate" | "accent" | "amber" | "mint" | "rose";
   className?: string;
 }) {
   const tones = {
-    slate: "bg-white/5 text-slate-300 ring-white/10",
-    indigo: "bg-indigo-500/15 text-indigo-300 ring-indigo-400/20",
-    emerald: "bg-emerald-500/15 text-emerald-300 ring-emerald-400/20",
-    amber: "bg-amber-500/15 text-amber-300 ring-amber-400/20",
-    rose: "bg-rose-500/15 text-rose-300 ring-rose-400/20",
+    slate: "bg-white/[0.05] text-muted ring-white/10",
+    accent: "bg-accent/15 text-[#bcb2ff] ring-accent/25",
+    amber: "bg-amber/15 text-amber ring-amber/25",
+    mint: "bg-mint/15 text-mint ring-mint/25",
+    rose: "bg-rose/15 text-rose ring-rose/25",
   };
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${tones[tone]} ${className}`}
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${tones[tone]} ${className}`}
     >
       {children}
     </span>
   );
 }
 
-export function SectionTitle({ children, action }: { children: ReactNode; action?: ReactNode }) {
+export function SectionTitle({
+  eyebrow,
+  children,
+  action,
+}: {
+  eyebrow?: string;
+  children: ReactNode;
+  action?: ReactNode;
+}) {
   return (
-    <div className="mb-4 flex items-center justify-between gap-3">
-      <h2 className="text-lg font-semibold tracking-tight text-slate-100">{children}</h2>
+    <div className="mb-5 flex items-end justify-between gap-3">
+      <div>
+        {eyebrow && (
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-accent">
+            {eyebrow}
+          </div>
+        )}
+        <h2 className="text-xl font-semibold tracking-tight text-ink">{children}</h2>
+      </div>
       {action}
     </div>
   );
 }
 
-export function Empty({ children }: { children: ReactNode }) {
+export function Empty({
+  icon,
+  title,
+  hint,
+}: {
+  icon?: ReactNode;
+  title: string;
+  hint?: string;
+}) {
   return (
-    <div className="rounded-xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-slate-500">
-      {children}
+    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-white/[0.09] px-4 py-9 text-center">
+      {icon && <div className="mb-3 text-faint">{icon}</div>}
+      <div className="text-sm font-medium text-muted">{title}</div>
+      {hint && <div className="mt-1 text-xs text-faint">{hint}</div>}
+    </div>
+  );
+}
+
+export function ProgressRing({
+  value,
+  max,
+  size = 92,
+  stroke = 8,
+  color = "var(--color-accent)",
+  children,
+}: {
+  value: number;
+  max: number;
+  size?: number;
+  stroke?: number;
+  color?: string;
+  children?: ReactNode;
+}) {
+  const ratio = Math.max(0, Math.min(1, max > 0 ? value / max : 0));
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90">
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke="rgba(255,255,255,0.08)"
+          strokeWidth={stroke}
+          fill="none"
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke={color}
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          fill="none"
+          strokeDasharray={circumference}
+          strokeDashoffset={circumference * (1 - ratio)}
+          style={{ transition: "stroke-dashoffset 0.5s cubic-bezier(0.2,0.7,0.2,1)" }}
+        />
+      </svg>
+      {children && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: ReadonlyArray<{ value: T; label: string }>;
+  value: T;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div className="inline-flex rounded-lg border border-line bg-black/20 p-0.5">
+      {options.map((option) => (
+        <button
+          key={option.value}
+          onClick={() => onChange(option.value)}
+          className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
+            value === option.value
+              ? "bg-white/10 text-ink shadow-sm"
+              : "text-faint hover:text-muted"
+          }`}
+        >
+          {option.label}
+        </button>
+      ))}
     </div>
   );
 }

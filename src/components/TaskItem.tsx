@@ -3,6 +3,7 @@ import {
   ArrowDown,
   ArrowUp,
   FileText,
+  Link2,
   Plus,
   Send,
   Trash2,
@@ -10,7 +11,7 @@ import {
 } from "lucide-react";
 import type { Task } from "../domain/model";
 import { useStore } from "../state/store";
-import { Chip, IconButton, Input } from "./ui";
+import { Chip, IconButton } from "./ui";
 
 export function TaskItem({
   task,
@@ -25,15 +26,15 @@ export function TaskItem({
   const [addingTag, setAddingTag] = useState(false);
   const [tagValue, setTagValue] = useState("");
 
-  const status = task.note?.handoff;
+  const status = task.note?.handoff.status;
   const subjects = data.settings.learnharnessSubjects;
 
   return (
     <div
-      className={`group rounded-xl border px-3 py-2.5 transition-colors ${
+      className={`group relative rounded-xl border px-3 py-2.5 transition-all duration-200 ${
         selected
-          ? "border-indigo-400/50 bg-indigo-500/10"
-          : "border-white/10 bg-white/[0.03] hover:border-white/20"
+          ? "border-accent/50 bg-accent/[0.09] shadow-[0_0_0_1px_rgba(139,124,255,0.15)]"
+          : "border-line bg-white/[0.018] hover:border-line-2 hover:bg-white/[0.035]"
       }`}
     >
       <div className="flex items-start gap-2.5">
@@ -41,7 +42,7 @@ export function TaskItem({
           type="checkbox"
           checked={task.done}
           onChange={() => actions.toggleTask(task.id)}
-          className="mt-1 h-4 w-4 shrink-0 accent-indigo-500"
+          className="mt-[3px] h-[17px] w-[17px] shrink-0 cursor-pointer rounded accent-accent"
           aria-label={`Mark ${task.title} done`}
         />
 
@@ -49,8 +50,8 @@ export function TaskItem({
           <input
             value={task.title}
             onChange={(event) => actions.updateTask(task.id, { title: event.target.value })}
-            className={`w-full bg-transparent text-sm outline-none ${
-              task.done ? "text-slate-500 line-through" : "text-slate-100"
+            className={`w-full bg-transparent text-[13.5px] font-medium outline-none ${
+              task.done ? "text-faint line-through" : "text-ink"
             }`}
           />
 
@@ -58,28 +59,33 @@ export function TaskItem({
             {task.tags.map((tag) => (
               <Chip
                 key={tag}
-                tone={tag === "persistent" ? "amber" : tag === "today" ? "indigo" : "slate"}
+                tone={tag === "persistent" ? "amber" : tag === "today" ? "accent" : "slate"}
               >
                 {tag}
                 <button
                   onClick={() => actions.removeTag(task.id, tag)}
-                  className="ml-0.5 opacity-60 hover:opacity-100"
+                  className="ml-0.5 opacity-50 hover:opacity-100"
                   aria-label={`Remove tag ${tag}`}
                 >
-                  <X size={11} />
+                  <X size={10} />
                 </button>
               </Chip>
             ))}
 
-            {status?.status === "ready" && <Chip tone="amber">ready for LH</Chip>}
-            {status?.status === "sent" && <Chip tone="emerald">sent to LH</Chip>}
-            {status?.status === "failed" && <Chip tone="rose">handoff failed</Chip>}
+            {task.linkedSubjectId && (
+              <Chip tone="accent">
+                <Link2 size={10} /> {task.linkedSubjectId}
+              </Chip>
+            )}
+            {status === "ready" && <Chip tone="amber">ready for LH</Chip>}
+            {status === "sent" && <Chip tone="mint">sent</Chip>}
+            {status === "failed" && <Chip tone="rose">failed</Chip>}
 
             {addingTag ? (
-              <Input
+              <input
                 autoFocus
                 value={tagValue}
-                placeholder="tag + Enter"
+                placeholder="tag ↵"
                 onChange={(event) => setTagValue(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
@@ -89,26 +95,41 @@ export function TaskItem({
                   }
                   if (event.key === "Escape") setAddingTag(false);
                 }}
-                className="w-28 px-2 py-0.5 text-xs"
+                className="inset-field w-24 px-2 py-0.5 text-[11px] text-ink placeholder:text-faint focus:outline-none"
               />
             ) : (
               <button
                 onClick={() => setAddingTag(true)}
-                className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs text-slate-500 hover:bg-white/10 hover:text-slate-300"
+                className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] text-faint transition-colors hover:bg-white/5 hover:text-muted"
                 title="Add tag"
               >
-                <Plus size={12} /> tag
+                <Plus size={11} /> tag
               </button>
             )}
           </div>
+
+          {subjects.length > 0 && (
+            <select
+              value={task.linkedSubjectId ?? ""}
+              onChange={(event) => actions.linkSubject(task.id, event.target.value || null)}
+              className="mt-2 rounded-lg border border-line bg-black/25 px-2 py-1 text-[10.5px] text-muted outline-none transition-colors hover:border-line-2 focus:border-accent/50"
+            >
+              <option value="">Link a LearnHarness subject…</option>
+              {subjects.map((subject) => (
+                <option key={subject} value={subject}>
+                  {subject}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
-        <div className="flex shrink-0 items-center gap-0.5 opacity-60 transition-opacity group-hover:opacity-100">
-          <IconButton onClick={() => actions.moveTask(task.id, -1)} title="Move up">
-            <ArrowUp size={15} />
+        <div className="flex shrink-0 items-center gap-0.5 opacity-40 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+          <IconButton onClick={() => actions.moveTask(task.id, -1)} title="Move up" className="h-7 w-7">
+            <ArrowUp size={14} />
           </IconButton>
-          <IconButton onClick={() => actions.moveTask(task.id, 1)} title="Move down">
-            <ArrowDown size={15} />
+          <IconButton onClick={() => actions.moveTask(task.id, 1)} title="Move down" className="h-7 w-7">
+            <ArrowDown size={14} />
           </IconButton>
           <IconButton
             onClick={() => {
@@ -116,38 +137,22 @@ export function TaskItem({
               onSelect();
             }}
             title="Open notes"
-            className={task.note ? "text-indigo-300" : ""}
+            className={`relative h-7 w-7 ${task.note ? "text-accent" : ""}`}
           >
-            {status?.status === "sent" ? <Send size={15} /> : <FileText size={15} />}
+            {status === "sent" ? <Send size={14} /> : <FileText size={14} />}
+            {task.note && (
+              <span className="absolute right-1 top-1 h-1 w-1 rounded-full bg-accent" />
+            )}
           </IconButton>
           <IconButton
             onClick={() => actions.deleteTask(task.id)}
             title="Delete task"
-            className="hover:text-rose-300"
+            className="h-7 w-7 hover:text-rose"
           >
-            <Trash2 size={15} />
+            <Trash2 size={14} />
           </IconButton>
         </div>
       </div>
-
-      {subjects.length > 0 && (
-        <div className="mt-2 pl-6">
-          <select
-            value={task.linkedSubjectId ?? ""}
-            onChange={(event) =>
-              actions.linkSubject(task.id, event.target.value || null)
-            }
-            className="rounded-md border border-white/10 bg-slate-800 px-2 py-1 text-xs text-slate-300 outline-none"
-          >
-            <option value="">No LearnHarness subject</option>
-            {subjects.map((subject) => (
-              <option key={subject} value={subject}>
-                {subject}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
     </div>
   );
 }

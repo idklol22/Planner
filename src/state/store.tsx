@@ -66,7 +66,7 @@ export interface Actions {
   addImage(taskId: string, image: { name: string; dataUrl: string }): void;
   removeImage(taskId: string, imageId: string): void;
   markNoteDone(taskId: string): void;
-  sendToLearnHarness(taskId: string): Promise<void>;
+  sendToLearnHarness(taskId: string): Promise<{ ok: boolean; message: string }>;
 
   addHabit(title: string, cadence: Habit["cadence"]): void;
   toggleHabitDate(id: string, date: ISODate): void;
@@ -286,7 +286,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       },
       async sendToLearnHarness(taskId) {
         const task = data.tasks.find((t) => t.id === taskId);
-        if (!task?.note || !task.linkedSubjectId) return;
+        if (!task?.note || !task.linkedSubjectId) {
+          return { ok: false, message: "Link a LearnHarness subject first" };
+        }
         const { fileName, markdown } = buildHandoffMarkdown(task, task.note, data.settings);
         try {
           const path = await storage.exportNote(
@@ -302,13 +304,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               error: undefined,
             }),
           );
+          return { ok: true, message: path };
         } catch (error) {
-          update((d) =>
-            patchNote(d, taskId, {
-              status: "failed",
-              error: error instanceof Error ? error.message : String(error),
-            }),
-          );
+          const message = error instanceof Error ? error.message : String(error);
+          update((d) => patchNote(d, taskId, { status: "failed", error: message }));
+          return { ok: false, message };
         }
       },
 
