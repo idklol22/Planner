@@ -1,0 +1,103 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #020617;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.25);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Markdown + LaTeX preview inside the notes editor. */
+.md-preview h1,
+.md-preview h2,
+.md-preview h3 {
+  font-weight: 600;
+  color: #f1f5f9;
+  margin: 1.1em 0 0.5em;
+  line-height: 1.25;
+}
+.md-preview h1 { font-size: 1.4em; }
+.md-preview h2 { font-size: 1.2em; }
+.md-preview h3 { font-size: 1.05em; }
+
+.md-preview p {
+  margin: 0.6em 0;
+}
+
+.md-preview ul,
+.md-preview ol {
+  margin: 0.6em 0;
+  padding-left: 1.4em;
+}
+.md-preview ul { list-style: disc; }
+.md-preview ol { list-style: decimal; }
+.md-preview li { margin: 0.25em 0; }
+
+.md-preview li input[type="checkbox"] {
+  margin-right: 0.4em;
+  accent-color: #6366f1;
+}
+
+.md-preview a {
+  color: #a5b4fc;
+  text-decoration: underline;
+}
+
+.md-preview code {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+}
+
+.md-preview pre {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 0.9em;
+  overflow-x: auto;
+}
+.md-preview pre code {
+  background: none;
+  padding: 0;
+}
+
+.md-preview blockquote {
+  border-left: 3px solid rgba(129, 140, 248, 0.5);
+  padding-left: 0.9em;
+  color: #94a3b8;
+}
+
+.md-preview img {
+  max-width: 100%;
+  border-radius: 8px;
+  margin: 0.6em 0;
+}
+
+.md-preview .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.3em 0;
+}
