@@ -108,6 +108,8 @@ export interface Actions {
   markNoteDone(taskId: string): void;
   /** Record an API hand-off result without marking the note itself as edited. */
   recordHandoff(taskId: string, handoff: Partial<HandoffState>): void;
+  /** LetCode: add an already-completed practice task. */
+  addDoneTask(categoryId: string, title: string, date: ISODate): string;
   sendToLearnHarness(taskId: string): Promise<{ ok: boolean; message: string }>;
 
   addHabit(input: HabitInput): string;
@@ -127,6 +129,10 @@ export interface Actions {
 
 interface StoreValue {
   data: AppData;
+  /** Latest data, even between renders (used by the sync controller). */
+  getData(): AppData;
+  /** Apply a pure transform immediately (remote rows from the hub). */
+  applyData(fn: (data: AppData) => AppData): void;
   ready: boolean;
   isNative: boolean;
   actions: Actions;
@@ -372,6 +378,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           }));
         });
       },
+      addDoneTask(categoryId, title, date) {
+        const id = uid("task");
+        update((d) => {
+          const stamp = nowISO();
+          const order = d.tasks
+            .filter((t) => t.date === date && !t.parentId && !t.deletedAt)
+            .reduce((m, t) => Math.max(m, t.order + 1), 0);
+          const task: Task = {
+            ...makeTask(date, title, order),
+            id,
+            categoryId,
+            kind: "practice",
+            done: true,
+            completedAt: stamp,
+          };
+          return { ...d, tasks: [...d.tasks, task] };
+        });
+        return id;
+      },
       async sendToLearnHarness(taskId) {
         const current = dataRef.current;
         const task = current.tasks.find((t) => t.id === taskId);
@@ -505,9 +530,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [update],
   );
 
+  const getData = useCallback(() => dataRef.current, []);
+  const applyData = useCallback((fn: (d: AppData) => AppData) => {
+    dataRef.current = fn(dataRef.current);
+    setData((prev) => fn(prev));
+  }, []);
+
   const value = useMemo<StoreValue>(
-    () => ({ data, ready, isNative: isTauri, actions }),
-    [data, ready, actions],
+    () => ({ data, getData, applyData, ready, isNative: isTauri, actions }),
+    [data, getData, applyData, ready, actions],
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

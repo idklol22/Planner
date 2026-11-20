@@ -4,6 +4,7 @@ import { TaskPage } from "./components/task-page/TaskPage";
 import { taskIdFromHash } from "./components/task-page/route";
 import { useHandoff } from "./lib/handoff";
 import { StoreProvider, useStore } from "./state/store";
+import { SyncProvider } from "./state/sync";
 import { ToastProvider } from "./state/toast";
 
 /** Keeps the hand-off engine alive for the whole app session. */
@@ -33,10 +34,12 @@ function Routes() {
 export function App() {
   return (
     <StoreProvider>
-      <ToastProvider>
-        <HandoffRunner />
-        <Routes />
-      </ToastProvider>
+      <SyncProvider>
+        <ToastProvider>
+          <HandoffRunner />
+          <Routes />
+        </ToastProvider>
+      </SyncProvider>
     </StoreProvider>
   );
 }

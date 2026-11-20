@@ -2,7 +2,7 @@
  *  `{ table, row }[]`; rows are merged per table + id so only the newest
  *  `updatedAt` survives. */
 
-import type { HubOp, SyncRow } from "../storage/hub";
+import type { HubOp, PullRow } from "../storage/hub";
 
 export const OUTBOX_KEY = "planner.outbox.v1";
 
@@ -31,8 +31,8 @@ export function opKey(op: HubOp): string {
 
 /** Strictly newer wins; equal timestamps keep the version already queued. */
 export function isNewerRow(
-  candidate: SyncRow,
-  current: SyncRow | null | undefined,
+  candidate: PullRow,
+  current: PullRow | null | undefined,
 ): boolean {
   if (!current) return true;
   const a = Date.parse(candidate.updatedAt);
