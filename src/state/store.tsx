@@ -126,6 +126,8 @@ export interface Actions {
 
   addHabit(input: HabitInput): string;
   updateHabit(id: string, patch: Partial<HabitInput>): void;
+  /** Archive (or restore) a habit. `deletedAt` is the archive flag. */
+  archiveHabit(id: string, archived?: boolean): void;
   /** Soft delete; existing tasks created from it stay. */
   deleteHabit(id: string): void;
   /** Turn a habit's ghost on `date` into a real task. */
@@ -199,6 +201,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const update = useCallback((mutator: Mutator) => {
     setData((prev) => mutator(prev));
   }, []);
+
+  const archiveHabit = useCallback(
+    (id: string, archived = true) => {
+      update((d) => {
+        const stamp = nowISO();
+        return {
+          ...d,
+          habits: d.habits.map((h) =>
+            h.id === id ? { ...h, deletedAt: archived ? stamp : undefined, updatedAt: stamp } : h,
+          ),
+        };
+      });
+    },
+    [update],
+  );
 
   const actions = useMemo<Actions>(
     () => ({
@@ -505,14 +522,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           }),
         }));
       },
+      archiveHabit,
       deleteHabit(id) {
-        update((d) => {
-          const stamp = nowISO();
-          return {
-            ...d,
-            habits: d.habits.map((h) => (h.id === id ? { ...h, deletedAt: stamp, updatedAt: stamp } : h)),
-          };
-        });
+        archiveHabit(id, true);
       },
       acceptGhost(habitId, date) {
         const habit = dataRef.current.habits.find((h) => h.id === habitId && !h.deletedAt);
@@ -619,7 +631,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }));
       },
     }),
-    [update],
+    [update, archiveHabit],
   );
 
   const getData = useCallback(() => dataRef.current, []);
