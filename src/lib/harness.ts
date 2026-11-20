@@ -38,6 +38,12 @@ export interface HarnessNoteResponse {
   [key: string]: unknown;
 }
 
+export interface HarnessNoteResult {
+  status: "none" | "pending" | "done" | "failed";
+  items?: unknown;
+  deadlines?: unknown;
+}
+
 export type HarnessResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
 function baseUrl(value: string | undefined | null): string {
@@ -62,6 +68,14 @@ export class HarnessClient {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(note),
     });
+  }
+
+  /** GET /api/planner/notes/result: what absorbing the note found (status none, pending, done or failed). */
+  noteResult(externalId: string): Promise<HarnessResult<HarnessNoteResult>> {
+    return this.request<HarnessNoteResult>(
+      `/api/planner/notes/result?externalId=${encodeURIComponent(externalId)}`,
+      { method: "GET" },
+    );
   }
 
   private async request<T>(path: string, init: RequestInit): Promise<HarnessResult<T>> {

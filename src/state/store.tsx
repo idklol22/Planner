@@ -26,7 +26,8 @@ import {
 } from "../domain/model";
 import { materializeOccurrences } from "../domain/recurrence";
 import { subtasksOf } from "../domain/tasks";
-import { buildHandoffMarkdown } from "../lib/handoff";
+import { tasksForItems, type NoteItem } from "../lib/absorb";
+import { buildHandoffMarkdown, NOTE_TASKS_EVENT } from "../lib/handoff";
 import { isTauri, storage } from "../storage";
 
 type Mutator = (data: AppData) => AppData;
@@ -108,6 +109,8 @@ export interface Actions {
   markNoteDone(taskId: string): void;
   /** Record an API hand-off result without marking the note itself as edited. */
   recordHandoff(taskId: string, handoff: Partial<HandoffState>): void;
+  /** Create tasks for dated items found in a note (deduped); returns how many were added. */
+  addNoteItems(categoryId: string, items: NoteItem[]): number;
   /** LetCode: add an already-completed practice task. */
   addDoneTask(categoryId: string, title: string, date: ISODate): string;
   sendToLearnHarness(taskId: string): Promise<{ ok: boolean; message: string }>;
@@ -323,7 +326,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             ...note,
             blocks,
             content,
-            handoff: { status: "not-done" },
+            // Keep sentAt/hash so the hand-off engine can tell an edit from an unchanged note.
+            handoff: { ...note.handoff, status: "not-done" },
           })),
         );
       },
@@ -377,6 +381,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             handoff: { ...note.handoff, status: subject ? "ready" : "not-done" },
           }));
         });
+      },
+      addNoteItems(categoryId, items) {
+        const count = tasksForItems(dataRef.current.tasks, categoryId, items).length;
+        if (count === 0) return 0;
+        update((d) => {
+          const specs = tasksForItems(d.tasks, categoryId, items);
+          const stamp = nowISO();
+          const next = [...d.tasks];
+          for (const spec of specs) {
+            const order = next
+              .filter((t) => t.date === spec.date && !t.parentId && !t.deletedAt)
+              .reduce((m, t) => Math.max(m, t.order + 1), 0);
+            next.push({
+              ...makeTask(spec.date, spec.title, order),
+              categoryId,
+              kind: spec.kind,
+              deadline: spec.deadline,
+              ...(spec.time ? { time: spec.time } : {}),
+              createdAt: stamp,
+              updatedAt: stamp,
+            });
+          }
+          return { ...d, tasks: next };
+        });
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent(NOTE_TASKS_EVENT, { detail: { count } }));
+        }
+        return count;
       },
       addDoneTask(categoryId, title, date) {
         const id = uid("task");

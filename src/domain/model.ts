@@ -18,6 +18,8 @@ export const HandoffSchema = z.object({
   error: z.string().optional(),
   /** `finished` flag of the last note sent, so a state flip can be re-sent. */
   finished: z.boolean().optional(),
+  /** Hash of the title, date and body last sent, so an unchanged note is never re-sent. */
+  hash: z.string().optional(),
   /** Hub mode: the queued `harness.note` command and its last known status. */
   commandId: z.string().optional(),
   commandStatus: z.enum(["queued", "claimed", "done", "failed"]).optional(),
