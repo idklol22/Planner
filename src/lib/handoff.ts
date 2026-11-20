@@ -8,6 +8,8 @@ import {
   type Task,
 } from "../domain/model";
 import { useStore } from "../state/store";
+import { useToast } from "../state/toast";
+import { itemsFromDeadlines, parseNoteItems, taskCountMessage } from "./absorb";
 import { useSync } from "../state/sync";
 import { HarnessClient, type HarnessNote } from "./harness";
 
@@ -78,7 +80,10 @@ export function buildHandoffMarkdown(
 // ── Harness hand-off engine ────────────────────────────────────────────────
 
 /** One API note to send; exactly the shape accepted by `HarnessClient.sendNote`. */
-export interface DueHandoff extends HarnessNote {}
+export interface DueHandoff extends HarnessNote {
+  /** Content hash recorded once the note is handed off (not sent to the Harness). */
+  hash: string;
+}
 
 const UNFINISHED_PREFIX = "> Unfinished notes (task not completed)";
 
@@ -95,23 +100,44 @@ function toMs(value: Date | string | null | undefined): number | null {
   return Number.isFinite(ms) ? ms : null;
 }
 
+/** Edits are sent this long after the last keystroke-level change. */
+export const HANDOFF_DEBOUNCE_MS = 60_000;
+
+/** Small stable string hash (FNV-1a) of what a hand-off carries; equal hash = nothing new to send. */
+export function noteHash(title: string, date: string, body: string): string {
+  let h = 0x811c9dc5;
+  const text = `${title}|${date}|${body}`;
+  for (let i = 0; i < text.length; i += 1) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return `${h.toString(16)}-${text.length}`;
+}
+
+function noteBody(note: Note): string {
+  const parts = [note.content.trim(), ...note.images.map((image) => `![${image.name}](${image.dataUrl})`)];
+  return parts.filter(Boolean).join("\n\n");
+}
+
 /**
  * Pure scheduler: which linked notes need sending right now?
  *
- * A note is due when the task was completed since `lastRun`, when it belongs to
- * a previous day and is still unfinished, when its note was edited after the
- * last successful send, or when a completion/unfinished state flip still needs
- * to be reflected at the Harness. Each task yields at most one note.
+ * A note is only ever sent when it differs from what was last sent (title, date and body hash; legacy
+ * notes without a hash fall back to "edited after the last send"). Then it is due
+ *  - on completion (or when it was last sent as unfinished), immediately;
+ *  - at day end: an unfinished task of a previous day, immediately;
+ *  - after an edit, once the note has been quiet for `debounceMs` (sent with finished = task.done).
+ * Each task yields at most one note. `_lastRun` is kept for call compatibility.
  */
 export function dueHandoffs(
   tasks: readonly Task[],
   categories: readonly Category[],
   now: Date | string = new Date(),
-  lastRun: Date | string | null = null,
+  _lastRun: Date | string | null = null,
+  debounceMs: number = HANDOFF_DEBOUNCE_MS,
 ): DueHandoff[] {
   const nowMs = toMs(now) ?? Date.now();
   const today = toISODate(new Date(nowMs));
-  const since = toMs(lastRun);
   const byCategory = new Map(categories.map((category) => [category.id, category]));
   const due: DueHandoff[] = [];
 
@@ -120,25 +146,24 @@ export function dueHandoffs(
     if (!note || task.deletedAt) continue;
     const category = byCategory.get(task.categoryId ?? "");
     if (!category?.linkedSubjectId) continue;
+    const body = noteBody(note);
+    if (!body) continue;
 
+    const hash = noteHash(task.title, task.date, body);
     const sentAt = toMs(note.handoff.sentAt);
     const updatedAt = toMs(note.updatedAt);
-    const completedAt = task.done ? toMs(task.completedAt ?? task.updatedAt) : null;
-    const completedSinceLastRun =
-      completedAt !== null && completedAt <= nowMs && (since === null || completedAt > since);
-    const editedSinceSend = sentAt !== null && updatedAt !== null && updatedAt > sentAt;
     const neverSent = sentAt === null;
+    const changed = neverSent
+      ? true
+      : note.handoff.hash !== undefined
+        ? note.handoff.hash !== hash
+        : updatedAt !== null && sentAt !== null && updatedAt > sentAt;
     const lastFinished = note.handoff.finished;
 
-    const completionDue =
-      task.done &&
-      ((completedSinceLastRun && (neverSent || editedSinceSend)) || lastFinished === false);
-    const unfinishedDue =
-      !task.done &&
-      task.date < today &&
-      (neverSent || editedSinceSend || lastFinished === true);
-
-    if (!completionDue && !unfinishedDue && !editedSinceSend) continue;
+    const completionDue = task.done && (changed || lastFinished === false);
+    const unfinishedDue = !task.done && task.date < today && (changed || lastFinished === true);
+    const editDue = changed && updatedAt !== null && nowMs - updatedAt >= debounceMs;
+    if (!completionDue && !unfinishedDue && !editDue) continue;
 
     const finished = task.done;
     const payload: DueHandoff = {
@@ -148,6 +173,7 @@ export function dueHandoffs(
       date: task.date,
       markdown: buildApiMarkdown(task, note, finished),
       finished,
+      hash,
     };
     if (category.linkedTopicId) payload.topicId = category.linkedTopicId;
     due.push(payload);
@@ -156,17 +182,42 @@ export function dueHandoffs(
   return due;
 }
 
-/** Runs the engine on task toggles and whenever the app opens or becomes visible. */
+export const NOTE_TASKS_EVENT = "planner:tasks-from-note";
+const RETRY_AFTER_MS = 60_000;
+const TICK_MS = 15_000;
+const RESULT_POLL_MS = 2_000;
+const RESULT_POLL_MAX = 30;
+/** A hub deadline only becomes a task while a note of that subject was handed off this recently. */
+const MIRROR_WINDOW_MS = 10 * 60_000;
+
+/** Runs the engine on task toggles, every few seconds (the edit debounce) and when the app becomes visible. */
 export function useHandoff(): void {
   const { data, ready, actions } = useStore();
   const { tasks, categories } = data;
   const hub = useSync();
+  const notify = useToast();
   const hubMode = hub.configured;
   const url = data.settings.harnessUrl || DEFAULT_HARNESS_URL;
-  const lastRunRef = useRef<Date | null>(null);
   const busyRef = useRef(false);
   const pendingRef = useRef(false);
   const sendingRef = useRef(new Set<string>());
+  const attemptRef = useRef(new Map<string, number>());
+
+  const pollResult = useCallback(
+    async (client: HarnessClient, externalId: string, categoryId: string) => {
+      for (let i = 0; i < RESULT_POLL_MAX; i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, RESULT_POLL_MS));
+        const result = await client.noteResult(externalId);
+        if (!result.ok) continue;
+        if (result.data.status === "failed") return;
+        if (result.data.status === "done") {
+          actions.addNoteItems(categoryId, parseNoteItems(result.data.items));
+          return;
+        }
+      }
+    },
+    [actions],
+  );
 
   const run = useCallback(async () => {
     if (!ready || (!url && !hubMode) || busyRef.current) {
@@ -174,16 +225,20 @@ export function useHandoff(): void {
       return;
     }
     const now = new Date();
-    const due = dueHandoffs(tasks, categories, now, lastRunRef.current);
-    lastRunRef.current = now;
-    const next = due.filter((note) => !sendingRef.current.has(note.externalId));
+    const due = dueHandoffs(tasks, categories, now);
+    const next = due.filter((note) => {
+      if (sendingRef.current.has(note.externalId)) return false;
+      const last = attemptRef.current.get(note.externalId);
+      return last === undefined || now.getTime() - last >= RETRY_AFTER_MS;
+    });
     if (next.length === 0) return;
 
     busyRef.current = true;
     const client = new HarnessClient(url);
     try {
-      for (const note of next) {
+      for (const { hash, ...note } of next) {
         sendingRef.current.add(note.externalId);
+        attemptRef.current.set(note.externalId, Date.now());
         try {
           if (hubMode) {
             // Hub mode: queue a harness.note command; the laptop agent runs it.
@@ -193,6 +248,7 @@ export function useHandoff(): void {
               sentAt: new Date().toISOString(),
               error: undefined,
               finished: note.finished,
+              hash,
               commandId,
               commandStatus: "queued",
             });
@@ -205,7 +261,10 @@ export function useHandoff(): void {
               sentAt: new Date().toISOString(),
               error: undefined,
               finished: note.finished,
+              hash,
             });
+            const categoryId = tasks.find((t) => t.id === note.externalId)?.categoryId;
+            if (categoryId) void pollResult(client, note.externalId, categoryId);
           } else {
             actions.recordHandoff(note.externalId, {
               status: "failed",
@@ -230,7 +289,7 @@ export function useHandoff(): void {
         queueMicrotask(() => void runRef.current());
       }
     }
-  }, [tasks, categories, url, ready, actions, hubMode, hub.sendNote]);
+  }, [tasks, categories, url, ready, actions, hubMode, hub.sendNote, pollResult]);
 
   const runRef = useRef(run);
   runRef.current = run;
@@ -239,6 +298,12 @@ export function useHandoff(): void {
   useEffect(() => {
     void run();
   }, [run]);
+
+  // The edit debounce is time, not a data change: look again every few seconds.
+  useEffect(() => {
+    const timer = setInterval(() => void runRef.current(), TICK_MS);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const onVisible = () => {
@@ -251,4 +316,36 @@ export function useHandoff(): void {
       window.removeEventListener("focus", onVisible);
     };
   }, []);
+
+  // Hub mode: deadlines the Harness added from a note just handed off also become tasks.
+  const deadlines = hub.mirror.deadlines;
+  useEffect(() => {
+    if (!hubMode || deadlines.length === 0) return;
+    const cutoff = Date.now() - MIRROR_WINDOW_MS;
+    const recent = new Set<string>();
+    for (const task of tasks) {
+      const sentAt = task.note?.handoff.sentAt ? Date.parse(task.note.handoff.sentAt) : NaN;
+      if (task.categoryId && sentAt >= cutoff) recent.add(task.categoryId);
+    }
+    for (const category of categories) {
+      if (!category.linkedSubjectId || !recent.has(category.id)) continue;
+      const rows = deadlines.filter(
+        (d) =>
+          d.subjectId === category.linkedSubjectId &&
+          !d.deletedAt &&
+          (!category.linkedTopicId || !d.topicId || d.topicId === category.linkedTopicId),
+      );
+      if (rows.length) actions.addNoteItems(category.id, itemsFromDeadlines(rows));
+    }
+  }, [hubMode, deadlines, tasks, categories, actions]);
+
+  // Every path that adds tasks from a note announces it here.
+  useEffect(() => {
+    const onAdded = (event: Event) => {
+      const count = (event as CustomEvent<{ count: number }>).detail?.count ?? 0;
+      if (count > 0) notify(taskCountMessage(count));
+    };
+    window.addEventListener(NOTE_TASKS_EVENT, onAdded);
+    return () => window.removeEventListener(NOTE_TASKS_EVENT, onAdded);
+  }, [notify]);
 }

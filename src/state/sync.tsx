@@ -118,6 +118,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         toggleTask: (id) => actionsRef.current.toggleTask(id),
       },
       recordHandoff: (taskId, patch) => actionsRef.current.recordHandoff(taskId, patch),
+      onNoteItems: (categoryId, items) => actionsRef.current.addNoteItems(categoryId, items),
       onMirror: setMirror,
     });
     controllerRef.current = controller;

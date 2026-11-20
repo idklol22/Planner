@@ -153,9 +153,51 @@ describe("dueHandoffs", () => {
     const deleted = withNote(
       { completedAt: "2026-11-20T09:00:00.000Z", deletedAt: "2026-11-20T10:00:00.000Z" },
     );
-    const todayUnfinished = withNote({ date: "2026-11-20", done: false, completedAt: undefined });
+    const todayUnfinished = withNote(
+      { date: "2026-11-20", done: false, completedAt: undefined },
+      { updatedAt: "2026-11-20T11:59:30.000Z" }, // edited 30 s ago: still inside the debounce
+    );
     const tasks = [unlinked, deleted, { ...task, note: null }, todayUnfinished];
 
     expect(dueHandoffs(tasks, [category], now, lastRun)).toEqual([]);
+  });
+});
+
+describe("dueHandoffs: send on edit", () => {
+  const now = "2026-11-20T12:00:00.000Z";
+  const open = (notePatch: Partial<Note>) =>
+    withNote({ date: "2026-11-20", done: false, completedAt: undefined }, notePatch);
+
+  it("waits 60 s after the last edit, then sends with finished = task.done", () => {
+    const recent = open({ updatedAt: "2026-11-20T11:59:30.000Z" });
+    const quiet = open({ updatedAt: "2026-11-20T11:58:30.000Z" });
+    expect(dueHandoffs([recent], [category], now)).toEqual([]);
+    const due = dueHandoffs([quiet], [category], now);
+    expect(due).toHaveLength(1);
+    expect(due[0].finished).toBe(false);
+    expect(due[0].hash).toEqual(expect.any(String));
+  });
+
+  it("does not re-send an unchanged note, but sends it once the content changes", () => {
+    const first = dueHandoffs([open({ updatedAt: "2026-11-20T10:00:00.000Z" })], [category], now)[0];
+    const sent = open({
+      updatedAt: "2026-11-20T11:00:00.000Z",
+      handoff: { status: "sent", sentAt: "2026-11-20T11:01:00.000Z", finished: false, hash: first.hash },
+    });
+    expect(dueHandoffs([sent], [category], now)).toEqual([]);
+    const edited = { ...sent, note: { ...sent.note!, content: "New thought", updatedAt: "2026-11-20T11:30:00.000Z" } };
+    expect(dueHandoffs([edited], [category], now)).toHaveLength(1);
+  });
+
+  it("sends on completion immediately, even inside the debounce", () => {
+    const done = withNote(
+      { date: "2026-11-20", done: true, completedAt: "2026-11-20T11:59:50.000Z" },
+      { updatedAt: "2026-11-20T11:59:40.000Z" },
+    );
+    expect(dueHandoffs([done], [category], now)).toHaveLength(1);
+  });
+
+  it("skips notes with no content", () => {
+    expect(dueHandoffs([open({ content: "  ", images: [], updatedAt: "2026-11-20T10:00:00.000Z" })], [category], now)).toEqual([]);
   });
 });

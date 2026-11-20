@@ -21,6 +21,7 @@ import {
   type PushResult,
   type HubOp,
 } from "../storage/hub";
+import { parseNoteItems, type NoteItem } from "../lib/absorb";
 import type { HarnessNote } from "../lib/harness";
 import { SyncEngine, type CursorStore } from "./engine";
 import {
@@ -62,6 +63,8 @@ export interface SyncControllerOptions {
   cursorStore: CursorStore;
   letcode: ActionsForLetcode;
   recordHandoff(taskId: string, patch: Partial<HandoffState>): void;
+  /** A finished `harness.note` command returned the dated items it found. */
+  onNoteItems?(categoryId: string, items: NoteItem[]): void;
   onMirror?(mirror: Mirror): void;
   today?(): ISODate;
   now?(): Date;
@@ -230,6 +233,8 @@ export class SyncController {
       if (!command || command.status === h.commandStatus) continue;
       if (command.status === "done") {
         this.o.recordHandoff(task.id, { status: "sent", commandStatus: "done", error: undefined });
+        const items = parseNoteItems((command.result as { items?: unknown } | null)?.items);
+        if (task.categoryId && items.length) this.o.onNoteItems?.(task.categoryId, items);
       } else if (command.status === "failed") {
         const result = command.result as { error?: unknown } | null;
         const error = typeof result?.error === "string" ? result.error : "Harness command failed";
