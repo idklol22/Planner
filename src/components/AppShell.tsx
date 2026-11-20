@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ChevronLeft } from "lucide-react";
 import { addDays, todayISO, type ISODate } from "../domain/dates";
 import { useStore } from "../state/store";
+import { useThemeState } from "../theme/store";
 import { CategoriesView } from "./CategoriesView";
 import { DayView, type MenuPage } from "./DayView";
 import { Flower } from "./Flower";
@@ -73,6 +74,7 @@ function MenuPageView({
 
 export function AppShell() {
   const { ready } = useStore();
+  useThemeState(); // re-render the tree when the theme changes: category colours are re-lit per theme
   const onTask = useOnTaskRoute();
   const [selected, setSelected] = useState<ISODate>(todayISO());
   const [page, setPage] = useState<MenuPage | null>(null);
@@ -104,7 +106,7 @@ export function AppShell() {
     return (
       <div className="flex h-dvh flex-col items-center justify-center gap-3">
         <div className="animate-pulse">
-          <Flower size={44} filled color="#fff" />
+          <Flower size={44} filled color="var(--accent)" />
         </div>
       </div>
     );

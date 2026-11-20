@@ -11,6 +11,7 @@ import { TASK_KINDS, type Task } from "../../domain/model";
 import { parseDays, REPEAT_OPTIONS } from "../../domain/recurrence";
 import { activeCategories } from "../../domain/tasks";
 import { useStore } from "../../state/store";
+import { catColor } from "../../theme/store";
 import { FlowerCheck } from "../Flower";
 import { blocksToMarkdown } from "./markdown";
 import { goBack } from "./route";
@@ -57,17 +58,17 @@ export function TaskPage({ taskId }: { taskId: string }) {
 
   return (
     <div
-      className="task-page fixed inset-0 z-50 overflow-y-auto bg-black"
+      className="task-page fixed inset-0 z-50 overflow-y-auto bg-canvas"
       // Keep the day page's single-key shortcuts (n, t, arrows) from firing underneath.
       onKeyDown={(e) => e.key !== "Escape" && e.nativeEvent.stopPropagation()}
     >
-      <div className="sticky top-0 z-10 bg-black/80 backdrop-blur-xl">
+      <div className="sticky top-0 z-10 bg-scrim backdrop-blur-xl">
         <div className="mx-auto flex h-14 w-full max-w-[720px] items-center px-4 md:px-0">
           <button
             onClick={goBack}
             aria-label="Back to day"
             title="Back (Esc)"
-            className="-ml-2 flex h-10 w-10 items-center justify-center rounded-full text-muted transition-colors hover:bg-white/10 hover:text-ink active:scale-90"
+            className="-ml-2 flex h-10 w-10 items-center justify-center rounded-full text-muted transition-colors hover:bg-ink/10 hover:text-ink active:scale-90"
           >
             <ArrowLeft size={20} />
           </button>
@@ -91,7 +92,7 @@ function withAfterBasic<T extends { group?: string }>(items: T[], extra: T): T[]
 }
 
 const chip =
-  "inline-flex h-8 items-center gap-1.5 rounded-lg bg-white/[0.06] px-2.5 text-[13.5px] text-muted outline-none transition-colors hover:bg-white/[0.1] hover:text-ink focus:bg-white/[0.1] focus:text-ink";
+  "inline-flex h-8 items-center gap-1.5 rounded-lg bg-ink/[0.06] px-2.5 text-[13.5px] text-muted outline-none transition-colors hover:bg-ink/[0.1] hover:text-ink focus:bg-ink/[0.1] focus:text-ink";
 
 function TaskDocument({ task }: { task: Task }) {
   const { data, actions } = useStore();
@@ -234,7 +235,7 @@ function TaskDocument({ task }: { task: Task }) {
   }
 
   const category = data.categories.find((c) => c.id === task.categoryId);
-  const color = category?.color ?? "#ffffff";
+  const color = category ? catColor(category.color) : "var(--accent)";
   const cats = activeCategories(data.categories);
   const repeatValue = task.rrule?.startsWith("days:") ? "custom" : (task.rrule ?? "");
 
@@ -259,8 +260,8 @@ function TaskDocument({ task }: { task: Task }) {
           }}
           aria-label="Task title"
           style={{ fontSize: 38, lineHeight: 1.15, fontWeight: 700, letterSpacing: "-0.025em" }}
-          className={`min-w-0 flex-1 resize-none bg-transparent font-bold tracking-[-0.025em] outline-none [field-sizing:content] placeholder:text-white/25 ${
-            task.done ? "text-white/40 line-through decoration-white/25" : ""
+          className={`min-w-0 flex-1 resize-none bg-transparent font-bold tracking-[-0.025em] outline-none [field-sizing:content] placeholder:text-ink/25 ${
+            task.done ? "text-ink/40 line-through decoration-ink/25" : ""
           }`}
         />
       </div>
@@ -274,11 +275,11 @@ function TaskDocument({ task }: { task: Task }) {
             onChange={(e) => actions.updateTask(task.id, { categoryId: e.target.value || null })}
             className="max-w-[160px] cursor-pointer bg-transparent outline-none"
           >
-            <option value="" className="bg-[#111] text-white">
+            <option value="" className="bg-raised text-ink">
               No category
             </option>
             {cats.map((c) => (
-              <option key={c.id} value={c.id} className="bg-[#111] text-white">
+              <option key={c.id} value={c.id} className="bg-raised text-ink">
                 {c.name}
               </option>
             ))}
@@ -317,11 +318,11 @@ function TaskDocument({ task }: { task: Task }) {
             className="cursor-pointer bg-transparent outline-none"
           >
             {REPEAT_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value} className="bg-[#111] text-white">
+              <option key={o.value} value={o.value} className="bg-raised text-ink">
                 {o.label}
               </option>
             ))}
-            <option value="custom" className="bg-[#111] text-white">
+            <option value="custom" className="bg-raised text-ink">
               {task.rrule?.startsWith("days:") ? `Days: ${parseDays(task.rrule).join(",")}` : "Custom days"}
             </option>
           </select>
@@ -335,7 +336,7 @@ function TaskDocument({ task }: { task: Task }) {
             className="cursor-pointer bg-transparent capitalize outline-none"
           >
             {TASK_KINDS.map((k) => (
-              <option key={k} value={k} className="bg-[#111] capitalize text-white">
+              <option key={k} value={k} className="bg-raised capitalize text-ink">
                 {k}
               </option>
             ))}

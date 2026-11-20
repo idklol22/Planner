@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Check, Link2, PlugZap, Target } from "lucide-react";
+import { Check, Link2, Palette, PlugZap, Target } from "lucide-react";
 import { DEFAULT_HARNESS_URL } from "../domain/model";
 import { HarnessClient } from "../lib/harness";
 import { useStore } from "../state/store";
 import { useToast } from "../state/toast";
+import { ThemePicker } from "./ThemePicker";
 import { Button, Input, Panel, SectionTitle } from "./ui";
 
 export function SettingsView() {
@@ -32,6 +33,19 @@ export function SettingsView() {
   return (
     <div className="mx-auto max-w-3xl space-y-5">
       <SectionTitle eyebrow="Connections">Settings</SectionTitle>
+
+      <Panel>
+        <div className="mb-4 flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent">
+            <Palette size={18} />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-ink">Theme</h3>
+            <p className="mt-1 text-xs text-muted">Saved on this device. Applies instantly.</p>
+          </div>
+        </div>
+        <ThemePicker />
+      </Panel>
 
       <Panel>
         <div className="mb-5 flex items-start gap-3">

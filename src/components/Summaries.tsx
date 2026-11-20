@@ -1,14 +1,14 @@
 import { useMemo } from "react";
 import { addDays, formatDayTitle, type ISODate } from "../domain/dates";
 import { daySummary, weekSummary, type CategoryCount } from "../domain/summaries";
-import { nearestCategoryColor } from "../domain/palette";
+import { catColor } from "../theme/store";
 import { useStore } from "../state/store";
 
 const fmt = (n: number) => n.toLocaleString("en-US");
 
 function Stat({ value, label }: { value: string; label: string }) {
   return (
-    <div className="min-w-0 flex-1 rounded-xl bg-black/40 px-3.5 py-3">
+    <div className="min-w-0 flex-1 rounded-xl bg-canvas/40 px-3.5 py-3">
       <div className="truncate text-[22px] font-semibold leading-tight tabular-nums">{value}</div>
       <div className="truncate text-[12px] font-medium uppercase tracking-wider text-faint">{label}</div>
     </div>
@@ -22,8 +22,8 @@ function Chips({ rows }: { rows: CategoryCount[] }) {
       {rows.map((r) => (
         <span
           key={r.category?.id ?? "none"}
-          className="flex items-center gap-1.5 rounded-full bg-white/[0.06] px-3.5 py-1.5 text-[14px] font-semibold"
-          style={{ color: r.category ? nearestCategoryColor(r.category.color) : "var(--text)" }}
+          className="flex items-center gap-1.5 rounded-full bg-ink/[0.06] px-3.5 py-1.5 text-[14px] font-semibold"
+          style={{ color: r.category ? catColor(r.category.color) : "var(--text)" }}
         >
           {r.category?.name ?? "Inbox"}
           <span className="font-medium tabular-nums text-faint">

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Flame, Plus, Trash2, X } from "lucide-react";
+import { Flame, Plus, Trash2, TriangleAlert, X } from "lucide-react";
 import { dayKcal, entriesForDay, onGoal } from "../domain/calories";
 import type { ISODate } from "../domain/dates";
 import { useStore } from "../state/store";
@@ -44,9 +44,13 @@ export function CalorieBar({ date }: { date: ISODate }) {
             onClick={() => setMode((m) => (m === "list" ? "idle" : "list"))}
             aria-expanded={mode === "list"}
             aria-label="Show calorie entries"
-            className="flex h-full min-w-0 flex-1 items-center gap-2.5 rounded-xl pl-3 text-left transition-colors hover:bg-white/[0.04]"
+            className="flex h-full min-w-0 flex-1 items-center gap-2.5 rounded-xl pl-3 text-left transition-colors hover:bg-ink/[0.04]"
           >
-            <Flame size={19} className={total > 0 ? "text-amber" : "text-faint"} strokeWidth={2.2} />
+            {over ? (
+              <TriangleAlert size={19} className="text-amber" strokeWidth={2.2} aria-label="Over goal" />
+            ) : (
+              <Flame size={19} className={total > 0 ? "text-amber" : "text-faint"} strokeWidth={2.2} />
+            )}
             <span className="text-[20px] font-semibold tabular-nums">{fmt(total)}</span>
             <span className="text-[15px] font-medium tabular-nums text-faint">
               / {fmt(goal)} kcal
@@ -55,7 +59,7 @@ export function CalorieBar({ date }: { date: ISODate }) {
           <button
             onClick={() => setMode((m) => (m === "add" ? "idle" : "add"))}
             aria-label={mode === "add" ? "Close calorie input" : "Add calories"}
-            className="mod-btn !min-w-10 !px-0 !bg-white/[0.07] !text-ink"
+            className="mod-btn !min-w-10 !px-0 !bg-ink/[0.07] !text-ink"
           >
             <Plus
               size={20}
@@ -65,7 +69,7 @@ export function CalorieBar({ date }: { date: ISODate }) {
             />
           </button>
         </div>
-        <div className="h-[4px] w-full bg-white/[0.07]">
+        <div className="h-[4px] w-full bg-ink/[0.07]">
           <div
             className="h-full rounded-full transition-[width,background-color] duration-500 ease-out"
             style={{ width: `${pct * 100}%`, backgroundColor: barColor }}
@@ -88,7 +92,7 @@ export function CalorieBar({ date }: { date: ISODate }) {
                   setMode("idle");
                 }
               }}
-              className="h-11 w-[92px] rounded-xl bg-black/50 px-3 text-[16px] font-semibold tabular-nums outline-none placeholder:font-normal placeholder:text-faint focus:ring-1 focus:ring-white/30"
+              className="h-11 w-[92px] rounded-xl bg-canvas/50 px-3 text-[16px] font-semibold tabular-nums outline-none placeholder:font-normal placeholder:text-faint focus:ring-1 focus:ring-ink/30"
             />
             <input
               value={label}
@@ -102,12 +106,12 @@ export function CalorieBar({ date }: { date: ISODate }) {
                   setMode("idle");
                 }
               }}
-              className="h-11 min-w-0 flex-1 rounded-xl bg-black/50 px-3 text-[16px] outline-none placeholder:text-faint focus:ring-1 focus:ring-white/30"
+              className="h-11 min-w-0 flex-1 rounded-xl bg-canvas/50 px-3 text-[16px] outline-none placeholder:text-faint focus:ring-1 focus:ring-ink/30"
             />
             <button
               onClick={submit}
               disabled={!kcal}
-              className="h-11 rounded-xl bg-[var(--accent)] px-4 text-[15px] font-semibold text-black transition-opacity active:scale-95 disabled:opacity-30"
+              className="h-11 rounded-xl bg-[var(--accent)] px-4 text-[15px] font-semibold text-accent-ink transition-opacity active:scale-95 disabled:opacity-30"
             >
               Add
             </button>
@@ -129,7 +133,7 @@ export function CalorieBar({ date }: { date: ISODate }) {
                     <button
                       onClick={() => actions.deleteCalorie(e.id)}
                       aria-label={`Delete ${e.label || "entry"}`}
-                      className="flex h-8 w-8 items-center justify-center rounded-full text-faint transition-colors hover:bg-white/10 hover:text-rose active:scale-90"
+                      className="flex h-8 w-8 items-center justify-center rounded-full text-faint transition-colors hover:bg-ink/10 hover:text-rose active:scale-90"
                     >
                       <Trash2 size={15} />
                     </button>

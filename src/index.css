@@ -32,27 +32,18 @@ button {
   cursor: pointer;
 }
 
-::selection {
-  background: rgba(255, 255, 255, 0.28);
-}
-
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.16);
+  background: color-mix(in srgb, var(--text) 22%, transparent);
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
-}
-
-input[type="date"],
-input[type="time"] {
-  color-scheme: dark;
 }
 
 /* ── Reusable surfaces ────────────────────────────────────────────────── */
@@ -72,13 +63,13 @@ input[type="time"] {
 .inset-field {
   border: 1px solid var(--color-line);
   border-radius: 12px;
-  background: #0a0a0a;
+  background: var(--bg);
   transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 .inset-field:focus-within,
 .inset-field:focus {
-  border-color: rgba(255, 255, 255, 0.4);
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.07);
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 22%, transparent);
   outline: none;
 }
 
@@ -91,19 +82,19 @@ input[type="time"] {
 }
 
 .brand-mark {
-  background: #fff;
+  background: var(--accent);
 }
 
 .primary-button {
-  background: #fff;
-  color: #000;
+  background: var(--accent);
+  color: var(--accent-contrast);
 }
 .primary-button:hover {
-  background: #e8e8e8;
+  background: color-mix(in srgb, var(--accent) 88%, var(--text));
 }
 
 .nav-active {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--hover);
 }
 
 .no-scrollbar {
@@ -285,7 +276,7 @@ input[type="time"] {
 
 /* ── Markdown + LaTeX preview ─────────────────────────────────────────── */
 .md-preview {
-  color: #dbe0ef;
+  color: var(--text);
   font-size: 14.5px;
   line-height: 1.75;
 }
@@ -329,13 +320,13 @@ input[type="time"] {
   accent-color: var(--color-accent);
 }
 .md-preview a {
-  color: #9ec5ff;
+  color: var(--accent);
   text-decoration: underline;
   text-underline-offset: 3px;
 }
 .md-preview code {
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: var(--hover-strong);
+  border: 1px solid var(--border);
   border-radius: 5px;
   padding: 0.12em 0.38em;
   font-family: var(--font-mono);
@@ -345,7 +336,7 @@ input[type="time"] {
   border: 1px solid var(--color-line);
   border-radius: 10px;
   padding: 0.95em;
-  background: rgba(3, 5, 10, 0.6);
+  background: var(--bg);
   overflow-x: auto;
 }
 .md-preview pre code {
@@ -354,8 +345,8 @@ input[type="time"] {
   padding: 0;
 }
 .md-preview blockquote {
-  border-left: 3px solid rgba(255, 255, 255, 0.5);
-  background: rgba(255, 255, 255, 0.05);
+  border-left: 3px solid var(--border-strong);
+  background: var(--hover);
   border-radius: 0 8px 8px 0;
   padding: 0.5em 1em;
   color: var(--color-muted);
@@ -370,7 +361,7 @@ input[type="time"] {
   overflow-x: auto;
   overflow-y: hidden;
   padding: 0.35em 0;
-  color: #fff;
+  color: var(--text);
 }
 
 .sheet-panel {

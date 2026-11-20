@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { inkOn } from "../theme/contrast";
 
 const GREY = "var(--flower-grey)";
 const CIRCLES: ReadonlyArray<readonly [number, number, number]> = [
@@ -26,7 +27,7 @@ export interface FlowerProps {
 /** One SVG for both the task checkbox and the calendar blob:
  *  four overlapping circles, grey or filled in a category colour. */
 export function Flower({
-  color = "#fff",
+  color = "var(--accent)",
   filled = false,
   count,
   checked = false,
@@ -34,6 +35,8 @@ export function Flower({
   className,
   ghost = false,
 }: FlowerProps) {
+  // The tick is drawn in black or white, whichever reads on the category colour (the accent token for var() colours).
+  const tick = color.startsWith("#") ? inkOn(color) : "var(--accent-contrast)";
   const showCount = !checked && count !== undefined && count > 0;
   return (
     <svg
@@ -59,7 +62,7 @@ export function Flower({
       <path
         d="M12.5 20.5 L18 26 L28 14.5"
         fill="none"
-        stroke="#fff"
+        stroke={tick}
         strokeWidth={2.6}
         strokeLinecap="round"
         strokeLinejoin="round"

@@ -22,7 +22,7 @@ export function TaskRow({
   return (
     <div
       className={`animate-row group flex min-h-[52px] items-center gap-3.5 rounded-xl px-2 py-1 transition-colors ${
-        active ? "bg-white/[0.07]" : "hover:bg-white/[0.04]"
+        active ? "bg-ink/[0.07]" : "hover:bg-ink/[0.04]"
       }`}
     >
       <FlowerCheck
@@ -38,7 +38,7 @@ export function TaskRow({
       >
         <span
           className={`min-w-0 flex-1 truncate text-[17px] leading-snug transition-colors ${
-            task.done ? "text-faint line-through decoration-white/25" : "text-ink"
+            task.done ? "text-faint line-through decoration-ink/25" : "text-ink"
           }`}
         >
           {task.title}
