@@ -1,9 +1,11 @@
 import { catColor } from "../theme/store";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Archive, ArchiveRestore, ChevronDown, ChevronUp, GripVertical, Plus } from "lucide-react";
 import { CATEGORY_COLORS, DEFAULT_HARNESS_URL, type Category } from "../domain/model";
 import { HarnessClient, type HarnessSubject } from "../lib/harness";
 import { useStore } from "../state/store";
+import { useSync } from "../state/sync";
+import { mirrorSubjects } from "../sync/mirror-view";
 import { CATEGORY_ICONS, CategoryIcon } from "./icons";
 
 function CategoryRow({
@@ -206,8 +208,16 @@ export function CategoriesView() {
   const [subjects, setSubjects] = useState<HarnessSubject[]>([]);
   const [unreachable, setUnreachable] = useState(false);
   const harnessUrl = data.settings.harnessUrl || DEFAULT_HARNESS_URL;
+  const hub = useSync();
+  const hubSubjects = useMemo(() => mirrorSubjects(hub.mirror), [hub.mirror]);
 
   useEffect(() => {
+    if (hub.configured) {
+      // Hub mode: subjects/topics come from the synced Harness mirror.
+      setSubjects(hubSubjects);
+      setUnreachable(false);
+      return;
+    }
     let alive = true;
     setUnreachable(false);
     void new HarnessClient(harnessUrl).subjects().then((result) => {
@@ -224,7 +234,7 @@ export function CategoriesView() {
     return () => {
       alive = false;
     };
-  }, [harnessUrl]);
+  }, [harnessUrl, hub.configured, hubSubjects]);
 
   const active = data.categories.filter((c) => !c.archived).sort((a, b) => a.order - b.order);
   const archived = data.categories.filter((c) => c.archived);

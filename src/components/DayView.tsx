@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, ListFilter, Menu, Plus, Repeat, Settings2, Sparkles, Tags, Settings, Flame } from "lucide-react";
+import { Check, Library, ListFilter, Menu, Plus, Repeat, Settings2, Sparkles, Tags, Settings, Flame } from "lucide-react";
 import {
   addDays,
   formatDayTitle,
@@ -17,13 +17,14 @@ import { sectionsForDay, tasksForDay, type Section } from "../domain/tasks";
 import { useStore } from "../state/store";
 import { CalendarStrip, type CalendarMode } from "./CalendarStrip";
 import { CalorieBar } from "./CalorieBar";
+import { DeadlinesCard } from "./DeadlinesCard";
 import { Flower } from "./Flower";
 import { HabitEditor } from "./HabitEditor";
 import { CategoryIcon } from "./icons";
 import { DaySummaryCard, WeekSummaryCard } from "./Summaries";
 import { TaskRow } from "./TaskRow";
 
-export type MenuPage = "categories" | "settings";
+export type MenuPage = "categories" | "library" | "settings";
 
 interface Prefs {
   showCompleted: boolean;
@@ -377,6 +378,7 @@ export function DayView({
                 {(
                   [
                     ["categories", "Categories", Tags],
+                    ["library", "Library", Library],
                     ["settings", "Settings", Settings],
                   ] as const
                 ).map(([page, label, Icon], i) => (
@@ -537,6 +539,8 @@ export function DayView({
           )}
         </div>
       )}
+
+      <DeadlinesCard date={selected} />
 
       {(showDaySummary || showWeekSummary) && (
         <div className="mt-4 space-y-4">

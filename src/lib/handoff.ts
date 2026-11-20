@@ -8,6 +8,7 @@ import {
   type Task,
 } from "../domain/model";
 import { useStore } from "../state/store";
+import { useSync } from "../state/sync";
 import { HarnessClient, type HarnessNote } from "./harness";
 
 export interface HandoffPayload {
@@ -159,6 +160,8 @@ export function dueHandoffs(
 export function useHandoff(): void {
   const { data, ready, actions } = useStore();
   const { tasks, categories } = data;
+  const hub = useSync();
+  const hubMode = hub.configured;
   const url = data.settings.harnessUrl || DEFAULT_HARNESS_URL;
   const lastRunRef = useRef<Date | null>(null);
   const busyRef = useRef(false);
@@ -166,7 +169,7 @@ export function useHandoff(): void {
   const sendingRef = useRef(new Set<string>());
 
   const run = useCallback(async () => {
-    if (!ready || !url || busyRef.current) {
+    if (!ready || (!url && !hubMode) || busyRef.current) {
       if (busyRef.current) pendingRef.current = true;
       return;
     }
@@ -182,6 +185,19 @@ export function useHandoff(): void {
       for (const note of next) {
         sendingRef.current.add(note.externalId);
         try {
+          if (hubMode) {
+            // Hub mode: queue a harness.note command; the laptop agent runs it.
+            const commandId = await hub.sendNote(note);
+            actions.recordHandoff(note.externalId, {
+              status: "ready",
+              sentAt: new Date().toISOString(),
+              error: undefined,
+              finished: note.finished,
+              commandId,
+              commandStatus: "queued",
+            });
+            continue;
+          }
           const result = await client.sendNote(note);
           if (result.ok) {
             actions.recordHandoff(note.externalId, {
@@ -214,7 +230,7 @@ export function useHandoff(): void {
         queueMicrotask(() => void runRef.current());
       }
     }
-  }, [tasks, categories, url, ready, actions]);
+  }, [tasks, categories, url, ready, actions, hubMode, hub.sendNote]);
 
   const runRef = useRef(run);
   runRef.current = run;

@@ -1,7 +1,7 @@
 /** Offline-first sync with the Planner hub. Framework-agnostic: the caller
  *  supplies the local-store seams and decides when to start/stop. */
 
-import type { HubClient, SyncRow, SyncTable } from "../storage/hub";
+import type { HubClient, PullRow, PullTable } from "../storage/hub";
 import { isNewerRow, LocalOutbox, type Outbox } from "./queue";
 
 export const PUSH_BATCH_SIZE = 200;
@@ -18,9 +18,11 @@ export interface CursorStore {
 
 export interface SyncEngineOptions {
   client: SyncClient;
-  getLocal(table: SyncTable, id: string): SyncRow | null | undefined;
-  applyRemote(table: SyncTable, row: SyncRow): void | Promise<void>;
+  getLocal(table: PullTable, id: string): PullRow | null | undefined;
+  applyRemote(table: PullTable, row: PullRow): void | Promise<void>;
   cursorStore: CursorStore;
+  /** Defaults to a localStorage-backed outbox. */
+  outbox?: Outbox;
 }
 
 /** Ready-made browser cursor store; any { get, set } object works too. */
@@ -38,7 +40,7 @@ export function localCursorStore(key = CURSOR_KEY): CursorStore {
 }
 
 export class SyncEngine {
-  readonly outbox: Outbox = new LocalOutbox();
+  readonly outbox: Outbox;
 
   private interval: ReturnType<typeof setInterval> | null = null;
   private retry: ReturnType<typeof setTimeout> | null = null;
@@ -56,7 +58,9 @@ export class SyncEngine {
     }
   };
 
-  constructor(private readonly options: SyncEngineOptions) {}
+  constructor(private readonly options: SyncEngineOptions) {
+    this.outbox = options.outbox ?? new LocalOutbox();
+  }
 
   /** Drain the outbox in batches of 200. Failures keep the ops and retry with
    *  exponential backoff; the promise resolves either way so background calls

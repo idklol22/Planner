@@ -7,10 +7,12 @@ import { CategoriesView } from "./CategoriesView";
 import { DayView, type MenuPage } from "./DayView";
 import { Flower } from "./Flower";
 import { HabitsList } from "./HabitEditor";
+import { LibraryView } from "./LibraryView";
 import { SettingsView } from "./SettingsView";
 
 const TITLES: Record<MenuPage, string> = {
   categories: "Categories",
+  library: "Library",
   settings: "Settings",
 };
 
@@ -46,6 +48,7 @@ function MenuPageView({
   date: ISODate;
   onBack: () => void;
 }) {
+  const [title, setTitle] = useState<string | null>(null);
   return (
     <div className="animate-slide fixed inset-0 z-50 overflow-y-auto overflow-x-hidden bg-[var(--bg)]">
       <div className="mx-auto w-full max-w-[720px] px-4 pb-12 md:px-6">
@@ -57,13 +60,15 @@ function MenuPageView({
           >
             <ChevronLeft size={20} />
           </button>
-          <h1 className="text-[24px] font-bold tracking-tight">{TITLES[page]}</h1>
+          <h1 className="min-w-0 truncate text-[24px] font-bold tracking-tight">{title ?? TITLES[page]}</h1>
         </header>
         {page === "categories" ? (
           <>
             <CategoriesView />
             <HabitsList date={date} />
           </>
+        ) : page === "library" ? (
+          <LibraryView onTitle={setTitle} />
         ) : (
           <SettingsView />
         )}

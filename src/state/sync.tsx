@@ -1,0 +1,218 @@
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import type { AppData } from "../domain/model";
+import type { HarnessNote } from "../lib/harness";
+import { HubClient } from "../storage/hub";
+import { SyncController, type SyncStatus } from "../sync/controller";
+import { localCursorStore, CURSOR_KEY } from "../sync/engine";
+import { emptyMirror, type Mirror } from "../sync/mapping";
+import { LocalOutbox } from "../sync/queue";
+import { useStore } from "./store";
+
+export const HUB_CONFIG_KEY = "planner.hub.v1";
+const SYNC_INTERVAL_MS = 60_000;
+const COMMAND_POLL_MS = 5_000;
+const PUSH_DEBOUNCE_MS = 1_500;
+
+export interface HubConfig {
+  url: string;
+  token: string;
+}
+
+export function loadHubConfig(storage: Pick<Storage, "getItem"> = localStorage): HubConfig {
+  try {
+    const raw = storage.getItem(HUB_CONFIG_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<HubConfig>;
+      return { url: parsed.url ?? "", token: parsed.token ?? "" };
+    }
+  } catch {
+    // Unreadable config: treat as not configured.
+  }
+  return { url: "", token: "" };
+}
+
+export const isHubConfigured = (config: HubConfig): boolean =>
+  Boolean(config.url.trim() && config.token.trim());
+
+export interface SyncContextValue {
+  config: HubConfig;
+  /** True when a hub URL and token are set. */
+  configured: boolean;
+  setConfig(config: HubConfig): void;
+  status: SyncStatus;
+  mirror: Mirror;
+  syncNow(): Promise<void>;
+  testConnection(config?: HubConfig): Promise<{ ok: boolean; message: string }>;
+  /** Hub mode: queue a `harness.note` command. Rejects when no hub is set. */
+  sendNote(note: HarnessNote): Promise<string>;
+  /** Authenticated hub client, or null when not configured. */
+  client: HubClient | null;
+}
+
+const IDLE: SyncStatus = { syncing: false, lastSyncedAt: null, error: null, pending: 0 };
+const LAST_SYNC_KEY = "planner.lastSynced.v1";
+
+const SyncContext = createContext<SyncContextValue | null>(null);
+
+export function SyncProvider({ children }: { children: ReactNode }) {
+  const { data, ready, getData, applyData, actions } = useStore();
+  const [config, setConfigState] = useState<HubConfig>(() => loadHubConfig());
+  const [status, setStatus] = useState<SyncStatus>(IDLE);
+  const [mirror, setMirror] = useState<Mirror>(emptyMirror);
+  const controllerRef = useRef<SyncController | null>(null);
+  const prevDataRef = useRef<AppData | null>(null);
+  const actionsRef = useRef(actions);
+  actionsRef.current = actions;
+
+  const configured = isHubConfigured(config);
+  const client = useMemo(
+    () => (configured ? new HubClient(config.url.trim(), config.token.trim()) : null),
+    [configured, config.url, config.token],
+  );
+
+  const setConfig = useCallback((next: HubConfig) => {
+    const clean = { url: next.url.trim(), token: next.token.trim() };
+    setConfigState((old) => {
+      if (old.url !== clean.url) {
+        try {
+          localStorage.removeItem(CURSOR_KEY);
+        } catch {
+          // ignore
+        }
+      }
+      try {
+        localStorage.setItem(HUB_CONFIG_KEY, JSON.stringify(clean));
+      } catch {
+        // ignore
+      }
+      return clean;
+    });
+  }, []);
+
+  // One controller per hub; torn down when the hub changes or is cleared.
+  useEffect(() => {
+    if (!client || !ready) {
+      controllerRef.current = null;
+      setStatus(IDLE);
+      return;
+    }
+    const cursorStore = localCursorStore();
+    const controller = new SyncController({
+      client,
+      getData,
+      apply: applyData,
+      storage: localStorage,
+      outbox: new LocalOutbox(),
+      cursorStore,
+      letcode: {
+        addDoneTask: (categoryId, title, date) => actionsRef.current.addDoneTask(categoryId, title, date),
+        toggleTask: (id) => actionsRef.current.toggleTask(id),
+      },
+      recordHandoff: (taskId, patch) => actionsRef.current.recordHandoff(taskId, patch),
+      onMirror: setMirror,
+    });
+    controllerRef.current = controller;
+    prevDataRef.current = getData();
+    setMirror(controller.mirror);
+    let lastSyncedAt: string | null = null;
+    try {
+      lastSyncedAt = localStorage.getItem(LAST_SYNC_KEY);
+    } catch {
+      // ignore
+    }
+    setStatus({ ...controller.status, lastSyncedAt });
+    const unsubscribe = controller.subscribe(() => {
+      setStatus(controller.status);
+      if (controller.status.lastSyncedAt) {
+        try {
+          localStorage.setItem(LAST_SYNC_KEY, controller.status.lastSyncedAt);
+        } catch {
+          // ignore
+        }
+      }
+    });
+    if (cursorStore.get() === 0) controller.seedOutbox();
+    controller.start(SYNC_INTERVAL_MS);
+    const commandTimer = setInterval(() => {
+      if (controller.hasOpenCommands()) void controller.trackCommands().catch(() => {});
+    }, COMMAND_POLL_MS);
+    return () => {
+      unsubscribe();
+      clearInterval(commandTimer);
+      controller.stop();
+      if (controllerRef.current === controller) controllerRef.current = null;
+    };
+  }, [client, ready, getData, applyData]);
+
+  // Local edits -> outbox -> debounced push.
+  const pushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    const controller = controllerRef.current;
+    const prev = prevDataRef.current;
+    prevDataRef.current = data;
+    if (!controller || !prev || prev === data) return;
+    controller.handleChange(prev, data);
+    if (pushTimer.current) clearTimeout(pushTimer.current);
+    pushTimer.current = setTimeout(() => {
+      void controller.engine.push().catch(() => {});
+    }, PUSH_DEBOUNCE_MS);
+  }, [data]);
+  useEffect(
+    () => () => {
+      if (pushTimer.current) clearTimeout(pushTimer.current);
+    },
+    [],
+  );
+
+  const syncNow = useCallback(async () => {
+    await controllerRef.current?.syncNow();
+  }, []);
+
+  const testConnection = useCallback(
+    async (candidate?: HubConfig) => {
+      const target = candidate ?? config;
+      if (!isHubConfigured(target)) return { ok: false, message: "Enter the hub URL and device token" };
+      try {
+        await new HubClient(target.url.trim(), target.token.trim()).ping();
+        return { ok: true, message: "Connected to the hub" };
+      } catch (error) {
+        return {
+          ok: false,
+          message: `Hub not reachable · ${error instanceof Error ? error.message : String(error)}`,
+        };
+      }
+    },
+    [config],
+  );
+
+  const sendNote = useCallback(
+    async (note: HarnessNote) => {
+      const controller = controllerRef.current;
+      if (!controller) throw new Error("Hub is not configured");
+      return controller.sendNote(note);
+    },
+    [],
+  );
+
+  const value = useMemo<SyncContextValue>(
+    () => ({ config, configured, setConfig, status, mirror, syncNow, testConnection, sendNote, client }),
+    [config, configured, setConfig, status, mirror, syncNow, testConnection, sendNote, client],
+  );
+
+  return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;
+}
+
+export function useSync(): SyncContextValue {
+  const value = useContext(SyncContext);
+  if (!value) throw new Error("useSync must be used inside SyncProvider");
+  return value;
+}
