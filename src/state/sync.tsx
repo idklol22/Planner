@@ -37,7 +37,9 @@ export function loadHubConfig(storage: Pick<Storage, "getItem"> = localStorage):
   } catch {
     // Unreadable config: treat as not configured.
   }
-  return { url: "", token: "" };
+  // Build-time default for this machine (planner/.env.local, git-ignored; never set in CI builds).
+  const env = (import.meta as { env?: Record<string, string | undefined> }).env ?? {};
+  return { url: env.VITE_HUB_URL ?? "", token: env.VITE_HUB_TOKEN ?? "" };
 }
 
 export const isHubConfigured = (config: HubConfig): boolean =>
