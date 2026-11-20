@@ -948,7 +948,7 @@ export default {
           response = await handleGetEvents(request, env);
         } else if (request.method === "POST" && path === "/commands") {
           response = await handlePostCommand(request, env);
-        } else if (request.method === "GET" && /^/commands/[^/]+$/.test(path)) {
+        } else if (request.method === "GET" && /^\/commands\/[^/]+$/.test(path)) {
           const row = await env.DB.prepare("SELECT * FROM command WHERE id = ?")
             .bind(decodeSegment(path.split("/")[2]))
             .first();
