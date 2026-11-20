@@ -32,7 +32,8 @@ export function loadHubConfig(storage: Pick<Storage, "getItem"> = localStorage):
     const raw = storage.getItem(HUB_CONFIG_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<HubConfig>;
-      return { url: parsed.url ?? "", token: parsed.token ?? "" };
+      // A half-filled saved config must not hide the build-time default below.
+      if (parsed.url?.trim() && parsed.token?.trim()) return { url: parsed.url.trim(), token: parsed.token.trim() };
     }
   } catch {
     // Unreadable config: treat as not configured.
