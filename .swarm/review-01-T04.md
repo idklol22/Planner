@@ -1,0 +1,7 @@
+REVIEW: FIX
+
+1. **Escape with the sheet open also closes the whole Habits page** — `src/components/AppShell.tsx:80-86` and `src/components/HabitEditor.tsx:45-49`. Both register `window` keydown listeners; AppShell's listener was registered first and unconditionally does `if (page) setPage(null)`, so a single Escape dismisses the HabitEditor *and* the full-screen page, dumping the user back on the Day view. The spec requires "Escape while the sheet is open is owned by HabitEditor; the page itself uses AppShell's existing Escape handling." Fix: gate AppShell's page-close on no open sheet (e.g. skip when `document.querySelector('[role="dialog"]')` exists), or have HabitEditor intercept Escape in the capture phase and call `stopPropagation()` — the same guard `InlineAdd` already uses at `src/components/DayView.tsx:75-78`.
+
+2. **Stale create-mode copy in the shared sheet** — `src/components/HabitEditor.tsx:84`. The heading still reads "Add as habit", but the "Add as habit…" menu item was removed and the only create entry point is now the "New habit" button on `HabitsView`. Show "New habit" when `!habit` so the button and sheet agree.
+
+3. **Trash button's accessible name still says "Delete habit"** — `src/components/HabitEditor.tsx:176`. It now calls `actions.archiveHabit(habit.id, true)`, so rename the `aria-label` to "Archive habit" to match the new archive/restore model (and the Archive row buttons in `HabitsView`).
