@@ -81,3 +81,32 @@ export function formatTime(isoDateTime: string): string {
     minute: "2-digit",
   });
 }
+
+/** Monday (or Sunday) that starts the week containing `iso`. */
+export function startOfWeek(iso: ISODate, weekStartsOn: 0 | 1 = 1): ISODate {
+  const date = fromISODate(iso);
+  const offset = (date.getDay() - weekStartsOn + 7) % 7;
+  return addDays(iso, -offset);
+}
+
+export function weekDates(iso: ISODate, weekStartsOn: 0 | 1 = 1): ISODate[] {
+  const start = startOfWeek(iso, weekStartsOn);
+  return Array.from({ length: 7 }, (_, i) => addDays(start, i));
+}
+
+/** Same day-of-month in another month, clamped to that month's length. */
+export function addMonths(iso: ISODate, months: number): ISODate {
+  const date = fromISODate(iso);
+  const target = new Date(date.getFullYear(), date.getMonth() + months, 1);
+  const last = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  target.setDate(Math.min(date.getDate(), last));
+  return toISODate(target);
+}
+
+/** "Thu, 20 Nov" */
+export function formatDayTitle(iso: ISODate): string {
+  const date = fromISODate(iso);
+  const wd = date.toLocaleDateString("en-GB", { weekday: "short" });
+  const mon = date.toLocaleDateString("en-GB", { month: "short" });
+  return `${wd}, ${date.getDate()} ${mon}`;
+}

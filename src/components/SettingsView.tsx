@@ -38,7 +38,7 @@ export function SettingsView() {
           <div>
             <h3 className="text-sm font-semibold text-ink">LearnHarness integration</h3>
             <p className="mt-1 text-xs leading-relaxed text-muted">
-              Link a task to a subject, write its note, then hand it off. ToDoMate writes a
+              Link a category to a subject, write notes on its tasks, then hand them off. Planner writes a
               self-contained Markdown file with frontmatter into the folder below.
             </p>
           </div>

@@ -27,6 +27,8 @@ export function buildHandoffMarkdown(
   task: Task,
   note: Note,
   settings: Settings,
+  /** LearnHarness subject linked through the task's category. */
+  subject: string | null,
   now: Date = new Date(),
 ): HandoffPayload {
   const imageBlock = note.images.length
@@ -39,10 +41,10 @@ export function buildHandoffMarkdown(
   const frontmatter = [
     "---",
     `title: ${yaml(task.title)}`,
-    `subject: ${yaml(task.linkedSubjectId ?? "unfiled")}`,
+    `subject: ${yaml(subject ?? "unfiled")}`,
     `date: ${task.date}`,
-    `tags: [${task.tags.map((tag) => yaml(tag)).join(", ")}]`,
-    "source: todomate",
+    `kind: ${task.kind}`,
+    "source: planner",
     `task_id: ${task.id}`,
     `handed_off_at: ${now.toISOString()}`,
     `daily_calorie_goal: ${settings.dailyCalorieGoal}`,

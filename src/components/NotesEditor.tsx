@@ -13,14 +13,14 @@ import {
   Send,
   Sigma,
   Trash2,
-  X,
 } from "lucide-react";
 import type { Task } from "../domain/model";
 import { useStore } from "../state/store";
 import { useToast } from "../state/toast";
 import { Button, Chip, IconButton, Segmented } from "./ui";
 
-export function NotesEditor({ task, onClose }: { task: Task; onClose: () => void }) {
+/** Markdown note editor, embedded in the task sheet. */
+export function NoteEditor({ task }: { task: Task }) {
   const { data, actions } = useStore();
   const notify = useToast();
   const [tab, setTab] = useState<"edit" | "preview">("edit");
@@ -30,7 +30,7 @@ export function NotesEditor({ task, onClose }: { task: Task; onClose: () => void
 
   const note = task.note;
   const status = note?.handoff.status;
-  const subjects = data.settings.learnharnessSubjects;
+  const subject = data.categories.find((c) => c.id === task.categoryId)?.linkedSubjectId ?? null;
   const words = note?.content.trim() ? note.content.trim().split(/\s+/).length : 0;
 
   function insert(snippet: string, caretOffset = snippet.length) {
@@ -74,52 +74,26 @@ export function NotesEditor({ task, onClose }: { task: Task; onClose: () => void
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/70 backdrop-blur-sm">
-      <div className="animate-slide relative flex h-full w-full max-w-3xl flex-col border-l border-line-2 bg-surface shadow-2xl shadow-black/70">
-        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent to-transparent" />
-
-        <header className="border-b border-line px-7 pb-5 pt-6">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <div className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-accent">
-                <FileText size={12} /> Task notes
-              </div>
-              <h2 className="truncate text-xl font-semibold tracking-tight text-ink">
-                {task.title}
-              </h2>
-              <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                {status === "ready" && <Chip tone="amber">ready for LearnHarness</Chip>}
-                {status === "sent" && <Chip tone="mint">sent</Chip>}
-                {status === "failed" && <Chip tone="rose">handoff failed</Chip>}
-                {note && <Chip tone="slate">{words} words</Chip>}
-              </div>
-            </div>
-            <IconButton onClick={onClose} title="Close notes" className="h-9 w-9">
-              <X size={19} />
-            </IconButton>
-          </div>
-
-          {subjects.length > 0 && (
-            <div className="mt-4 flex items-center gap-2">
-              <Link2 size={13} className="text-faint" />
-              <select
-                value={task.linkedSubjectId ?? ""}
-                onChange={(event) => actions.linkSubject(task.id, event.target.value || null)}
-                className="inset-field flex-1 bg-black/25 px-3 py-2 text-xs text-muted focus:outline-none"
-              >
-                <option value="">Link to a LearnHarness subject…</option>
-                {subjects.map((subject) => (
-                  <option key={subject} value={subject}>
-                    {subject}
-                  </option>
-                ))}
-              </select>
-            </div>
+    <div className="flex flex-col">
+      <div className="mb-3 flex items-center gap-2 px-1">
+        <FileText size={15} className="text-faint" />
+        <h3 className="text-[13px] font-semibold uppercase tracking-[0.12em] text-faint">Note</h3>
+        <div className="ml-auto flex flex-wrap items-center gap-1.5">
+          {status === "ready" && <Chip tone="amber">ready for LearnHarness</Chip>}
+          {status === "sent" && <Chip tone="mint">sent</Chip>}
+          {status === "failed" && <Chip tone="rose">handoff failed</Chip>}
+          {subject && (
+            <Chip tone="slate">
+              <Link2 size={10} /> {subject}
+            </Chip>
           )}
-        </header>
+          {note && <Chip tone="slate">{words} words</Chip>}
+        </div>
+      </div>
 
+      <div className="overflow-hidden rounded-2xl border border-line bg-surface">
         {!note ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-4">
+          <div className="flex flex-col items-center justify-center gap-3 py-10">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-line bg-white/[0.03] text-accent">
               <FileText size={24} />
             </div>
@@ -130,7 +104,7 @@ export function NotesEditor({ task, onClose }: { task: Task; onClose: () => void
           </div>
         ) : (
           <>
-            <div className="flex flex-wrap items-center gap-1 border-b border-line bg-black/10 px-7 py-2.5">
+            <div className="flex flex-wrap items-center gap-1 border-b border-line bg-black/10 px-4 py-2.5">
               <IconButton onClick={() => insert("**bold**", 2)} title="Bold" className="h-7 w-7">
                 <Bold size={14} />
               </IconButton>
@@ -190,7 +164,7 @@ export function NotesEditor({ task, onClose }: { task: Task; onClose: () => void
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-7 py-6">
+            <div className="px-4 py-4">
               {tab === "edit" ? (
                 <textarea
                   ref={textareaRef}
@@ -199,10 +173,10 @@ export function NotesEditor({ task, onClose }: { task: Task; onClose: () => void
                   placeholder={
                     "Write notes in Markdown…\n\n- [ ] nested tasks\n$x^2$ inline math, $$blocks$$\n[[wikilinks]] and pasted images"
                   }
-                  className="h-full min-h-[24rem] w-full resize-none rounded-xl border border-line bg-black/25 p-5 font-mono text-[13px] leading-7 text-ink outline-none transition-colors placeholder:text-faint focus:border-accent/45"
+                  className="min-h-[16rem] w-full resize-y rounded-xl border border-line bg-black p-4 font-mono text-[13px] leading-7 text-ink outline-none transition-colors placeholder:text-faint focus:border-white/40"
                 />
               ) : (
-                <div className="md-preview min-h-[24rem] rounded-xl border border-line bg-black/25 p-6">
+                <div className="md-preview min-h-[16rem] rounded-xl border border-line bg-black p-5">
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm, remarkMath]}
                     rehypePlugins={[rehypeKatex]}
@@ -239,7 +213,7 @@ export function NotesEditor({ task, onClose }: { task: Task; onClose: () => void
               )}
             </div>
 
-            <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-line bg-black/10 px-7 py-4">
+            <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-line bg-black/10 px-4 py-4">
               <Button
                 variant="secondary"
                 onClick={() => actions.markNoteDone(task.id)}
@@ -262,11 +236,11 @@ export function NotesEditor({ task, onClose }: { task: Task; onClose: () => void
                 <Button
                   variant="primary"
                   onClick={() => void send()}
-                  disabled={sending || !task.linkedSubjectId || !note.content.trim()}
+                  disabled={sending || !subject || !note.content.trim()}
                   title={
-                    task.linkedSubjectId
+                    subject
                       ? "Write this note to the LearnHarness handoff folder"
-                      : "Link a LearnHarness subject first"
+                      : "Link the category to a LearnHarness subject first"
                   }
                 >
                   <Send size={15} /> {sending ? "Sending…" : "Send to LearnHarness"}
