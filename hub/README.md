@@ -1,8 +1,10 @@
 # Planner hub
 
 A small Cloudflare Worker + D1 backend for Planner. It stores client rows
-(`category`, `task`, `goal`, `meal`), serves a sync feed, records events and
-commands, and publishes a private iCalendar feed. There is no UI wiring here.
+(`category`, `task`, `goal`, `meal` and the read-only harness mirror tables
+`h_subject`, `h_topic`, `h_material`, `h_deadline`), serves a sync feed,
+records events and commands, stores files in R2, and publishes a private
+iCalendar feed. There is no UI wiring here.
 
 ## Local development
 
@@ -33,10 +35,18 @@ Every JSON endpoint uses `Authorization: Bearer <token>`. Generate a random
 npm run new-device -- "my laptop"
 ```
 
-The script prints the token once and the SQL plus a ready-to-run
-`npx wrangler d1 execute planner --local --command '...'` line. Only the
-token's SHA-256 hash is stored in the `device` table. Revoke a device later
-with `UPDATE device SET revoked_at = CURRENT_TIMESTAMP WHERE id = 'dev_...'`.
+Add `--role harness` for the laptop agent, which is the only device allowed to
+write the `h_*` mirror tables:
+
+```bash
+npm run new-device -- "laptop" --role harness
+```
+
+The script prints the token once and the SQL plus ready-to-run
+`npx wrangler d1 execute planner --local --command '...'` (or `--remote`)
+lines. Only the token's SHA-256 hash is stored in the `device` table; its
+`role` defaults to `user`. Revoke a device later with
+`UPDATE device SET revoked_at = CURRENT_TIMESTAMP WHERE id = 'dev_...'`.
 
 To revoke locally:
 
@@ -48,8 +58,11 @@ npx wrangler d1 execute planner --local --command "UPDATE device SET revoked_at 
 
 | Endpoint | Auth | Purpose |
 | --- | --- | --- |
-| `POST /ops` `{ops:[{table,row}]}` | Bearer | Upsert `category`/`task`/`goal`/`meal`; newest `updatedAt` wins. Returns `{applied,cursor}`. |
-| `GET /sync?since=<seq>` | Bearer | Up to 500 `{table,row}` changes, with `cursor` and `more`. |
+| `POST /ops` `{ops:[{table,row}]}` | Bearer | Upsert `category`/`task`/`goal`/`meal` and (role `harness` only) `h_subject`/`h_topic`/`h_material`/`h_deadline`; newest `updatedAt` wins. Returns `{applied,cursor}`. Other devices get 403 for `h_*` writes. |
+| `GET /sync?since=<seq>` | Bearer | Up to 500 `{table,row}` changes (including `h_*`), with `cursor` and `more`. |
+| `PUT /files/:sha256` (body = bytes, `Content-Type`) | Bearer | Store `files/<sha256>` if missing; 400 if the body hash differs. Returns `{sha256,bytes}`. |
+| `GET /files/:sha256` (`Range` supported) | Bearer | Stream the file; 200 or 206, 404 if missing. |
+| `HEAD /files/:sha256` | Bearer | 200 or 404, so agents can skip uploads. |
 | `POST /events` / `GET /events?since=` | Bearer | Store/list events; `idempotencyKey` deduplicates posts. |
 | `POST /commands`, `POST /commands/claim {device}`, `POST /commands/:id/complete {status,result}` | Bearer | Queue, atomically claim (5-minute lease), and finish commands. |
 | `GET /cal/<CAL_SECRET>.ics` | calendar secret | Tasks with a `time`; recurring tasks get an `RRULE`. |
@@ -70,19 +83,25 @@ npx tsc --noEmit
 ```
 
 Tests run in the Workers runtime via `@cloudflare/vitest-pool-workers` and
-apply `migrations/0001_init.sql` to an isolated local D1 database.
+apply both migrations to an isolated local D1 database and R2 bucket.
 
-## Deploying later (not done here)
+## Deploy to Cloudflare (free)
 
-Workers and D1 both have free tiers that are ample for a personal planner;
-this hub needs no paid plan.
+Workers, D1 and R2 all have free tiers ample for a personal planner. Run these
+steps in order from `planner/hub`:
 
-1. Create the database: `npx wrangler d1 create planner`, then copy the
-   returned `database_id` into the `[[d1_databases]]` block in `wrangler.toml`.
-2. Apply migrations remotely: `npx wrangler d1 migrations apply planner --remote`.
-3. Set the calendar secret: `npx wrangler secret put CAL_SECRET`. Insert a
-   device (see above) with `--remote`.
-4. Set `ALLOWED_ORIGINS` to the deployed web app's origin(s) and run
-   `npx wrangler deploy`.
+1. Log in: `npx wrangler login` (opens a browser).
+2. Create the D1 database: `npx wrangler d1 create planner`.
+3. Create the R2 bucket: `npx wrangler r2 bucket create planner-files`.
+4. Paste the `database_id` from step 2 into the `[[d1_databases]]` block of
+   `wrangler.toml`, replacing `local-dev`.
+5. Set the secrets: `npx wrangler secret put CAL_SECRET`, then
+   `npx wrangler secret put ALLOWED_ORIGINS` (comma-separated app origins).
+6. Deploy: `npm run deploy` (applies migrations remotely, then deploys the
+   Worker). Note the Worker URL.
+7. Make device tokens: `npm run new-device -- "laptop" --role harness`,
+   `npm run new-device -- "iphone"`, `npm run new-device -- "desktop"`. For
+   each, run the printed `npx wrangler d1 execute planner --remote --command
+   '...'` line, then paste the token into that device's settings.
 
 Nothing has been deployed as part of this task.
