@@ -7,6 +7,7 @@ export interface CallOptions {
   method?: string;
   token?: string | null;
   body?: unknown;
+  rawBody?: string | Uint8Array | ArrayBuffer;
   headers?: Record<string, string>;
 }
 
@@ -15,10 +16,16 @@ export async function call(path: string, options: CallOptions = {}): Promise<Res
   const headers = new Headers(options.headers);
   if (options.body !== undefined) headers.set("Content-Type", "application/json");
   if (options.token) headers.set("Authorization", `Bearer ${options.token}`);
+  const body =
+    options.rawBody !== undefined
+      ? options.rawBody
+      : options.body === undefined
+        ? undefined
+        : JSON.stringify(options.body);
   const request = new Request(`${ORIGIN}${path}`, {
     method: options.method ?? "GET",
     headers,
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    body,
   });
   return worker.fetch(request, env);
 }
@@ -30,14 +37,21 @@ export async function sha256Hex(value: string): Promise<string> {
 
 export async function seedDevice(
   token: string,
-  options: { name?: string; revoked?: boolean } = {},
+  options: { name?: string; revoked?: boolean; role?: "user" | "harness" } = {},
 ): Promise<string> {
   const id = `dev_${crypto.randomUUID()}`;
   const now = new Date().toISOString();
   await env.DB.prepare(
-    "INSERT INTO device (id, name, token_hash, created_at, revoked_at) VALUES (?, ?, ?, ?, ?)",
+    "INSERT INTO device (id, name, role, token_hash, created_at, revoked_at) VALUES (?, ?, ?, ?, ?, ?)",
   )
-    .bind(id, options.name ?? "test device", await sha256Hex(token), now, options.revoked ? now : null)
+    .bind(
+      id,
+      options.name ?? "test device",
+      options.role ?? "user",
+      await sha256Hex(token),
+      now,
+      options.revoked ? now : null,
+    )
     .run();
   return id;
 }

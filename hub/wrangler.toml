@@ -12,3 +12,7 @@ binding = "DB"
 database_name = "planner"
 database_id = "local-dev"
 migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "planner-files"
