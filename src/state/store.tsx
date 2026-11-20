@@ -156,6 +156,8 @@ interface StoreValue {
   data: AppData;
   /** Latest data, even between renders (used by the sync controller). */
   getData(): AppData;
+  /** Cancel the pending debounced save and persist the latest data now. */
+  flush(): Promise<void>;
   /** Apply a pure transform immediately (remote rows from the hub). */
   applyData(fn: (data: AppData) => AppData): void;
   ready: boolean;
@@ -190,14 +192,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!ready) return;
-    const timer = setTimeout(() => {
+    saveTimer.current = setTimeout(() => {
+      saveTimer.current = null;
       void storage.save(data).catch(() => {
         // Persistence errors are surfaced by the storage adapter in native builds.
       });
     }, 250);
-    return () => clearTimeout(timer);
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    };
   }, [data, ready]);
 
   const update = useCallback((mutator: Mutator) => {
@@ -647,10 +654,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     dataRef.current = fn(dataRef.current);
     setData((prev) => fn(prev));
   }, []);
+  const flush = useCallback(async () => {
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    await storage.save(dataRef.current);
+  }, []);
 
   const value = useMemo<StoreValue>(
-    () => ({ data, getData, applyData, ready, isNative: isTauri, actions }),
-    [data, getData, applyData, ready, actions],
+    () => ({ data, getData, flush, applyData, ready, isNative: isTauri, actions }),
+    [data, getData, flush, applyData, ready, actions],
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

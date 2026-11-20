@@ -24,6 +24,7 @@ import {
 import { parseNoteItems, type NoteItem } from "../lib/absorb";
 import type { HarnessNote } from "../lib/harness";
 import { SyncEngine, type CursorStore } from "./engine";
+import { keepaliveBatch, KEEPALIVE_MAX_BYTES, KEEPALIVE_MAX_OPS } from "./flush";
 import {
   allOps,
   applyMirrorRow,
@@ -61,6 +62,8 @@ export interface SyncControllerOptions {
   storage: KeyValueStorage;
   outbox: Outbox;
   cursorStore: CursorStore;
+  /** Best-effort, fire-and-forget push used by `flush()`. */
+  keepalive?(ops: HubOp[]): boolean;
   letcode: ActionsForLetcode;
   recordHandoff(taskId: string, patch: Partial<HandoffState>): void;
   /** A finished `harness.note` command returned the dated items it found. */
@@ -196,6 +199,16 @@ export class SyncController {
         lastSyncedAt: failed ? this.status.lastSyncedAt : (this.o.now?.() ?? new Date()).toISOString(),
       });
     }
+  }
+
+  /** Best-effort push on tab hide / app close. Sends at most one small batch;
+   *  never acks ops (a response cannot be awaited here and hub upserts are
+   *  idempotent on `updatedAt`) and never emits a status change. */
+  flush(): void {
+    const ops = this.o.outbox.pending(KEEPALIVE_MAX_OPS);
+    const batch = keepaliveBatch(ops, KEEPALIVE_MAX_OPS, KEEPALIVE_MAX_BYTES);
+    if (batch.length === 0 || !this.o.keepalive) return;
+    this.o.keepalive(batch);
   }
 
   /** Poll `practice.solved` events and apply each exactly once. */
