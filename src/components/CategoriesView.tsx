@@ -1,3 +1,4 @@
+import { nearestCategoryColor } from "../domain/palette";
 import { useEffect, useState } from "react";
 import { Archive, ArchiveRestore, ChevronDown, ChevronUp, GripVertical, Plus } from "lucide-react";
 import { CATEGORY_COLORS, DEFAULT_HARNESS_URL, type Category } from "../domain/model";
@@ -44,11 +45,11 @@ function CategoryRow({
         <button onClick={onToggle} className="flex min-w-0 flex-1 items-center gap-3 py-2 text-left">
           <span
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
-            style={{ background: `${cat.color}26` }}
+            style={{ background: `${nearestCategoryColor(cat.color)}26` }}
           >
-            <CategoryIcon name={cat.icon} size={17} color={cat.color} />
+            <CategoryIcon name={cat.icon} size={17} color={nearestCategoryColor(cat.color)} />
           </span>
-          <span className="min-w-0 flex-1 truncate text-[17px] font-semibold" style={{ color: cat.color }}>
+          <span className="min-w-0 flex-1 truncate text-[17px] font-semibold" style={{ color: nearestCategoryColor(cat.color) }}>
             {cat.name}
           </span>
           {cat.linkedSubjectId && (
@@ -100,11 +101,11 @@ function CategoryRow({
                   key={c}
                   onClick={() => actions.updateCategory(cat.id, { color: c })}
                   aria-label={`Colour ${c}`}
-                  aria-pressed={cat.color === c}
+                  aria-pressed={nearestCategoryColor(cat.color) === c}
                   className="h-8 w-8 rounded-full transition-transform active:scale-90"
                   style={{
                     background: c,
-                    boxShadow: cat.color === c ? `0 0 0 2px #111, 0 0 0 4px ${c}` : "none",
+                    boxShadow: nearestCategoryColor(cat.color) === c ? `0 0 0 2px #111, 0 0 0 4px ${c}` : "none",
                   }}
                 />
               ))}
@@ -124,7 +125,7 @@ function CategoryRow({
                     cat.icon === key ? "bg-white/15" : "bg-surface-2 hover:bg-surface-3"
                   }`}
                 >
-                  <CategoryIcon name={key} size={18} color={cat.icon === key ? cat.color : "#aaa"} />
+                  <CategoryIcon name={key} size={18} color={cat.icon === key ? nearestCategoryColor(cat.color) : "#aaa"} />
                 </button>
               ))}
             </div>
@@ -315,7 +316,7 @@ export function CategoriesView() {
           <div className="space-y-2">
             {archived.map((cat) => (
               <div key={cat.id} className="flex min-h-[52px] items-center gap-3 rounded-2xl bg-surface px-4">
-                <span className="h-3 w-3 rounded-full opacity-60" style={{ background: cat.color }} />
+                <span className="h-3 w-3 rounded-full opacity-60" style={{ background: nearestCategoryColor(cat.color) }} />
                 <span className="min-w-0 flex-1 truncate text-[16px] text-muted">{cat.name}</span>
                 <button
                   onClick={() => actions.archiveCategory(cat.id, false)}
