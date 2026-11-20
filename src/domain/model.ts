@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { uid } from "./ids";
 
+/** Base URL of a locally running LearnHarness dev server. */
+export const DEFAULT_HARNESS_URL = "http://localhost:3000";
+
 // ── Schemas ────────────────────────────────────────────────────────────────
 export const NoteImageSchema = z.object({
   id: z.string(),
@@ -13,6 +16,8 @@ export const HandoffSchema = z.object({
   sentAt: z.string().optional(),
   fileName: z.string().optional(),
   error: z.string().optional(),
+  /** `finished` flag of the last note sent, so a state flip can be re-sent. */
+  finished: z.boolean().optional(),
 });
 
 export const NoteSchema = z.object({
@@ -43,6 +48,8 @@ export const CategorySchema = z.object({
   icon: z.string().optional(),
   order: z.number(),
   linkedSubjectId: z.string().nullable(),
+  /** Optional topic inside the linked LearnHarness subject. */
+  linkedTopicId: z.string().nullable().optional(),
   archived: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -102,6 +109,8 @@ export const SettingsSchema = z.object({
   handoffFolder: z.string(),
   /** User-managed list of LearnHarness subjects a task can be linked to. */
   learnharnessSubjects: z.array(z.string()),
+  /** Base URL of the running LearnHarness dev server. */
+  harnessUrl: z.string().default(DEFAULT_HARNESS_URL),
   dailyCalorieGoal: z.number(),
 });
 
@@ -184,6 +193,7 @@ export function makeCategory(name: string, order: number, color?: string): Categ
     color: color ?? CATEGORY_COLORS[order % CATEGORY_COLORS.length],
     order,
     linkedSubjectId: null,
+    linkedTopicId: null,
     archived: false,
     createdAt: now,
     updatedAt: now,
@@ -232,6 +242,7 @@ export function defaultData(): AppData {
     settings: {
       handoffFolder: "",
       learnharnessSubjects: [],
+      harnessUrl: DEFAULT_HARNESS_URL,
       dailyCalorieGoal: 2000,
     },
   };
