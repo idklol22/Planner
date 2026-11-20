@@ -113,7 +113,7 @@ export function AppShell() {
   return (
     <div className="h-dvh overflow-hidden bg-black" hidden={onTask}>
       <main className="h-full overflow-y-auto overflow-x-hidden pb-[var(--safe-bottom)]">
-        <div className="animate-fade mx-auto w-full max-w-[560px]">
+        <div className="animate-fade mx-auto w-full max-w-[560px] lg:max-w-[1150px]">
           <DayView
             selected={selected}
             onSelect={setSelected}

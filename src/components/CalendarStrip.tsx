@@ -66,7 +66,7 @@ export function CalendarStrip({
   }
 
   const touch = useRef<{ x: number; y: number } | null>(null);
-  const sizes = mode === "week" ? { flower: 38, num: "h-7 w-7 text-[15px]" } : { flower: 32, num: "h-6 w-6 text-[13px]" };
+  const sizes = mode === "week" ? { flower: 38, num: "h-7 w-7 text-[15px]" } : { flower: 32, num: "h-6 w-6 text-[13px] lg:h-7 lg:w-7 lg:text-[16px]" };
 
   return (
     <section aria-label="Calendar" className="select-none">
