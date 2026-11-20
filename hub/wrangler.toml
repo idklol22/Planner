@@ -1,0 +1,14 @@
+name = "planner-hub"
+main = "src/index.ts"
+compatibility_date = "2025-05-01"
+
+# Local development defaults. For deployment, replace database_id with the real
+# D1 database id and keep CAL_SECRET as a secret (see README.md).
+[vars]
+ALLOWED_ORIGINS = "http://localhost:1420,http://localhost:5173"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "planner"
+database_id = "local-dev"
+migrations_dir = "migrations"
