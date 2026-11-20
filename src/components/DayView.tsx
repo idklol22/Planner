@@ -10,6 +10,7 @@ import {
 } from "../domain/dates";
 import { ghostsFor } from "../domain/habits";
 import { CATEGORY_COLORS, type Habit } from "../domain/model";
+import { dayKcal } from "../domain/calories";
 import { sectionsForDay, tasksForDay, type Section } from "../domain/tasks";
 import { useStore } from "../state/store";
 import { CalendarStrip, type CalendarMode } from "./CalendarStrip";
@@ -143,9 +144,9 @@ function CategorySection({
   const body = section.tasks.length > 0 || ghosts.length > 0 || adding;
   return (
     <section aria-label={name} className="relative">
-      <div className="flex h-12 items-center gap-2.5 rounded-full bg-surface-2 pl-4 pr-1.5">
+      <div className="flex h-12 items-center gap-2.5 rounded-full bg-surface-2 pl-4 pr-1.5 lg:w-fit lg:min-w-[190px] lg:gap-3 lg:pl-5">
         <CategoryIcon name={cat?.icon} size={17} color={color} />
-        <h3 className="min-w-0 truncate text-[15px] font-semibold" style={{ color }}>
+        <h3 className="min-w-0 truncate text-[15px] font-semibold lg:text-[16px]" style={{ color }}>
           {name}
         </h3>
         {section.tasks.length > 0 && (
@@ -153,7 +154,7 @@ function CategorySection({
             {section.tasks.filter((t) => t.done).length}/{section.tasks.length}
           </span>
         )}
-        <span className="flex-1" />
+        <span className="flex-1 lg:min-w-4" />
         <button
           onClick={() => setMenu((v) => !v)}
           aria-label={`Add to ${name}`}
@@ -178,7 +179,7 @@ function CategorySection({
           />
           <div
             role="menu"
-            className="animate-pop absolute right-1 top-[52px] z-20 w-56 origin-top-right overflow-hidden rounded-2xl border border-line-2 bg-surface-3 shadow-2xl shadow-black"
+            className="animate-pop absolute right-1 top-[52px] lg:left-4 lg:right-auto lg:origin-top-left z-20 w-56 origin-top-right overflow-hidden rounded-2xl border border-line-2 bg-surface-3 shadow-2xl shadow-black"
           >
             <button
               role="menuitem"
@@ -262,7 +263,9 @@ export function DayView({
   const [adding, setAdding] = useState<string | null>(null);
   const [listMenu, setListMenu] = useState(false);
   const [mainMenu, setMainMenu] = useState(false);
-  const [mode, setMode] = useState<CalendarMode>("week");
+  const [mode, setMode] = useState<CalendarMode>(() =>
+    typeof window !== "undefined" && window.matchMedia?.("(min-width: 1024px)").matches ? "month" : "week",
+  );
   const [weekPinned, setWeekPinned] = useState(false);
   const [editor, setEditor] = useState<EditorState>(null);
   const hour = useHour();
@@ -329,9 +332,10 @@ export function DayView({
   }
 
   return (
-    <div className="px-4 pb-10 pt-3 md:px-6">
-      <header className="mb-4 flex items-center justify-between gap-3">
-        <div className="min-w-0">
+    <div className="px-4 pb-10 pt-3 md:px-6 lg:grid lg:grid-cols-[440px_minmax(0,1fr)] lg:items-start lg:gap-16 lg:px-10 lg:pb-16 lg:pt-8">
+      <div className="lg:sticky lg:top-8">
+      <header className="mb-4 flex items-center justify-between gap-3 lg:mb-6">
+        <div className="min-w-0 lg:hidden">
           {rel && (
             <div className="text-[12px] font-semibold uppercase tracking-[0.14em] text-faint">{rel}</div>
           )}
@@ -339,7 +343,7 @@ export function DayView({
             {formatDayTitle(selected)}
           </h1>
         </div>
-        <div className="relative flex shrink-0 items-center gap-2">
+        <div className="relative flex shrink-0 items-center gap-2 lg:fixed lg:right-6 lg:top-5 lg:z-30">
           {selected !== today && (
             <button
               onClick={() => onSelect(today)}
@@ -394,11 +398,26 @@ export function DayView({
         </div>
       </header>
 
+      <div className="mb-6 hidden lg:block">
+        <div className="text-[34px] font-bold leading-none tracking-tight">
+          {fromISODate(selected).toLocaleDateString("en-GB", { weekday: "long" })}
+        </div>
+        <div className="mt-1 text-[22px] font-semibold leading-tight text-muted">
+          {fromISODate(selected).toLocaleDateString("en-GB", { day: "numeric", month: "long" })}
+        </div>
+        <div className="mt-3 text-[14px] font-medium text-muted">
+          {dayTasks.length - open} of {dayTasks.length} done · {dayKcal(data.calories, selected).toLocaleString("en-US")} kcal
+        </div>
+      </div>
+
       <CalendarStrip selected={selected} onSelect={onSelect} mode={mode} onModeChange={changeMode} />
 
       <CalorieBar date={selected} />
+      </div>
 
-      <div className="mb-3 mt-5 flex items-baseline justify-between px-1">
+      <div className="min-w-0">
+
+      <div className="mb-3 mt-5 flex items-baseline justify-between px-1 lg:mt-3">
         <div className="text-[13px] font-medium text-muted">
           {dayTasks.length === 0
             ? "Nothing planned"
@@ -472,9 +491,9 @@ export function DayView({
       )}
 
       {hasCategories && (
-        <div className="relative mt-8">
+        <div className="relative mt-8 lg:mt-10">
           <div className="border-t-2 border-dotted border-white/15" />
-          <div className="mt-3 flex justify-center">
+          <div className="mt-3 flex justify-center lg:justify-end">
             <button
               onClick={() => setListMenu((v) => !v)}
               aria-expanded={listMenu}
@@ -490,7 +509,7 @@ export function DayView({
                 className="fixed inset-0 z-10 cursor-default"
                 onClick={() => setListMenu(false)}
               />
-              <div className="animate-pop absolute bottom-full left-1/2 z-20 mb-2 w-72 -translate-x-1/2 overflow-hidden rounded-2xl border border-line-2 bg-surface-2 shadow-2xl shadow-black">
+              <div className="animate-pop absolute bottom-full left-1/2 z-20 mb-2 w-72 -translate-x-1/2 lg:left-auto lg:right-0 lg:translate-x-0 overflow-hidden rounded-2xl border border-line-2 bg-surface-2 shadow-2xl shadow-black">
                 {(
                   [
                     ["showCompleted", "Show completed"],
@@ -520,6 +539,8 @@ export function DayView({
           )}
         </div>
       )}
+
+      </div>
 
       {editor && (
         <HabitEditor
