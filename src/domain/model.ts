@@ -18,7 +18,10 @@ export const HandoffSchema = z.object({
 export const NoteSchema = z.object({
   id: z.string(),
   taskId: z.string(),
+  /** Markdown export of `blocks` (kept in sync by the task page). */
   content: z.string(),
+  /** BlockNote document JSON (task page). */
+  blocks: z.array(z.unknown()).optional(),
   images: z.array(NoteImageSchema),
   handoff: HandoffSchema,
   createdAt: z.string(),
