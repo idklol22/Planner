@@ -80,7 +80,8 @@ export function AppShell() {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
-        if (page) setPage(null);
+        // A full-screen sheet (e.g. the habit editor) owns Escape while it is open.
+        if (page && !document.querySelector('[role="dialog"]')) setPage(null);
         return;
       }
       if (page || onTask || isTyping(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;

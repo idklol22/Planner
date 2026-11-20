@@ -81,7 +81,7 @@ export function HabitEditor({
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-canvas">
             <Flame size={17} className="text-amber" />
           </span>
-          <h2 className="text-[19px] font-bold tracking-tight">{habit ? "Edit habit" : "Add as habit"}</h2>
+          <h2 className="text-[19px] font-bold tracking-tight">{habit ? "Edit habit" : "New habit"}</h2>
         </div>
 
         <label className={LABEL}>Habit</label>
@@ -173,7 +173,7 @@ export function HabitEditor({
                 actions.archiveHabit(habit.id, true);
                 onClose();
               }}
-              aria-label="Delete habit"
+              aria-label="Archive habit"
               className="flex h-12 w-12 items-center justify-center rounded-full bg-canvas text-rose transition-transform active:scale-90"
             >
               <Trash2 size={18} />
