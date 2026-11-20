@@ -15,6 +15,7 @@ import {
 import { dayKcal, hasEntries, onGoal } from "../domain/calories";
 import { daySummary } from "../domain/tasks";
 import { useStore } from "../state/store";
+import { nearestCategoryColor } from "../domain/palette";
 import { Flower } from "./Flower";
 
 export type CalendarMode = "week" | "month";
@@ -66,17 +67,17 @@ export function CalendarStrip({
   }
 
   const touch = useRef<{ x: number; y: number } | null>(null);
-  const sizes = mode === "week" ? { flower: 38, num: "h-7 w-7 text-[15px]" } : { flower: 32, num: "h-6 w-6 text-[13px] lg:h-7 lg:w-7 lg:text-[16px]" };
+  const sizes = mode === "week" ? { flower: 38, num: "h-8 w-8 text-[15px]" } : { flower: 30, num: "h-7 w-7 text-[15px]" };
 
   return (
-    <section aria-label="Calendar" className="select-none">
-      <div className="mb-2 flex items-center justify-between px-1">
-        <h2 className="text-[22px] font-bold tracking-tight">{formatMonth(selected)}</h2>
-        <div className="flex items-center gap-1.5">
+    <section aria-label="Calendar" className="module select-none">
+      <div className="module-head justify-between">
+        <h2 className="text-[24px] font-semibold tracking-tight">{formatMonth(selected)}</h2>
+        <div className="flex items-center gap-1">
           <button
             onClick={() => go(-1)}
             aria-label={mode === "week" ? "Previous week" : "Previous month"}
-            className="flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors hover:bg-white/10 hover:text-ink active:scale-90"
+            className="mod-btn !min-w-10 !px-0"
           >
             <ChevronLeft size={22} />
           </button>
@@ -84,7 +85,7 @@ export function CalendarStrip({
             onClick={() => onModeChange(mode === "week" ? "month" : "week")}
             aria-label={mode === "week" ? "Switch to month view" : "Switch to week view"}
             title={mode === "week" ? "Show month" : "Show week"}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-2 text-[14px] font-bold transition-all hover:bg-surface-3 active:scale-90"
+            className="mod-btn !min-w-10 !px-0 !bg-white/[0.07] !text-ink"
           >
             <span key={mode} className="animate-fade">
               {mode === "week" ? "W" : "M"}
@@ -93,7 +94,7 @@ export function CalendarStrip({
           <button
             onClick={() => go(1)}
             aria-label={mode === "week" ? "Next week" : "Next month"}
-            className="flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors hover:bg-white/10 hover:text-ink active:scale-90"
+            className="mod-btn !min-w-10 !px-0"
           >
             <ChevronRight size={22} />
           </button>
@@ -113,11 +114,11 @@ export function CalendarStrip({
           if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.5) go(dx < 0 ? 1 : -1);
         }}
       >
-        <div className="mb-1 grid grid-cols-7 text-center">
+        <div className="mb-1 grid grid-cols-[repeat(7,minmax(0,1fr))] text-center">
           {labels.map((label, i) => (
             <div
               key={label + i}
-              className={`text-[11px] font-semibold uppercase tracking-wide ${
+              className={`text-[12px] font-semibold uppercase tracking-wide ${
                 i === 5 ? "text-sat" : i === 6 ? "text-sun" : "text-faint"
               }`}
             >
@@ -128,7 +129,7 @@ export function CalendarStrip({
 
         <div
           key={rangeKey}
-          className={`grid grid-cols-7 ${direction.current === "next" ? "slide-next" : "slide-prev"}`}
+          className={`grid grid-cols-[repeat(7,minmax(0,1fr))] ${direction.current === "next" ? "slide-next" : "slide-prev"}`}
         >
           {dates.map((date) => {
             const summary = daySummary(data.tasks, data.categories, date);
@@ -143,7 +144,7 @@ export function CalendarStrip({
                 onClick={() => onSelect(date)}
                 aria-label={fromISODate(date).toDateString()}
                 aria-pressed={isSel}
-                className={`group flex flex-col items-center gap-1 rounded-2xl py-1.5 transition-opacity active:scale-95 ${
+                className={`group flex flex-col items-center gap-0.5 rounded-xl py-1 transition-opacity active:scale-95 ${
                   dim ? "opacity-35" : ""
                 }`}
               >
@@ -151,16 +152,16 @@ export function CalendarStrip({
                   size={sizes.flower}
                   filled={summary.allDone}
                   checked={summary.allDone}
-                  color={summary.color ?? "#fff"}
+                  color={summary.color ? nearestCategoryColor(summary.color) : "#fff"}
                   count={summary.open}
                   className="transition-transform duration-200 group-hover:scale-110"
                 />
                 <span
                   className={`flex items-center justify-center rounded-full font-semibold tabular-nums transition-colors ${sizes.num} ${
                     isSel
-                      ? "bg-white text-black"
+                      ? "bg-[var(--accent)] text-[var(--accent-ink)]"
                       : isToday
-                        ? "bg-surface-3 text-ink"
+                        ? "bg-white/[0.12] text-ink"
                         : weekendClass(date) || "text-ink"
                   }`}
                 >

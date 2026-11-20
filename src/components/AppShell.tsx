@@ -46,9 +46,9 @@ function MenuPageView({
   onBack: () => void;
 }) {
   return (
-    <div className="animate-slide fixed inset-0 z-50 overflow-y-auto overflow-x-hidden bg-black">
+    <div className="animate-slide fixed inset-0 z-50 overflow-y-auto overflow-x-hidden bg-[var(--bg)]">
       <div className="mx-auto w-full max-w-[720px] px-4 pb-12 md:px-6">
-        <header className="sticky top-0 z-10 -mx-4 mb-2 flex items-center gap-2 bg-black/90 px-3 pb-3 pt-4 backdrop-blur-xl md:-mx-6 md:px-5">
+        <header className="sticky top-0 z-10 -mx-4 mb-2 flex items-center gap-2 bg-[var(--bg)]/90 px-3 pb-3 pt-4 backdrop-blur-xl md:-mx-6 md:px-5">
           <button
             onClick={onBack}
             aria-label="Back"
@@ -102,7 +102,7 @@ export function AppShell() {
 
   if (!ready) {
     return (
-      <div className="flex h-dvh flex-col items-center justify-center gap-3 bg-black">
+      <div className="flex h-dvh flex-col items-center justify-center gap-3">
         <div className="animate-pulse">
           <Flower size={44} filled color="#fff" />
         </div>
@@ -111,9 +111,9 @@ export function AppShell() {
   }
 
   return (
-    <div className="h-dvh overflow-hidden bg-black" hidden={onTask}>
+    <div className="h-dvh overflow-hidden" hidden={onTask}>
       <main className="h-full overflow-y-auto overflow-x-hidden pb-[var(--safe-bottom)]">
-        <div className="animate-fade mx-auto w-full max-w-[560px] lg:max-w-[1150px]">
+        <div className="animate-fade mx-auto w-full max-w-[560px] lg:max-w-[1200px]">
           <DayView
             selected={selected}
             onSelect={setSelected}

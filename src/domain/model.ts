@@ -172,21 +172,8 @@ export function makeTask(date: string, title: string, order: number): Task {
   };
 }
 
-/** 12 preset category colours, bright enough for a true-black background. */
-export const CATEGORY_COLORS = [
-  "#FF6B6B",
-  "#FF9F43",
-  "#FFD166",
-  "#A3D977",
-  "#34D399",
-  "#2DD4BF",
-  "#38BDF8",
-  "#5B8DEF",
-  "#8B7CFF",
-  "#C084FC",
-  "#F472B6",
-  "#D4A373",
-] as const;
+export { CATEGORY_COLORS } from "./palette";
+import { CATEGORY_COLORS } from "./palette";
 
 export function makeCategory(name: string, order: number, color?: string): Category {
   const now = new Date().toISOString();

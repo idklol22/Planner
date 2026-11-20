@@ -1,0 +1,120 @@
+/* Planner theme: one place for every colour, radius and size. Derived from LetCode's midnight tiles. */
+:root {
+  color-scheme: dark;
+  /* surfaces */
+  --bg: #060606;
+  --tile: rgba(14, 14, 15, 0.86);
+  --tile-2: #151516;
+  --tile-3: #1e1e20;
+  --tile-hi: inset 0 1px 0 rgba(255, 255, 255, 0.07), inset 0 0 0 1px rgba(255, 255, 255, 0.055);
+  --line: rgba(255, 255, 255, 0.07);
+  --line-2: rgba(255, 255, 255, 0.15);
+  --pop: #121213;
+  --shadow: 0 20px 60px rgba(0, 0, 0, 0.65);
+  /* text */
+  --text: #f2f2f2;
+  --muted: #a9a9ab;
+  --dim: #6d6d70;
+  /* neutral accent for UI chrome */
+  --accent: #d8d8da;
+  --accent-ink: #070707;
+  --accent-line: rgba(255, 255, 255, 0.45);
+  /* state */
+  --ok: #9fc4ad;
+  --warn: #cdb98e;
+  --bad: #d39a96;
+  --sat: #86a8c4;
+  --sun: #c98a94;
+  /* category accents (mirrored in src/domain/palette.ts) */
+  --cat-1: #c98a94;
+  --cat-2: #d39a8a;
+  --cat-3: #cdb98e;
+  --cat-4: #b3bf8a;
+  --cat-5: #8bb39d;
+  --cat-6: #7fb0aa;
+  --cat-7: #86a8c4;
+  --cat-8: #8f9bc9;
+  --cat-9: #a99bc7;
+  --cat-10: #c595b5;
+  /* scale */
+  --r: 18px;
+  --r-sm: 12px;
+  --gap: 16px;
+  --pad: 18px;
+  --font-base: 16px;
+  --flower-grey: #2c2c2f;
+}
+
+@theme {
+  --color-canvas: var(--bg);
+  --color-rail: var(--bg);
+  --color-surface: var(--tile);
+  --color-surface-2: var(--tile-2);
+  --color-surface-3: var(--tile-3);
+  --color-line: var(--line);
+  --color-line-2: var(--line-2);
+  --color-ink: var(--text);
+  --color-muted: var(--muted);
+  --color-faint: var(--dim);
+  --color-accent: var(--accent);
+  --color-accent-2: var(--accent);
+  --color-amber: var(--warn);
+  --color-mint: var(--ok);
+  --color-rose: var(--bad);
+  --color-sat: var(--sat);
+  --color-sun: var(--sun);
+  --font-sans: "Inter Variable", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
+}
+
+/* Subtle, static background: two soft glows, no animation. */
+body {
+  background:
+    radial-gradient(1100px 650px at 88% -12%, rgba(225, 225, 228, 0.1), transparent 62%),
+    radial-gradient(900px 600px at -5% 110%, rgba(140, 160, 170, 0.07), transparent 60%),
+    var(--bg) fixed;
+  font-size: var(--font-base);
+}
+
+/* Module card (LetCode tile). */
+.module {
+  position: relative;
+  border-radius: var(--r);
+  background: var(--tile);
+  box-shadow: var(--tile-hi);
+  padding: var(--pad);
+}
+.module-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  margin-bottom: 10px;
+}
+.module-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.mod-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  min-width: 40px;
+  padding: 0 10px;
+  border-radius: 12px;
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 600;
+  transition: background 0.12s, color 0.12s;
+}
+.mod-btn:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text);
+}
+.mod-btn:active {
+  transform: scale(0.94);
+}

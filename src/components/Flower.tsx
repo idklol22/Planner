@@ -1,12 +1,12 @@
 import { useRef, useState } from "react";
 
-const GREY = "#2a2a2a";
+const GREY = "var(--flower-grey)";
 const CIRCLES: ReadonlyArray<readonly [number, number, number]> = [
-  [14, 14, 11],
-  [26, 14, 11],
-  [14, 26, 11],
-  [26, 26, 11],
-  [20, 20, 10],
+  [14.5, 14.5, 9.5],
+  [25.5, 14.5, 9.5],
+  [14.5, 25.5, 9.5],
+  [25.5, 25.5, 9.5],
+  [20, 20, 8.5],
 ];
 
 export interface FlowerProps {
@@ -47,8 +47,9 @@ export function Flower({
       <g
         className="flower-fill"
         fill={ghost ? "none" : filled ? color : GREY}
+        fillOpacity={filled && !ghost ? 0.92 : 1}
         stroke={ghost ? color : undefined}
-        strokeWidth={ghost ? 2 : undefined}
+        strokeWidth={ghost ? 1.6 : undefined}
         strokeDasharray={ghost ? "3.5 3.5" : undefined}
       >
         {CIRCLES.map(([cx, cy, r]) => (
@@ -59,7 +60,7 @@ export function Flower({
         d="M12.5 20.5 L18 26 L28 14.5"
         fill="none"
         stroke="#fff"
-        strokeWidth={3.6}
+        strokeWidth={2.6}
         strokeLinecap="round"
         strokeLinejoin="round"
         className={`flower-check ${checked ? "on" : ""}`}
@@ -70,9 +71,9 @@ export function Flower({
           y="20"
           textAnchor="middle"
           dominantBaseline="central"
-          fill="#fff"
-          fontSize={count! > 9 ? 15 : 18}
-          fontWeight={700}
+          fill="var(--text)"
+          fontSize={count! > 9 ? 15 : 17}
+          fontWeight={600}
           fontFamily="inherit"
         >
           {count}
