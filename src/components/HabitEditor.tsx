@@ -1,0 +1,243 @@
+import { useEffect, useState } from "react";
+import { Flame, Trash2 } from "lucide-react";
+import type { ISODate } from "../domain/dates";
+import { describeSchedule } from "../domain/habits";
+import type { Habit } from "../domain/model";
+import { activeCategories } from "../domain/tasks";
+import { useStore } from "../state/store";
+
+// Monday first, values are JS weekdays (0 = Sunday).
+const DAYS: [string, number][] = [
+  ["M", 1],
+  ["T", 2],
+  ["W", 3],
+  ["T", 4],
+  ["F", 5],
+  ["S", 6],
+  ["S", 0],
+];
+const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+const LABEL = "mb-1.5 block text-[12px] font-semibold uppercase tracking-wider text-faint";
+const FIELD =
+  "h-11 rounded-xl bg-black px-3 text-[15px] text-ink outline-none focus:ring-1 focus:ring-white/30";
+
+/** Bottom sheet on phone, centred card on desktop. Creates or edits a habit. */
+export function HabitEditor({
+  habit,
+  categoryId,
+  date,
+  onClose,
+}: {
+  habit?: Habit;
+  categoryId?: string | null;
+  date: ISODate;
+  onClose: () => void;
+}) {
+  const { data, actions } = useStore();
+  const [title, setTitle] = useState(habit?.title ?? "");
+  const [cat, setCat] = useState<string>(habit?.categoryId ?? categoryId ?? "");
+  const [start, setStart] = useState(habit?.startDate ?? date);
+  const [forever, setForever] = useState(habit ? habit.endDate === null : true);
+  const [end, setEnd] = useState(habit?.endDate ?? date);
+  const [days, setDays] = useState<number[]>(habit?.weekdays ?? []);
+  const categories = activeCategories(data.categories);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const valid = title.trim().length > 0 && (forever || end >= start);
+
+  function save() {
+    if (!valid) return;
+    const input = {
+      title: title.trim(),
+      categoryId: cat || null,
+      startDate: start,
+      endDate: forever ? null : end,
+      weekdays: days,
+    };
+    if (habit) actions.updateHabit(habit.id, input);
+    else actions.addHabit(input);
+    onClose();
+  }
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-end justify-center md:items-center">
+      <button
+        aria-label="Close"
+        onClick={onClose}
+        className="animate-fade absolute inset-0 cursor-default bg-black/75 backdrop-blur-[2px]"
+      />
+      <div
+        role="dialog"
+        aria-label={habit ? "Edit habit" : "New habit"}
+        className="animate-sheet-up relative max-h-[92dvh] w-full max-w-[460px] overflow-y-auto rounded-t-[28px] bg-surface-2 px-5 pb-[calc(20px+var(--safe-bottom))] pt-3 md:rounded-[28px] md:pb-5"
+      >
+        <div className="mx-auto mb-3 h-1 w-9 rounded-full bg-white/20 md:hidden" />
+        <div className="mb-4 flex items-center gap-2.5">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-black">
+            <Flame size={17} className="text-amber" />
+          </span>
+          <h2 className="text-[19px] font-bold tracking-tight">{habit ? "Edit habit" : "Add as habit"}</h2>
+        </div>
+
+        <label className={LABEL}>Habit</label>
+        <input
+          autoFocus={!habit}
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && save()}
+          placeholder="e.g. Stretch for 10 minutes"
+          className={`${FIELD} mb-4 w-full`}
+        />
+
+        <label className={LABEL}>Category</label>
+        <select value={cat} onChange={(e) => setCat(e.target.value)} className={`${FIELD} mb-4 w-full`}>
+          <option value="">Inbox</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+
+        <label className={LABEL}>Repeats</label>
+        <div className="mb-2 flex justify-between gap-1.5">
+          {DAYS.map(([label, value], i) => {
+            const on = days.includes(value);
+            return (
+              <button
+                key={i}
+                type="button"
+                aria-pressed={on}
+                aria-label={DAY_NAMES[i]}
+                onClick={() => setDays((d) => (on ? d.filter((x) => x !== value) : [...d, value]))}
+                className={`flex h-10 flex-1 items-center justify-center rounded-full text-[14px] font-semibold transition-all active:scale-90 ${
+                  on ? "bg-white text-black" : "bg-black text-muted hover:text-ink"
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+        <p className="mb-4 text-[12px] text-faint">
+          {days.length === 0 || days.length === 7 ? "Every day" : "Only on the days selected"}
+        </p>
+
+        <div className="mb-4 grid grid-cols-2 gap-3">
+          <div>
+            <label className={LABEL}>Starts</label>
+            <input
+              type="date"
+              value={start}
+              onChange={(e) => e.target.value && setStart(e.target.value)}
+              className={`${FIELD} w-full`}
+            />
+          </div>
+          <div>
+            <label className={LABEL}>Ends</label>
+            <div className="flex h-11 rounded-xl bg-black p-0.5">
+              {([true, false] as const).map((f) => (
+                <button
+                  key={String(f)}
+                  type="button"
+                  onClick={() => setForever(f)}
+                  className={`flex-1 rounded-[10px] text-[13px] font-semibold transition-colors ${
+                    forever === f ? "bg-white text-black" : "text-muted"
+                  }`}
+                >
+                  {f ? "Never" : "On date"}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        {!forever && (
+          <input
+            type="date"
+            value={end}
+            min={start}
+            onChange={(e) => e.target.value && setEnd(e.target.value)}
+            className={`${FIELD} animate-row mb-4 w-full`}
+          />
+        )}
+
+        <div className="mt-2 flex items-center gap-2">
+          {habit && (
+            <button
+              onClick={() => {
+                actions.deleteHabit(habit.id);
+                onClose();
+              }}
+              aria-label="Delete habit"
+              className="flex h-12 w-12 items-center justify-center rounded-full bg-black text-rose transition-transform active:scale-90"
+            >
+              <Trash2 size={18} />
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            className="h-12 flex-1 rounded-full bg-black text-[15px] font-semibold text-muted transition-transform active:scale-95"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={save}
+            disabled={!valid}
+            className="h-12 flex-[1.4] rounded-full bg-white text-[15px] font-semibold text-black transition-all active:scale-95 disabled:opacity-30"
+          >
+            {habit ? "Save" : "Add habit"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Compact list of habits, mounted under Categories in the menu page. */
+export function HabitsList({ date }: { date: ISODate }) {
+  const { data } = useStore();
+  const [editing, setEditing] = useState<Habit | null>(null);
+  const habits = data.habits.filter((h) => !h.deletedAt);
+  if (habits.length === 0) {
+    return (
+      <p className="mt-8 px-1 text-[13px] leading-relaxed text-faint">
+        Habits are daily suggestions. Add one from the + on a category pill, then edit it here.
+      </p>
+    );
+  }
+  return (
+    <section className="mt-8" aria-label="Habits">
+      <h2 className="mb-2 px-1 text-[13px] font-semibold uppercase tracking-wider text-faint">Habits</h2>
+      <div className="space-y-1.5">
+        {habits.map((h) => {
+          const cat = data.categories.find((c) => c.id === h.categoryId);
+          return (
+            <button
+              key={h.id}
+              onClick={() => setEditing(h)}
+              className="flex w-full items-center gap-3 rounded-2xl bg-surface px-4 py-3 text-left transition-colors hover:bg-surface-2"
+            >
+              <span
+                className="h-2.5 w-2.5 shrink-0 rounded-full"
+                style={{ backgroundColor: cat?.color ?? "#777" }}
+              />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[16px] font-semibold">{h.title}</span>
+                <span className="block truncate text-[12px] text-faint">
+                  {cat?.name ?? "Inbox"} · {describeSchedule(h)}
+                </span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {editing && <HabitEditor habit={editing} date={date} onClose={() => setEditing(null)} />}
+    </section>
+  );
+}

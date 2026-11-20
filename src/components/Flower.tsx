@@ -19,6 +19,8 @@ export interface FlowerProps {
   checked?: boolean;
   size?: number;
   className?: string;
+  /** Faded dashed outline: a habit suggestion that is not a task yet. */
+  ghost?: boolean;
 }
 
 /** One SVG for both the task checkbox and the calendar blob:
@@ -30,6 +32,7 @@ export function Flower({
   checked = false,
   size = 28,
   className,
+  ghost = false,
 }: FlowerProps) {
   const showCount = !checked && count !== undefined && count > 0;
   return (
@@ -41,7 +44,13 @@ export function Flower({
       aria-hidden="true"
       focusable="false"
     >
-      <g className="flower-fill" fill={filled ? color : GREY}>
+      <g
+        className="flower-fill"
+        fill={ghost ? "none" : filled ? color : GREY}
+        stroke={ghost ? color : undefined}
+        strokeWidth={ghost ? 2 : undefined}
+        strokeDasharray={ghost ? "3.5 3.5" : undefined}
+      >
         {CIRCLES.map(([cx, cy, r]) => (
           <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r={r} style={{ transition: "fill .22s ease" }} />
         ))}

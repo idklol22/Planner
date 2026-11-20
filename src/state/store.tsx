@@ -12,15 +12,13 @@ import { uid } from "../domain/ids";
 import type { ISODate } from "../domain/dates";
 import {
   defaultData,
+  makeCalorieEntry,
   makeCategory,
   makeHabit,
   makeNote,
   makeTask,
   type AppData,
-  type CalorieEntry,
   type Category,
-  type Habit,
-  type MealSlot,
   type Note,
   type Settings,
   type Task,
@@ -70,6 +68,14 @@ export type TaskPatch = Partial<
   >
 >;
 
+export interface HabitInput {
+  title: string;
+  categoryId: string | null;
+  startDate: ISODate;
+  endDate: ISODate | null;
+  weekdays?: number[];
+}
+
 export interface Actions {
   addCategory(name: string, color?: string, icon?: string): string;
   updateCategory(
@@ -80,7 +86,7 @@ export interface Actions {
   reorderCategories(ids: string[]): void;
   archiveCategory(id: string, archived?: boolean): void;
 
-  addTask(date: ISODate, title: string, categoryId?: string | null): string;
+  addTask(date: ISODate, title: string, categoryId?: string | null, habitId?: string | null): string;
   updateTask(id: string, patch: TaskPatch): void;
   toggleTask(id: string): void;
   moveTaskToDay(id: string, date: ISODate): void;
@@ -98,11 +104,14 @@ export interface Actions {
   markNoteDone(taskId: string): void;
   sendToLearnHarness(taskId: string): Promise<{ ok: boolean; message: string }>;
 
-  addHabit(title: string, cadence: Habit["cadence"]): void;
-  toggleHabitDate(id: string, date: ISODate): void;
+  addHabit(input: HabitInput): string;
+  updateHabit(id: string, patch: Partial<HabitInput>): void;
+  /** Soft delete; existing tasks created from it stay. */
   deleteHabit(id: string): void;
+  /** Turn a habit's ghost on `date` into a real task. */
+  acceptGhost(habitId: string, date: ISODate): string | null;
 
-  addCalorie(date: ISODate, slot: MealSlot, label: string, kcal: number): void;
+  addCalorie(date: ISODate, kcal: number, label?: string): void;
   deleteCalorie(id: string): void;
 
   updateSettings(patch: Partial<Settings>): void;
@@ -188,14 +197,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         update((d) => mapCategory(d, id, (c) => ({ ...c, archived })));
       },
 
-      addTask(date, title, categoryId = null) {
+      addTask(date, title, categoryId = null, habitId = null) {
         const id = uid("task");
         update((d) => {
           const order =
             d.tasks
               .filter((t) => t.date === date && !t.parentId && !t.deletedAt)
               .reduce((m, t) => Math.max(m, t.order + 1), 0);
-          const task: Task = { ...makeTask(date, title.trim(), order), id, categoryId };
+          const task: Task = { ...makeTask(date, title.trim(), order), id, categoryId, habitId };
           return { ...d, tasks: [...d.tasks, task] };
         });
         return id;
@@ -364,41 +373,71 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
       },
 
-      addHabit(title, cadence) {
-        update((d) => ({ ...d, habits: [...d.habits, makeHabit(title, cadence)] }));
+      addHabit(input) {
+        const habit = makeHabit(
+          input.title.trim() || "Habit",
+          input.categoryId,
+          input.startDate,
+          input.endDate,
+          input.weekdays,
+        );
+        update((d) => ({ ...d, habits: [...d.habits, habit] }));
+        return habit.id;
       },
-      toggleHabitDate(id, date) {
+      updateHabit(id, patch) {
         update((d) => ({
           ...d,
-          habits: d.habits.map((habit) =>
-            habit.id === id
-              ? {
-                  ...habit,
-                  completedDates: habit.completedDates.includes(date)
-                    ? habit.completedDates.filter((x) => x !== date)
-                    : [...habit.completedDates, date],
-                }
-              : habit,
-          ),
+          habits: d.habits.map((h) => {
+            if (h.id !== id) return h;
+            const next = { ...h, ...patch, updatedAt: nowISO() };
+            const days = next.weekdays;
+            next.weekdays = days && days.length > 0 && days.length < 7 ? days : undefined;
+            return next;
+          }),
         }));
       },
       deleteHabit(id) {
-        update((d) => ({ ...d, habits: d.habits.filter((h) => h.id !== id) }));
+        update((d) => {
+          const stamp = nowISO();
+          return {
+            ...d,
+            habits: d.habits.map((h) => (h.id === id ? { ...h, deletedAt: stamp, updatedAt: stamp } : h)),
+          };
+        });
+      },
+      acceptGhost(habitId, date) {
+        const habit = dataRef.current.habits.find((h) => h.id === habitId && !h.deletedAt);
+        if (!habit) return null;
+        const id = uid("task");
+        update((d) => {
+          if (d.tasks.some((t) => t.date === date && t.habitId === habitId && !t.deletedAt)) return d;
+          const order = d.tasks
+            .filter((t) => t.date === date && !t.parentId && !t.deletedAt)
+            .reduce((m, t) => Math.max(m, t.order + 1), 0);
+          const task: Task = {
+            ...makeTask(date, habit.title, order),
+            id,
+            categoryId: habit.categoryId,
+            habitId: habit.id,
+          };
+          return { ...d, tasks: [...d.tasks, task] };
+        });
+        return id;
       },
 
-      addCalorie(date, slot, label, kcal) {
-        const entry: CalorieEntry = {
-          id: uid("cal"),
-          date,
-          slot,
-          label,
-          kcal,
-          createdAt: nowISO(),
-        };
+      addCalorie(date, kcal, label) {
+        if (!Number.isFinite(kcal) || kcal <= 0) return;
+        const entry = makeCalorieEntry(date, Math.round(kcal), label);
         update((d) => ({ ...d, calories: [...d.calories, entry] }));
       },
       deleteCalorie(id) {
-        update((d) => ({ ...d, calories: d.calories.filter((c) => c.id !== id) }));
+        update((d) => {
+          const stamp = nowISO();
+          return {
+            ...d,
+            calories: d.calories.map((c) => (c.id === id ? { ...c, deletedAt: stamp, updatedAt: stamp } : c)),
+          };
+        });
       },
 
       updateSettings(patch) {

@@ -1,18 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, ListFilter, Menu, Plus, Sparkles } from "lucide-react";
+import { Check, ListFilter, Menu, Plus, Repeat, Settings2, Sparkles, Tags, Settings, Flame } from "lucide-react";
 import {
-  formatDayTitle,
-  todayISO,
   addDays,
+  formatDayTitle,
+  fromISODate,
+  startOfWeek,
+  todayISO,
   type ISODate,
 } from "../domain/dates";
-import { CATEGORY_COLORS } from "../domain/model";
+import { ghostsFor } from "../domain/habits";
+import { CATEGORY_COLORS, type Habit } from "../domain/model";
 import { sectionsForDay, tasksForDay, type Section } from "../domain/tasks";
 import { useStore } from "../state/store";
 import { CalendarStrip, type CalendarMode } from "./CalendarStrip";
+import { CalorieBar } from "./CalorieBar";
 import { Flower } from "./Flower";
+import { HabitEditor } from "./HabitEditor";
 import { CategoryIcon } from "./icons";
+import { DaySummaryCard, WeekSummaryCard } from "./Summaries";
 import { TaskRow } from "./TaskRow";
+
+export type MenuPage = "categories" | "settings";
 
 interface Prefs {
   showCompleted: boolean;
@@ -72,27 +80,69 @@ function InlineAdd({
   );
 }
 
+/** A habit suggestion for the day: faded row with a dashed flower. Tap to make it a task. */
+function GhostRow({
+  habit,
+  color,
+  onAccept,
+  onEdit,
+}: {
+  habit: Habit;
+  color: string;
+  onAccept: () => void;
+  onEdit: () => void;
+}) {
+  return (
+    <div className="animate-row group flex min-h-[48px] items-center gap-3 rounded-2xl px-2 py-1.5 opacity-55 transition-[opacity,background-color] hover:bg-white/[0.04] hover:opacity-90">
+      <button
+        onClick={onAccept}
+        aria-label={`Add "${habit.title}" as a task`}
+        className="flower-btn"
+      >
+        <Flower size={30} color={color} ghost />
+      </button>
+      <button onClick={onAccept} className="flex min-w-0 flex-1 items-center gap-2 py-1.5 text-left">
+        <span className="min-w-0 flex-1 truncate text-[17px] leading-snug text-ink">{habit.title}</span>
+        <Repeat size={14} className="shrink-0 text-faint" aria-label="Habit" />
+      </button>
+      <button
+        onClick={onEdit}
+        aria-label={`Edit habit ${habit.title}`}
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-faint transition-colors hover:bg-white/10 hover:text-ink active:scale-90"
+      >
+        <Settings2 size={15} />
+      </button>
+    </div>
+  );
+}
+
 function CategorySection({
   section,
+  ghosts,
   date,
   adding,
   setAdding,
-  openTaskId,
   onOpenTask,
+  onAddHabit,
+  onEditHabit,
 }: {
   section: Section;
+  ghosts: Habit[];
   date: ISODate;
   adding: boolean;
   setAdding: (on: boolean) => void;
-  openTaskId: string | null;
   onOpenTask: (id: string) => void;
+  onAddHabit: (categoryId: string | null) => void;
+  onEditHabit: (habit: Habit) => void;
 }) {
   const { actions } = useStore();
+  const [menu, setMenu] = useState(false);
   const cat = section.category;
   const color = cat?.color ?? "#ffffff";
   const name = cat?.name ?? "Inbox";
+  const body = section.tasks.length > 0 || ghosts.length > 0 || adding;
   return (
-    <section aria-label={name}>
+    <section aria-label={name} className="relative">
       <div className="flex h-12 items-center gap-2.5 rounded-full bg-surface-2 pl-4 pr-1.5">
         <CategoryIcon name={cat?.icon} size={17} color={color} />
         <h3 className="min-w-0 truncate text-[15px] font-semibold" style={{ color }}>
@@ -105,22 +155,66 @@ function CategorySection({
         )}
         <span className="flex-1" />
         <button
-          onClick={() => setAdding(true)}
-          aria-label={`Add task to ${name}`}
+          onClick={() => setMenu((v) => !v)}
+          aria-label={`Add to ${name}`}
+          aria-expanded={menu}
+          aria-haspopup="menu"
           className="flex h-9 w-9 items-center justify-center rounded-full bg-black text-white transition-transform hover:scale-105 active:scale-90"
         >
-          <Plus size={20} strokeWidth={2.5} />
+          <Plus
+            size={20}
+            strokeWidth={2.5}
+            className="transition-transform duration-200"
+            style={{ transform: menu ? "rotate(45deg)" : undefined }}
+          />
         </button>
       </div>
-      {(section.tasks.length > 0 || adding) && (
+      {menu && (
+        <>
+          <button
+            aria-label="Close menu"
+            className="fixed inset-0 z-10 cursor-default"
+            onClick={() => setMenu(false)}
+          />
+          <div
+            role="menu"
+            className="animate-pop absolute right-1 top-[52px] z-20 w-56 origin-top-right overflow-hidden rounded-2xl border border-line-2 bg-surface-3 shadow-2xl shadow-black"
+          >
+            <button
+              role="menuitem"
+              onClick={() => {
+                setMenu(false);
+                setAdding(true);
+              }}
+              className="flex w-full items-center gap-3 px-4 py-3.5 text-left text-[15px] font-medium hover:bg-white/5"
+            >
+              <Plus size={17} className="text-muted" /> Add task
+            </button>
+            <button
+              role="menuitem"
+              onClick={() => {
+                setMenu(false);
+                onAddHabit(cat?.id ?? null);
+              }}
+              className="flex w-full items-center gap-3 border-t border-line px-4 py-3.5 text-left text-[15px] font-medium hover:bg-white/5"
+            >
+              <Flame size={17} className="text-muted" /> Add as habit…
+            </button>
+          </div>
+        </>
+      )}
+      {body && (
         <div className="mt-1 space-y-0.5 px-1">
           {section.tasks.map((task) => (
-            <TaskRow
-              key={task.id}
-              task={task}
+            <TaskRow key={task.id} task={task} color={color} onOpen={onOpenTask} />
+          ))}
+          {ghosts.map((habit) => (
+            <GhostRow
+              key={habit.id}
+              habit={habit}
               color={color}
-              active={openTaskId === task.id}
-              onOpen={onOpenTask}
+              onAccept={() => actions.acceptGhost(habit.id, date)}
+              onEdit={() => onEditHabit(habit)}
             />
           ))}
           {adding && (
@@ -138,31 +232,40 @@ function CategorySection({
 
 const SUGGESTIONS = ["Study", "Work", "Health", "Personal"];
 
+/** Re-renders every minute so the "after 21:00" summary appears on its own. */
+function useHour(): number {
+  const [hour, setHour] = useState(() => new Date().getHours());
+  useEffect(() => {
+    const id = window.setInterval(() => setHour(new Date().getHours()), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
+  return hour;
+}
+
+type EditorState = { habit?: Habit; categoryId?: string | null } | null;
+
 export function DayView({
   selected,
   onSelect,
-  mode,
-  onModeChange,
-  openTaskId,
-  onOpenTask,
   addSignal,
-  onOpenMenu,
+  onOpenPage,
   onManageCategories,
 }: {
   selected: ISODate;
   onSelect: (date: ISODate) => void;
-  mode: CalendarMode;
-  onModeChange: (mode: CalendarMode) => void;
-  openTaskId: string | null;
-  onOpenTask: (id: string) => void;
   addSignal: number;
-  onOpenMenu: () => void;
+  onOpenPage: (page: MenuPage) => void;
   onManageCategories: () => void;
 }) {
   const { data, actions } = useStore();
   const [prefs, setPrefs] = useState<Prefs>(loadPrefs);
   const [adding, setAdding] = useState<string | null>(null);
   const [listMenu, setListMenu] = useState(false);
+  const [mainMenu, setMainMenu] = useState(false);
+  const [mode, setMode] = useState<CalendarMode>("week");
+  const [weekPinned, setWeekPinned] = useState(false);
+  const [editor, setEditor] = useState<EditorState>(null);
+  const hour = useHour();
 
   useEffect(() => {
     try {
@@ -172,15 +275,31 @@ export function DayView({
     }
   }, [prefs]);
 
-  const sections = useMemo(
-    () => sectionsForDay(data.tasks, data.categories, selected, prefs),
-    [data.tasks, data.categories, selected, prefs],
-  );
+  const today = todayISO();
+
+  const sections = useMemo(() => {
+    const base = sectionsForDay(data.tasks, data.categories, selected, { showCompleted: prefs.showCompleted });
+    // Habit ghosts are suggestions for today and the future, never for past days.
+    const ghosts = selected >= today ? ghostsFor(selected, data.habits, data.tasks) : [];
+    const live = new Set(base.map((s) => s.category?.id).filter(Boolean));
+    const forSection = (s: Section) =>
+      ghosts.filter((h) =>
+        s.category ? h.categoryId === s.category.id : !h.categoryId || !live.has(h.categoryId),
+      );
+    const withInbox =
+      !base.some((s) => !s.category) && ghosts.some((h) => !h.categoryId || !live.has(h.categoryId))
+        ? [...base, { category: null, tasks: [] } as Section]
+        : base;
+    return withInbox
+      .map((section) => ({ section, ghosts: forSection(section) }))
+      .filter((row) => !prefs.hideEmpty || row.section.tasks.length > 0 || row.ghosts.length > 0);
+  }, [data.tasks, data.categories, data.habits, selected, today, prefs]);
+
   const dayTasks = tasksForDay(data.tasks, selected);
   const open = dayTasks.filter((t) => !t.done).length;
 
   // `n` shortcut: open the inline input of the first category.
-  const firstKey = sections[0] ? (sections[0].category?.id ?? "__inbox") : null;
+  const firstKey = sections[0] ? (sections[0].section.category?.id ?? "__inbox") : null;
   const lastSignal = useRef(addSignal);
   useEffect(() => {
     if (addSignal !== lastSignal.current) {
@@ -191,7 +310,6 @@ export function DayView({
 
   useEffect(() => setAdding(null), [selected]);
 
-  const today = todayISO();
   const rel =
     selected === today
       ? "Today"
@@ -201,9 +319,17 @@ export function DayView({
           ? "Yesterday"
           : null;
   const hasCategories = data.categories.some((c) => !c.archived);
+  const showDaySummary = selected < today || (selected === today && hour >= 21);
+  const isSunday = fromISODate(selected).getDay() === 0;
+  const showWeekSummary = isSunday || (weekPinned && mode === "week");
+
+  function changeMode(next: CalendarMode) {
+    setMode(next);
+    setWeekPinned(next === "week");
+  }
 
   return (
-    <div className="px-4 pb-8 pt-3 md:px-6">
+    <div className="px-4 pb-10 pt-3 md:px-6">
       <header className="mb-4 flex items-center justify-between gap-3">
         <div className="min-w-0">
           {rel && (
@@ -213,33 +339,64 @@ export function DayView({
             {formatDayTitle(selected)}
           </h1>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <div className="inline-flex rounded-full bg-surface-2 p-0.5" role="tablist" aria-label="Calendar view">
-            {(["month", "week"] as const).map((m) => (
-              <button
-                key={m}
-                role="tab"
-                aria-selected={mode === m}
-                onClick={() => onModeChange(m)}
-                className={`rounded-full px-3 py-1.5 text-[13px] font-semibold capitalize transition-colors ${
-                  mode === m ? "bg-white text-black" : "text-muted hover:text-ink"
-                }`}
-              >
-                {m}
-              </button>
-            ))}
-          </div>
+        <div className="relative flex shrink-0 items-center gap-2">
+          {selected !== today && (
+            <button
+              onClick={() => onSelect(today)}
+              className="animate-fade h-9 rounded-full bg-surface-2 px-3.5 text-[13px] font-semibold text-muted transition-colors hover:bg-surface-3 hover:text-ink active:scale-95"
+            >
+              Today
+            </button>
+          )}
           <button
-            onClick={onOpenMenu}
+            onClick={() => setMainMenu((v) => !v)}
             aria-label="Menu"
+            aria-expanded={mainMenu}
+            aria-haspopup="menu"
             className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-2 text-ink transition-colors hover:bg-surface-3 active:scale-90"
           >
             <Menu size={18} />
           </button>
+          {mainMenu && (
+            <>
+              <button
+                aria-label="Close menu"
+                className="fixed inset-0 z-30 cursor-default"
+                onClick={() => setMainMenu(false)}
+              />
+              <div
+                role="menu"
+                className="animate-pop absolute right-0 top-11 z-40 w-52 origin-top-right overflow-hidden rounded-2xl border border-line-2 bg-surface-3 shadow-2xl shadow-black"
+              >
+                {(
+                  [
+                    ["categories", "Categories", Tags],
+                    ["settings", "Settings", Settings],
+                  ] as const
+                ).map(([page, label, Icon], i) => (
+                  <button
+                    key={page}
+                    role="menuitem"
+                    onClick={() => {
+                      setMainMenu(false);
+                      onOpenPage(page);
+                    }}
+                    className={`flex w-full items-center gap-3 px-4 py-3.5 text-left text-[15px] font-medium hover:bg-white/5 ${
+                      i > 0 ? "border-t border-line" : ""
+                    }`}
+                  >
+                    <Icon size={17} className="text-muted" /> {label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </header>
 
-      <CalendarStrip selected={selected} onSelect={onSelect} mode={mode} />
+      <CalendarStrip selected={selected} onSelect={onSelect} mode={mode} onModeChange={changeMode} />
+
+      <CalorieBar date={selected} />
 
       <div className="mb-3 mt-5 flex items-baseline justify-between px-1">
         <div className="text-[13px] font-medium text-muted">
@@ -280,17 +437,21 @@ export function DayView({
         </div>
       ) : (
         <div className="space-y-3">
-          {sections.map((section) => {
+          {sections.map(({ section, ghosts }) => {
             const key = section.category?.id ?? "__inbox";
             return (
               <CategorySection
                 key={key}
                 section={section}
+                ghosts={ghosts}
                 date={selected}
                 adding={adding === key}
                 setAdding={(on) => setAdding(on ? key : null)}
-                openTaskId={openTaskId}
-                onOpenTask={onOpenTask}
+                onOpenTask={(id) => {
+                  window.location.hash = `#/task/${id}`;
+                }}
+                onAddHabit={(categoryId) => setEditor({ categoryId })}
+                onEditHabit={(habit) => setEditor({ habit })}
               />
             );
           })}
@@ -300,6 +461,13 @@ export function DayView({
               Nothing to show. Turn off &quot;Hide empty categories&quot; in the list menu to add tasks.
             </div>
           )}
+        </div>
+      )}
+
+      {(showDaySummary || showWeekSummary) && (
+        <div className="mt-6 space-y-3">
+          {showDaySummary && <DaySummaryCard date={selected} />}
+          {showWeekSummary && <WeekSummaryCard start={startOfWeek(selected)} />}
         </div>
       )}
 
@@ -322,7 +490,7 @@ export function DayView({
                 className="fixed inset-0 z-10 cursor-default"
                 onClick={() => setListMenu(false)}
               />
-              <div className="animate-row absolute bottom-full left-1/2 z-20 mb-2 w-72 -translate-x-1/2 overflow-hidden rounded-2xl border border-line-2 bg-surface-2 shadow-2xl shadow-black">
+              <div className="animate-pop absolute bottom-full left-1/2 z-20 mb-2 w-72 -translate-x-1/2 overflow-hidden rounded-2xl border border-line-2 bg-surface-2 shadow-2xl shadow-black">
                 {(
                   [
                     ["showCompleted", "Show completed"],
@@ -351,6 +519,15 @@ export function DayView({
             </>
           )}
         </div>
+      )}
+
+      {editor && (
+        <HabitEditor
+          habit={editor.habit}
+          categoryId={editor.categoryId}
+          date={selected < today ? today : selected}
+          onClose={() => setEditor(null)}
+        />
       )}
     </div>
   );

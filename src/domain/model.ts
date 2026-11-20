@@ -56,6 +56,8 @@ export const TaskSchema = z.object({
   parentId: z.string().nullable(),
   /** Set on a materialised occurrence of a recurring template task. */
   seriesId: z.string().nullable().optional(),
+  /** Set when the task was created by accepting a habit's ghost on that day. */
+  habitId: z.string().nullable().optional(),
   order: z.number(),
   done: z.boolean(),
   completedAt: z.string().optional(),
@@ -73,20 +75,26 @@ export const TaskSchema = z.object({
 export const HabitSchema = z.object({
   id: z.string(),
   title: z.string(),
-  cadence: z.enum(["daily", "weekly"]),
-  completedDates: z.array(z.string()),
+  categoryId: z.string().nullable(),
+  /** First day the habit applies (YYYY-MM-DD). */
+  startDate: z.string(),
+  /** Last day it applies, or null = forever. */
+  endDate: z.string().nullable(),
+  /** 0 = Sunday. Missing or empty = every day. */
+  weekdays: z.array(z.number().int().min(0).max(6)).optional(),
   createdAt: z.string(),
+  updatedAt: z.string(),
+  deletedAt: z.string().optional(),
 });
-
-export const MealSlotSchema = z.enum(["breakfast", "lunch", "dinner"]);
 
 export const CalorieEntrySchema = z.object({
   id: z.string(),
   date: z.string(),
-  slot: MealSlotSchema,
-  label: z.string(),
   kcal: z.number(),
+  label: z.string().optional(),
   createdAt: z.string(),
+  updatedAt: z.string(),
+  deletedAt: z.string().optional(),
 });
 
 export const SettingsSchema = z.object({
@@ -98,7 +106,7 @@ export const SettingsSchema = z.object({
 });
 
 export const AppDataSchema = z.object({
-  version: z.literal(2),
+  version: z.literal(3),
   tasks: z.array(TaskSchema),
   categories: z.array(CategorySchema),
   habits: z.array(HabitSchema),
@@ -115,7 +123,6 @@ export type Task = z.infer<typeof TaskSchema>;
 export type Category = z.infer<typeof CategorySchema>;
 export type TaskKind = z.infer<typeof TaskKindSchema>;
 export type Habit = z.infer<typeof HabitSchema>;
-export type MealSlot = z.infer<typeof MealSlotSchema>;
 export type CalorieEntry = z.infer<typeof CalorieEntrySchema>;
 export type Settings = z.infer<typeof SettingsSchema>;
 export type AppData = z.infer<typeof AppDataSchema>;
@@ -183,19 +190,41 @@ export function makeCategory(name: string, order: number, color?: string): Categ
   };
 }
 
-export function makeHabit(title: string, cadence: Habit["cadence"]): Habit {
+export function makeHabit(
+  title: string,
+  categoryId: string | null,
+  startDate: string,
+  endDate: string | null = null,
+  weekdays?: number[],
+): Habit {
+  const now = new Date().toISOString();
   return {
     id: uid("habit"),
     title,
-    cadence,
-    completedDates: [],
-    createdAt: new Date().toISOString(),
+    categoryId,
+    startDate,
+    endDate,
+    weekdays: weekdays && weekdays.length > 0 && weekdays.length < 7 ? weekdays : undefined,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+export function makeCalorieEntry(date: string, kcal: number, label?: string): CalorieEntry {
+  const now = new Date().toISOString();
+  return {
+    id: uid("cal"),
+    date,
+    kcal,
+    label: label?.trim() || undefined,
+    createdAt: now,
+    updatedAt: now,
   };
 }
 
 export function defaultData(): AppData {
   return {
-    version: 2,
+    version: 3,
     tasks: [],
     categories: [],
     habits: [],
@@ -208,7 +237,64 @@ export function defaultData(): AppData {
   };
 }
 
-// ── Migration v1 → v2 ──────────────────────────────────────────────────────
+// ── Migrations ─────────────────────────────────────────────────────────────
+const LegacyHabitSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  cadence: z.enum(["daily", "weekly"]).optional(),
+  completedDates: z.array(z.string()).optional(),
+  createdAt: z.string(),
+});
+const LegacyCalorieSchema = z.object({
+  id: z.string(),
+  date: z.string(),
+  slot: z.string().optional(),
+  label: z.string().optional(),
+  kcal: z.number(),
+  createdAt: z.string(),
+});
+
+const V2Schema = z.object({
+  version: z.literal(2),
+  tasks: z.array(TaskSchema),
+  categories: z.array(CategorySchema),
+  habits: z.array(LegacyHabitSchema),
+  calories: z.array(LegacyCalorieSchema),
+  settings: SettingsSchema,
+});
+
+/** v2 → v3: habits become scheduled ghost suggestions, calories gain sync stamps. */
+export function migrateV2(value: unknown): AppData | null {
+  const parsed = V2Schema.safeParse(value);
+  if (!parsed.success) return null;
+  const v2 = parsed.data;
+  const habits: Habit[] = v2.habits.map((h) => {
+    const start = h.createdAt.slice(0, 10);
+    // A weekly habit has no weekday in v2; anchor it to the weekday it was created on.
+    const weekdays =
+      h.cadence === "weekly" ? [new Date(`${start}T12:00:00`).getDay()] : undefined;
+    return {
+      id: h.id,
+      title: h.title,
+      categoryId: null,
+      startDate: start,
+      endDate: null,
+      weekdays,
+      createdAt: h.createdAt,
+      updatedAt: h.createdAt,
+    };
+  });
+  const calories: CalorieEntry[] = v2.calories.map((c) => ({
+    id: c.id,
+    date: c.date,
+    kcal: c.kcal,
+    label: [c.slot, c.label].filter(Boolean).join(": ") || undefined,
+    createdAt: c.createdAt,
+    updatedAt: c.createdAt,
+  }));
+  return AppDataSchema.parse({ ...v2, version: 3, habits, calories });
+}
+
 const V1TaskSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -225,12 +311,12 @@ const V1Schema = z.object({
   version: z.literal(1),
   tasks: z.array(V1TaskSchema),
   headings: z.array(z.object({ id: z.string(), title: z.string() }).passthrough()),
-  habits: z.array(HabitSchema),
-  calories: z.array(CalorieEntrySchema),
+  habits: z.array(LegacyHabitSchema),
+  calories: z.array(LegacyCalorieSchema),
   settings: SettingsSchema,
 });
 
-/** Each distinct heading title becomes a category; tasks keep their mapping. */
+/** v1 → v3. Each distinct heading title becomes a category; tasks keep their mapping. */
 export function migrateV1(value: unknown): AppData | null {
   const parsed = V1Schema.safeParse(value);
   if (!parsed.success) return null;
@@ -269,7 +355,7 @@ export function migrateV1(value: unknown): AppData | null {
       updatedAt: t.completedAt ?? t.createdAt,
     };
   });
-  return AppDataSchema.parse({
+  return migrateV2({
     version: 2,
     tasks,
     categories,
@@ -279,9 +365,9 @@ export function migrateV1(value: unknown): AppData | null {
   });
 }
 
-/** Parse persisted data; migrate v1, fall back to a clean slate if corrupt. */
+/** Parse persisted data; migrate older versions, fall back to a clean slate if corrupt. */
 export function parseAppData(value: unknown): AppData {
   const result = AppDataSchema.safeParse(value);
   if (result.success) return result.data;
-  return migrateV1(value) ?? defaultData();
+  return migrateV2(value) ?? migrateV1(value) ?? defaultData();
 }

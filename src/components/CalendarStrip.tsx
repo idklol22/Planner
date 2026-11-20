@@ -12,6 +12,7 @@ import {
   weekdayLabels,
   type ISODate,
 } from "../domain/dates";
+import { dayKcal, hasEntries, onGoal } from "../domain/calories";
 import { daySummary } from "../domain/tasks";
 import { useStore } from "../state/store";
 import { Flower } from "./Flower";
@@ -29,10 +30,12 @@ export function CalendarStrip({
   selected,
   onSelect,
   mode,
+  onModeChange,
 }: {
   selected: ISODate;
   onSelect: (date: ISODate) => void;
   mode: CalendarMode;
+  onModeChange: (mode: CalendarMode) => void;
 }) {
   const { data, ready, actions } = useStore();
   const today = todayISO();
@@ -69,7 +72,7 @@ export function CalendarStrip({
     <section aria-label="Calendar" className="select-none">
       <div className="mb-2 flex items-center justify-between px-1">
         <h2 className="text-[22px] font-bold tracking-tight">{formatMonth(selected)}</h2>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5">
           <button
             onClick={() => go(-1)}
             aria-label={mode === "week" ? "Previous week" : "Previous month"}
@@ -77,14 +80,16 @@ export function CalendarStrip({
           >
             <ChevronLeft size={22} />
           </button>
-          {selected !== today && (
-            <button
-              onClick={() => onSelect(today)}
-              className="animate-fade rounded-full px-3 py-1.5 text-[13px] font-semibold text-muted transition-colors hover:bg-white/10 hover:text-ink"
-            >
-              Today
-            </button>
-          )}
+          <button
+            onClick={() => onModeChange(mode === "week" ? "month" : "week")}
+            aria-label={mode === "week" ? "Switch to month view" : "Switch to week view"}
+            title={mode === "week" ? "Show month" : "Show week"}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-2 text-[14px] font-bold transition-all hover:bg-surface-3 active:scale-90"
+          >
+            <span key={mode} className="animate-fade">
+              {mode === "week" ? "W" : "M"}
+            </span>
+          </button>
           <button
             onClick={() => go(1)}
             aria-label={mode === "week" ? "Next week" : "Next month"}
@@ -130,6 +135,8 @@ export function CalendarStrip({
             const isSel = date === selected;
             const isToday = date === today;
             const dim = mode === "month" && !sameMonth(date, selected);
+            const logged = mode === "month" && hasEntries(data.calories, date);
+            const goodDay = logged && onGoal(dayKcal(data.calories, date), data.settings.dailyCalorieGoal);
             return (
               <button
                 key={date}
@@ -159,6 +166,14 @@ export function CalendarStrip({
                 >
                   {Number(date.slice(-2))}
                 </span>
+                {mode === "month" && (
+                  <span
+                    aria-hidden
+                    className={`-mt-0.5 h-1 w-1 rounded-full transition-colors ${
+                      logged ? (goodDay ? "bg-mint" : "bg-white/35") : "bg-transparent"
+                    }`}
+                  />
+                )}
               </button>
             );
           })}
