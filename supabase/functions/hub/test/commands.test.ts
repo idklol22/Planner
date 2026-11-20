@@ -36,7 +36,7 @@ describe("command claims", () => {
       claimedBy: expect.stringMatching(/^device-[ab]$/),
     });
 
-    const leaseUntil = ctx.store.getCommand("cmd-lease")?.leaseUntil;
+    const leaseUntil = ctx.store.peekCommand("cmd-lease")?.leaseUntil;
     expect(Date.parse(leaseUntil!)).toBeGreaterThan(Date.now());
   });
 
@@ -64,3 +64,22 @@ describe("command claims", () => {
     expect(none.command).toBeNull();
   });
 });
+
+describe("get command", () => {
+  it("returns a command by id, 404 when missing", async () => {
+    await call(ctx, "/commands", {
+      method: "POST",
+      token: TOKEN,
+      body: { id: "cmd-get", type: "handoff", payload: { a: 1 } },
+    });
+    const found = await call(ctx, "/commands/cmd-get", { token: TOKEN });
+    expect(found.status).toBe(200);
+    expect(((await found.json()) as { command: { id: string; status: string } }).command).toMatchObject({
+      id: "cmd-get",
+      status: "queued",
+    });
+    const missing = await call(ctx, "/commands/nope", { token: TOKEN });
+    expect(missing.status).toBe(404);
+  });
+});
+

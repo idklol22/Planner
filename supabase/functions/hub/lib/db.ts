@@ -224,6 +224,7 @@ export interface HubStore {
   insertEvent(event: EventInput): Promise<EventResult>;
   eventsSince(since: number | string, limit: number): Promise<EventsResult>;
   enqueueCommand(command: CommandInput): Promise<{ id: string }>;
+  getCommand(id: string): Promise<CommandRow | null>;
   claimCommand(device: string, leaseSec: number): Promise<CommandRow | null>;
   completeCommand(id: string, status: CommandStatus, result: unknown): Promise<CommandRow | null>;
   timedTasks(): Promise<TaskRow[]>;

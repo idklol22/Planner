@@ -15,7 +15,7 @@ import type {
   SyncRow,
   SyncTable,
   TaskRow,
-} from "./db";
+} from "./db.ts";
 
 const SYNC_TABLES: SyncTable[] = [
   "category",
@@ -427,6 +427,9 @@ export async function handle(
             const body = normalize(raw);
             const id = typeof body.id === "string" && body.id ? body.id : crypto.randomUUID();
             response = json(await store.enqueueCommand({ id, type: body.type as string, payload: body.payload ?? null }), 201);
+          } else if (request.method === "GET" && /^\/commands\/[^/]+$/.test(path)) {
+            const found = await store.getCommand(decodeSegment(path.split("/")[2]));
+            response = found ? json({ command: toCommandRow(found) }) : error("command not found", 404);
           } else if (request.method === "POST" && path === "/commands/claim") {
             const body = await readJson(request);
             if (!isRecord(body) || typeof body.device !== "string" || !body.device) {

@@ -1,1 +1,4 @@
 project_id = "planner"
+
+[functions.hub]
+verify_jwt = false

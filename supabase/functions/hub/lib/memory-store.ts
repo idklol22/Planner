@@ -20,8 +20,8 @@ import type {
   SyncTable,
   TaskRow,
   UpsertResult,
-} from "./db";
-import { compareUpdatedAt, normalize, sha256Hex } from "./logic";
+} from "./db.ts";
+import { compareUpdatedAt, normalize, sha256Hex } from "./logic.ts";
 
 interface StoredDevice extends Device {
   tokenHash: string;
@@ -147,6 +147,11 @@ export class MemoryStore implements HubStore {
     return { id: command.id };
   }
 
+  async getCommand(id: string): Promise<CommandRow | null> {
+    const command = this.commands.get(id);
+    return command ? { ...command } : null;
+  }
+
   async claimCommand(device: string, leaseSec: number): Promise<CommandRow | null> {
     const now = new Date().toISOString();
     const leaseUntil = new Date(Date.now() + leaseSec * 1000).toISOString();
@@ -256,7 +261,7 @@ export class MemoryStore implements HubStore {
     );
   }
 
-  getCommand(id: string): CommandRow | undefined {
+  peekCommand(id: string): CommandRow | undefined {
     const command = this.commands.get(id);
     return command ? { ...command } : undefined;
   }
