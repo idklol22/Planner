@@ -13,3 +13,8 @@ Thumbs.db
 # Editor
 .vscode/
 .idea/
+
+# local secrets
+supabase/.env.local
+.env.local
+supabase/.temp/

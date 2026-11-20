@@ -74,3 +74,23 @@ A small reporter in LetCode's Python server: when a submission is Accepted, POST
    Planner settings.
 4. Create a GitHub repo for the Planner (private is fine) so the iOS build workflow can run. Push.
 5. Install AltServer on Windows and AltStore on the iPhone, then install the IPA from the workflow artifact.
+
+---
+
+## Change (2026-11-20): Supabase instead of Cloudflare (owner won't add a card)
+- The hub moves to **Supabase** (free plan, no card): Postgres for the tables, **Storage** bucket `files` for PDFs and
+  notes, and one **Edge Function** `hub` (Deno) that serves the SAME HTTP API as the Cloudflare hub (`/ops`, `/sync`,
+  `/events`, `/commands*`, `/files/:sha256`, `/cal/<secret>.ics`). So HubClient, the cloud-agent, LetCode and the
+  Planner only change their base URL (`https://<project>.supabase.co/functions/v1/hub`).
+- Port `planner/hub` (Workers + D1) to `planner/supabase/`:
+  - `migrations/*.sql`, translated to Postgres (`bigserial` change_log, `jsonb` payloads)
+  - `functions/hub/index.ts`, the same routes; the device-token check uses the same table; storage access via the
+    service-role key held only in the function's secrets
+  - local dev with `npx supabase start` (needs Docker), or test against a deno test harness with a mocked db
+  The Cloudflare hub stays in the repo for reference until the port passes the same tests.
+- Free limits: 500 MB database and 1 GB file storage (fine for lecture PDFs for a while). A free project pauses after
+  7 days without activity; the laptop cloud-agent's 60s sync keeps it awake, and a paused project restores from the
+  dashboard.
+- Owner one-time steps: sign up at supabase.com (GitHub login works), create a project, then
+  `npx supabase login` and `npx supabase link`. Claude runs deploy (`supabase db push`,
+  `supabase functions deploy hub`) and sets the secrets.

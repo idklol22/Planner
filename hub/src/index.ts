@@ -6,6 +6,7 @@
 
 export interface HubEnv {
   DB: D1Database;
+  FILES: R2Bucket;
   CAL_SECRET: string;
   ALLOWED_ORIGINS?: string;
 }
@@ -16,7 +17,15 @@ declare global {
   }
 }
 
-export type SyncTable = "category" | "task" | "goal" | "meal";
+export type SyncTable =
+  | "category"
+  | "task"
+  | "goal"
+  | "meal"
+  | "h_subject"
+  | "h_topic"
+  | "h_material"
+  | "h_deadline";
 export type Note = {
   id?: string;
   taskId?: string;
@@ -82,7 +91,61 @@ export interface MealRow {
   deletedAt: string | null;
 }
 
-export type SyncRow = CategoryRow | TaskRow | GoalRow | MealRow;
+export interface HSubjectRow {
+  id: string;
+  name: string;
+  color: string;
+  order: number;
+  updatedAt: string;
+  deletedAt: string | null;
+}
+
+export interface HTopicRow {
+  id: string;
+  subjectId: string;
+  name: string;
+  order: number;
+  updatedAt: string;
+  deletedAt: string | null;
+}
+
+export interface HMaterialRow {
+  id: string;
+  subjectId: string;
+  topicId: string | null;
+  fileName: string;
+  title: string;
+  kind: "pdf" | "text";
+  sha256: string;
+  pageCount: number;
+  lecture: string | null;
+  date: string | null;
+  addedAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+}
+
+export interface HDeadlineRow {
+  id: string;
+  subjectId: string;
+  topicId: string | null;
+  title: string;
+  due: string;
+  kind: string;
+  done: boolean;
+  updatedAt: string;
+  deletedAt: string | null;
+}
+
+export type SyncRow =
+  | CategoryRow
+  | TaskRow
+  | GoalRow
+  | MealRow
+  | HSubjectRow
+  | HTopicRow
+  | HMaterialRow
+  | HDeadlineRow;
 export interface HubOp {
   table: SyncTable;
   row: SyncRow;
@@ -110,7 +173,16 @@ export interface CommandRow {
   updatedAt: string;
 }
 
-const SYNC_TABLES: SyncTable[] = ["category", "task", "goal", "meal"];
+const SYNC_TABLES: SyncTable[] = [
+  "category",
+  "task",
+  "goal",
+  "meal",
+  "h_subject",
+  "h_topic",
+  "h_material",
+  "h_deadline",
+];
 const PAGE_SIZE = 500;
 const LEASE_MS = 5 * 60 * 1000;
 
@@ -169,6 +241,48 @@ const FIELDS: Record<SyncTable, Field[]> = {
     { key: "slot", column: "slot", kind: "text" },
     { key: "label", column: "label", kind: "text" },
     { key: "kcal", column: "kcal", kind: "real" },
+    { key: "updatedAt", column: "updated_at", kind: "text" },
+    { key: "deletedAt", column: "deleted_at", kind: "text" },
+  ],
+  h_subject: [
+    { key: "id", column: "id", kind: "text" },
+    { key: "name", column: "name", kind: "text" },
+    { key: "color", column: "color", kind: "text" },
+    { key: "order", column: "order", kind: "int" },
+    { key: "updatedAt", column: "updated_at", kind: "text" },
+    { key: "deletedAt", column: "deleted_at", kind: "text" },
+  ],
+  h_topic: [
+    { key: "id", column: "id", kind: "text" },
+    { key: "subjectId", column: "subject_id", kind: "text" },
+    { key: "name", column: "name", kind: "text" },
+    { key: "order", column: "order", kind: "int" },
+    { key: "updatedAt", column: "updated_at", kind: "text" },
+    { key: "deletedAt", column: "deleted_at", kind: "text" },
+  ],
+  h_material: [
+    { key: "id", column: "id", kind: "text" },
+    { key: "subjectId", column: "subject_id", kind: "text" },
+    { key: "topicId", column: "topic_id", kind: "text" },
+    { key: "fileName", column: "file_name", kind: "text" },
+    { key: "title", column: "title", kind: "text" },
+    { key: "kind", column: "kind", kind: "text" },
+    { key: "sha256", column: "sha256", kind: "text" },
+    { key: "pageCount", column: "page_count", kind: "int" },
+    { key: "lecture", column: "lecture", kind: "text" },
+    { key: "date", column: "date", kind: "text" },
+    { key: "addedAt", column: "added_at", kind: "text" },
+    { key: "updatedAt", column: "updated_at", kind: "text" },
+    { key: "deletedAt", column: "deleted_at", kind: "text" },
+  ],
+  h_deadline: [
+    { key: "id", column: "id", kind: "text" },
+    { key: "subjectId", column: "subject_id", kind: "text" },
+    { key: "topicId", column: "topic_id", kind: "text" },
+    { key: "title", column: "title", kind: "text" },
+    { key: "due", column: "due", kind: "text" },
+    { key: "kind", column: "kind", kind: "text" },
+    { key: "done", column: "done", kind: "bool" },
     { key: "updatedAt", column: "updated_at", kind: "text" },
     { key: "deletedAt", column: "deleted_at", kind: "text" },
   ],
@@ -308,9 +422,16 @@ class HttpError extends Error {
   }
 }
 
-async function sha256Hex(value: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+function digestHex(digest: ArrayBuffer): string {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  return digestHex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)));
+}
+
+async function sha256Bytes(bytes: ArrayBuffer): Promise<string> {
+  return digestHex(await crypto.subtle.digest("SHA-256", bytes));
 }
 
 function corsHeaders(request: Request, env: HubEnv): Headers {
@@ -325,8 +446,8 @@ function corsHeaders(request: Request, env: HubEnv): Headers {
     headers.set("Vary", "Origin");
     headers.set("Access-Control-Allow-Credentials", "true");
   }
-  headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  headers.set("Access-Control-Allow-Headers", "Authorization, Content-Type");
+  headers.set("Access-Control-Allow-Methods", "GET, HEAD, POST, PUT, OPTIONS");
+  headers.set("Access-Control-Allow-Headers", "Authorization, Content-Type, Range");
   headers.set("Access-Control-Max-Age", "86400");
   return headers;
 }
@@ -340,23 +461,38 @@ function withCors(response: Response, cors: Headers): Response {
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
-async function authorize(request: Request, env: HubEnv): Promise<Response | null> {
+interface AuthResult {
+  denied: Response | null;
+  role: string | null;
+}
+
+async function authorize(request: Request, env: HubEnv): Promise<AuthResult> {
   const header = request.headers.get("Authorization") ?? "";
   const match = /^Bearer\s+(.+)$/i.exec(header);
-  if (!match) return error("missing bearer token", 401);
+  if (!match) return { denied: error("missing bearer token", 401), role: null };
   const hash = await sha256Hex(match[1].trim());
-  const device = await env.DB.prepare("SELECT id FROM device WHERE token_hash = ? AND revoked_at IS NULL")
+  const device = await env.DB.prepare("SELECT id, role FROM device WHERE token_hash = ? AND revoked_at IS NULL")
     .bind(hash)
-    .first();
-  if (!device) return error("unauthorized", 401);
-  return null;
+    .first<{ id: string; role: string | null }>();
+  if (!device) return { denied: error("unauthorized", 401), role: null };
+  return { denied: null, role: device.role ?? "user" };
 }
 
 // ── Endpoints ───────────────────────────────────────────────────────────────
 
-async function handleOps(request: Request, env: HubEnv): Promise<Response> {
+async function handleOps(request: Request, env: HubEnv, role: string | null): Promise<Response> {
   const body = await readJson(request);
   if (!isRecord(body) || !Array.isArray(body.ops)) throw new HttpError("expected { ops: [...] }", 400);
+
+  // Check the whole batch before writing anything: h_* rows are harness-only.
+  if (
+    role !== "harness" &&
+    body.ops.some(
+      (op) => isRecord(op) && typeof op.table === "string" && op.table.startsWith("h_"),
+    )
+  ) {
+    throw new HttpError("harness role required for h_* tables", 403);
+  }
 
   let applied = 0;
   for (const op of body.ops) {
@@ -686,6 +822,102 @@ async function handleIcs(request: Request, env: HubEnv): Promise<Response> {
   });
 }
 
+// ── Files (R2) ──────────────────────────────────────────────────────────────
+
+function isSha256(value: string): boolean {
+  return /^[0-9a-f]{64}$/i.test(value);
+}
+
+function fileKey(sha: string): string {
+  return `files/${sha.toLowerCase()}`;
+}
+
+type ParsedRange = { start: number; end: number } | null | "invalid";
+
+/** Convert a single `Range: bytes=…` header into an inclusive byte range. */
+function parseRange(header: string | null, size: number): ParsedRange {
+  if (!header) return null;
+  const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (!match || (!match[1] && !match[2])) return "invalid";
+  if (match[2] === "") {
+    const start = Number(match[1]);
+    if (!Number.isSafeInteger(start) || start >= size) return "invalid";
+    return { start, end: size - 1 };
+  }
+  if (match[1] === "") {
+    const suffix = Number(match[2]);
+    if (!Number.isSafeInteger(suffix) || suffix <= 0) return "invalid";
+    return { start: Math.max(0, size - suffix), end: size - 1 };
+  }
+  const start = Number(match[1]);
+  const end = Number(match[2]);
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end)) return "invalid";
+  const clampedEnd = Math.min(end, size - 1);
+  if (start > clampedEnd || start >= size) return "invalid";
+  return { start, end: clampedEnd };
+}
+
+function fileHeaders(object: R2Object): Headers {
+  const headers = new Headers();
+  const contentType = object.httpMetadata?.contentType;
+  headers.set("Content-Type", contentType || "application/octet-stream");
+  headers.set("Accept-Ranges", "bytes");
+  if (object.httpMetadata?.cacheControl) {
+    headers.set("Cache-Control", object.httpMetadata.cacheControl);
+  }
+  return headers;
+}
+
+async function handlePutFile(request: Request, env: HubEnv, sha: string): Promise<Response> {
+  const normalized = sha.toLowerCase();
+  if (!isSha256(normalized)) throw new HttpError("invalid sha256", 400);
+  const bytes = await request.arrayBuffer();
+  if ((await sha256Bytes(bytes)) !== normalized) throw new HttpError("sha256 mismatch", 400);
+
+  const key = fileKey(normalized);
+  if (!(await env.FILES.head(key))) {
+    await env.FILES.put(key, bytes, {
+      httpMetadata: {
+        contentType: request.headers.get("Content-Type") || "application/octet-stream",
+      },
+    });
+  }
+  return json({ sha256: normalized, bytes: bytes.byteLength });
+}
+
+async function handleGetFile(request: Request, env: HubEnv, sha: string): Promise<Response> {
+  const key = fileKey(sha);
+  const meta = await env.FILES.head(key);
+  if (!meta) return error("file not found", 404);
+
+  const headers = fileHeaders(meta);
+  const range = parseRange(request.headers.get("Range"), meta.size);
+  if (range === "invalid") {
+    headers.set("Content-Range", `bytes */${meta.size}`);
+    return new Response(null, { status: 416, headers });
+  }
+  if (range) {
+    const length = range.end - range.start + 1;
+    const object = await env.FILES.get(key, { range: { offset: range.start, length } });
+    if (!object?.body) return error("file not found", 404);
+    headers.set("Content-Range", `bytes ${range.start}-${range.end}/${meta.size}`);
+    headers.set("Content-Length", String(length));
+    return new Response(object.body, { status: 206, headers });
+  }
+  const object = await env.FILES.get(key);
+  if (!object?.body) return error("file not found", 404);
+  headers.set("Content-Length", String(meta.size));
+  return new Response(object.body, { status: 200, headers });
+}
+
+async function handleHeadFile(env: HubEnv, sha: string): Promise<Response> {
+  const meta = await env.FILES.head(fileKey(sha));
+  if (!meta) return new Response(null, { status: 404 });
+  const headers = fileHeaders(meta);
+  headers.set("Content-Length", String(meta.size));
+  return new Response(null, { status: 200, headers });
+}
+
 // ── Router ──────────────────────────────────────────────────────────────────
 
 export default {
@@ -703,11 +935,11 @@ export default {
       } else if (request.method === "GET" && /^\/cal\/[^/]+\.ics$/.test(path)) {
         response = await handleIcs(request, env);
       } else {
-        const denied = await authorize(request, env);
-        if (denied) {
-          response = denied;
+        const auth = await authorize(request, env);
+        if (auth.denied) {
+          response = auth.denied;
         } else if (request.method === "POST" && path === "/ops") {
-          response = await handleOps(request, env);
+          response = await handleOps(request, env, auth.role);
         } else if (request.method === "GET" && path === "/sync") {
           response = await handleSync(request, env);
         } else if (request.method === "POST" && path === "/events") {
@@ -723,6 +955,11 @@ export default {
           /^\/commands\/[^/]+\/complete$/.test(path)
         ) {
           response = await handleCompleteCommand(request, env, decodeSegment(path.split("/")[2]));
+        } else if (/^\/files\/[^/]+$/.test(path) && ["PUT", "GET", "HEAD"].includes(request.method)) {
+          const sha = decodeSegment(path.split("/")[2]);
+          if (request.method === "PUT") response = await handlePutFile(request, env, sha);
+          else if (request.method === "GET") response = await handleGetFile(request, env, sha);
+          else response = await handleHeadFile(env, sha);
         } else {
           response = error("not found", 404);
         }
