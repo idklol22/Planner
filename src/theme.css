@@ -52,6 +52,10 @@ html[data-theme="blue"][data-layout="tiles"] {
   --tile: color-mix(in srgb, var(--surface) 72%, transparent);
   --tile-hi: inset 0 1px 0 rgba(255, 255, 255, 0.9), inset 0 0 0 1px #c4d3ef;
 }
+/* Nimbus: the dithered clouds are high-frequency and bright, so keep the glass denser. */
+html[data-theme="nimbus"][data-layout="tiles"] {
+  --tile: color-mix(in srgb, var(--surface) 90%, transparent);
+}
 /* High contrast: strong edges, no glass, no scene. */
 html[data-theme="contrast"] {
   --tile: var(--surface);
