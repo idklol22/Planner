@@ -16,7 +16,7 @@ export function SettingsView() {
   async function testConnection() {
     setTesting(true);
     setTestResult(null);
-    const result = await new HarnessClient(data.settings.harnessUrl).subjects();
+    const result = await new HarnessClient(data.settings.harnessUrl || DEFAULT_HARNESS_URL).subjects();
     setTesting(false);
     if (result.ok) {
       const message = `Connected · ${result.data.subjects.length} subjects`;

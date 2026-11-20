@@ -40,8 +40,8 @@ export interface HarnessNoteResponse {
 
 export type HarnessResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
-function baseUrl(value: string): string {
-  return (value.trim() || DEFAULT_HARNESS_URL).replace(/\/+$/, "");
+function baseUrl(value: string | undefined | null): string {
+  return ((value ?? "").trim() || DEFAULT_HARNESS_URL).replace(/\/+$/, "");
 }
 
 /** Small typed client for the Planner endpoints of a running LearnHarness dev server. */
