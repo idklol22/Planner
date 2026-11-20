@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Archive, ArchiveRestore, ChevronDown, ChevronUp, GripVertical, Plus } from "lucide-react";
-import { CATEGORY_COLORS, type Category } from "../domain/model";
+import { CATEGORY_COLORS, DEFAULT_HARNESS_URL, type Category } from "../domain/model";
+import { HarnessClient, type HarnessSubject } from "../lib/harness";
 import { useStore } from "../state/store";
 import { CATEGORY_ICONS, CategoryIcon } from "./icons";
 
@@ -13,6 +14,8 @@ function CategoryRow({
   dragProps,
   dragging,
   onMove,
+  subjects,
+  unreachable,
 }: {
   cat: Category;
   index: number;
@@ -22,10 +25,13 @@ function CategoryRow({
   dragProps: React.HTMLAttributes<HTMLDivElement>;
   dragging: boolean;
   onMove: (dir: -1 | 1) => void;
+  subjects: HarnessSubject[];
+  unreachable: boolean;
 }) {
-  const { data, actions } = useStore();
+  const { actions } = useStore();
   const [name, setName] = useState(cat.name);
-  const subjects = data.settings.learnharnessSubjects;
+  const selectedSubject = subjects.find((subject) => subject.id === cat.linkedSubjectId);
+  const savedSubject = cat.linkedSubjectId;
   return (
     <div
       {...dragProps}
@@ -128,21 +134,55 @@ function CategoryRow({
             <div className="mb-2 text-[12px] font-semibold uppercase tracking-[0.12em] text-faint">
               Linked LearnHarness subject
             </div>
-            <input
-              list={`subjects-${cat.id}`}
-              defaultValue={cat.linkedSubjectId ?? ""}
-              placeholder="None"
-              onBlur={(e) => {
-                const v = e.target.value.trim();
-                if (v !== (cat.linkedSubjectId ?? "")) actions.updateCategory(cat.id, { linkedSubjectId: v || null });
-              }}
-              className="w-full rounded-xl bg-surface-2 px-3.5 py-2.5 text-[16px] outline-none placeholder:text-faint focus:bg-surface-3"
-            />
-            <datalist id={`subjects-${cat.id}`}>
-              {subjects.map((s) => (
-                <option key={s} value={s} />
+            {unreachable && (
+              <p className="mb-2 text-[12px] text-rose" role="status">
+                LearnHarness not reachable
+              </p>
+            )}
+            <select
+              value={savedSubject ?? ""}
+              disabled={unreachable}
+              aria-label="Linked LearnHarness subject"
+              onChange={(event) =>
+                actions.updateCategory(cat.id, {
+                  linkedSubjectId: event.target.value || null,
+                  linkedTopicId: null,
+                })
+              }
+              className="w-full rounded-xl bg-surface-2 px-3.5 py-2.5 text-[16px] outline-none focus:bg-surface-3 disabled:text-muted"
+            >
+              <option value="">None</option>
+              {savedSubject && !subjects.some((subject) => subject.id === savedSubject) && (
+                <option value={savedSubject}>{savedSubject} (saved)</option>
+              )}
+              {subjects.map((subject) => (
+                <option key={subject.id} value={subject.id}>
+                  {subject.name}
+                </option>
               ))}
-            </datalist>
+            </select>
+
+            {(selectedSubject?.topics.length || cat.linkedTopicId) && (
+              <select
+                value={cat.linkedTopicId ?? ""}
+                disabled={unreachable}
+                aria-label="LearnHarness topic"
+                onChange={(event) =>
+                  actions.updateCategory(cat.id, { linkedTopicId: event.target.value || null })
+                }
+                className="mt-2 w-full rounded-xl bg-surface-2 px-3.5 py-2.5 text-[15px] outline-none focus:bg-surface-3 disabled:text-muted"
+              >
+                <option value="">No topic</option>
+                {cat.linkedTopicId && !selectedSubject?.topics.some((topic) => topic.id === cat.linkedTopicId) && (
+                  <option value={cat.linkedTopicId}>{cat.linkedTopicId} (saved)</option>
+                )}
+                {(selectedSubject?.topics ?? []).map((topic) => (
+                  <option key={topic.id} value={topic.id}>
+                    {topic.name}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           <button
@@ -162,6 +202,28 @@ export function CategoriesView() {
   const [name, setName] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
+  const [subjects, setSubjects] = useState<HarnessSubject[]>([]);
+  const [unreachable, setUnreachable] = useState(false);
+  const harnessUrl = data.settings.harnessUrl || DEFAULT_HARNESS_URL;
+
+  useEffect(() => {
+    let alive = true;
+    setUnreachable(false);
+    void new HarnessClient(harnessUrl).subjects().then((result) => {
+      if (!alive) return;
+      if (result.ok) {
+        setSubjects(result.data.subjects);
+        setUnreachable(false);
+      } else {
+        // Saved links are left untouched; only the picker loses its options.
+        setSubjects([]);
+        setUnreachable(true);
+      }
+    });
+    return () => {
+      alive = false;
+    };
+  }, [harnessUrl]);
 
   const active = data.categories.filter((c) => !c.archived).sort((a, b) => a.order - b.order);
   const archived = data.categories.filter((c) => c.archived);
@@ -185,6 +247,11 @@ export function CategoriesView() {
       <p className="mb-4 px-1 text-[14px] leading-relaxed text-muted">
         Categories group each day&apos;s tasks. Drag to reorder, tap one to change its colour, icon or linked subject.
       </p>
+      {unreachable && (
+        <p className="mb-4 px-1 text-[13px] text-rose" role="status">
+          LearnHarness not reachable
+        </p>
+      )}
 
       <div className="mb-4 flex items-center gap-2 rounded-full bg-surface-2 py-1.5 pl-5 pr-1.5">
         <input
@@ -221,6 +288,8 @@ export function CategoriesView() {
               onToggle={() => setExpanded(expanded === cat.id ? null : cat.id)}
               dragging={dragId === cat.id}
               onMove={(dir) => reorder(cat.id, i + dir)}
+              subjects={subjects}
+              unreachable={unreachable}
               dragProps={{
                 draggable: true,
                 onDragStart: (e) => {

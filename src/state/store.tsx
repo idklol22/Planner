@@ -19,6 +19,7 @@ import {
   type AppData,
   type CalorieEntry,
   type Category,
+  type HandoffState,
   type Habit,
   type MealSlot,
   type Note,
@@ -74,7 +75,7 @@ export interface Actions {
   addCategory(name: string, color?: string, icon?: string): string;
   updateCategory(
     id: string,
-    patch: Partial<Pick<Category, "name" | "color" | "icon" | "linkedSubjectId">>,
+    patch: Partial<Pick<Category, "name" | "color" | "icon" | "linkedSubjectId" | "linkedTopicId">>,
   ): void;
   /** Persist a new order from a list of category ids. */
   reorderCategories(ids: string[]): void;
@@ -96,6 +97,8 @@ export interface Actions {
   addImage(taskId: string, image: { name: string; dataUrl: string }): void;
   removeImage(taskId: string, imageId: string): void;
   markNoteDone(taskId: string): void;
+  /** Record an API hand-off result without marking the note itself as edited. */
+  recordHandoff(taskId: string, handoff: Partial<HandoffState>): void;
   sendToLearnHarness(taskId: string): Promise<{ ok: boolean; message: string }>;
 
   addHabit(title: string, cadence: Habit["cadence"]): void;
@@ -294,8 +297,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         );
       },
       updateNote(taskId, content) {
+        // Keep sentAt so the hand-off engine can spot edits after a send.
         update((d) =>
-          patchNote(d, taskId, (note) => ({ ...note, content, handoff: { status: "not-done" } })),
+          patchNote(d, taskId, (note) => ({
+            ...note,
+            content,
+            handoff: { ...note.handoff, status: "not-done" },
+          })),
         );
       },
       addImage(taskId, image) {
@@ -313,6 +321,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             images: note.images.filter((image) => image.id !== imageId),
           })),
         );
+      },
+      recordHandoff(taskId, handoff) {
+        update((d) => ({
+          ...d,
+          tasks: d.tasks.map((task) =>
+            task.id === taskId && task.note
+              ? { ...task, note: { ...task.note, handoff: { ...task.note.handoff, ...handoff } } }
+              : task,
+          ),
+        }));
       },
       markNoteDone(taskId) {
         update((d) => {
