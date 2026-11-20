@@ -1,8 +1,14 @@
-import { useState } from "react";
-import { Check, Cloud, Link2, Palette, PlugZap, RefreshCw, Target } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, Cloud, Link2, Palette, PlugZap, Power, RefreshCw, Target } from "lucide-react";
 import { DEFAULT_HARNESS_URL, defaultData } from "../domain/model";
 import { isTauri, storage } from "../storage";
 import { clearPlannerLocalData } from "../storage/reset";
+import {
+  autostartError,
+  autostartLabel,
+  loadAutostart,
+  setAutostart,
+} from "../lib/autostart";
 import { HarnessClient } from "../lib/harness";
 import { useStore } from "../state/store";
 import { useSync } from "../state/sync";
@@ -54,6 +60,91 @@ function ResetAll() {
         </div>
       )}
     </div>
+  );
+}
+
+function DesktopPanel() {
+  const notify = useToast();
+  const [enabled, setEnabled] = useState(false);
+  const [busy, setBusy] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    loadAutostart()
+      .then((value) => {
+        if (active) setEnabled(value);
+      })
+      .catch((e: unknown) => {
+        if (!active) return;
+        const message = autostartError(e);
+        setError(message);
+        notify(message, "error");
+      })
+      .finally(() => {
+        if (active) setBusy(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [notify]);
+
+  async function toggle() {
+    if (busy) return;
+    const previous = enabled;
+    const next = !previous;
+    setError(null);
+    setEnabled(next);
+    setBusy(true);
+    try {
+      await setAutostart(next);
+      notify(next ? "Open at login enabled" : "Open at login disabled");
+    } catch (e) {
+      setEnabled(previous);
+      const message = autostartError(e);
+      setError(message);
+      notify(message, "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Panel>
+      <div className="mb-5 flex items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent">
+          <Power size={18} />
+        </div>
+        <div>
+          <h3 className="text-sm font-semibold text-ink">Desktop</h3>
+          <p className="mt-1 text-xs text-muted">Start ToDoMate when you sign in.</p>
+        </div>
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm text-ink">Open at login</span>
+        <div className="flex flex-col items-end gap-1">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={enabled}
+            aria-label="Open at login"
+            disabled={busy}
+            onClick={() => void toggle()}
+            className={`relative inline-flex h-7 w-11 shrink-0 items-center rounded-full p-0.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 ${enabled ? "bg-accent" : "bg-ink/10"}`}
+          >
+            <span
+              className={`inline-block h-[22px] w-[22px] rounded-full bg-surface-3 shadow-sm transition-transform ${enabled ? "translate-x-4" : "translate-x-0"}`}
+            />
+          </button>
+          <span className="text-xs text-faint">{autostartLabel(enabled, busy)}</span>
+        </div>
+      </div>
+      {error && (
+        <p className="mt-2 text-xs text-rose" role="alert">
+          {error}
+        </p>
+      )}
+    </Panel>
   );
 }
 
@@ -282,6 +373,8 @@ export function SettingsView() {
           </Button>
         </div>
       </Panel>
+
+      {isNative && <DesktopPanel />}
 
       <Panel>
         <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-faint">
