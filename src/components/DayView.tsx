@@ -15,13 +15,14 @@ import { catColor } from "../theme/store";
 import { dayKcal } from "../domain/calories";
 import { sectionsForDay, tasksForDay, type Section } from "../domain/tasks";
 import { useStore } from "../state/store";
+import { useToast } from "../state/toast";
 import { CalendarStrip, type CalendarMode } from "./CalendarStrip";
 import { CalorieBar } from "./CalorieBar";
 import { DeadlinesCard } from "./DeadlinesCard";
 import { Flower } from "./Flower";
 import { HabitEditor } from "./HabitEditor";
 import { CategoryGoals } from "./CategoryGoals";
-import { CategoryIcon } from "./icons";
+import { CalendarArrowRight, CategoryIcon } from "./icons";
 import { DaySummaryCard, WeekSummaryCard } from "./Summaries";
 import { TaskRow } from "./TaskRow";
 
@@ -252,6 +253,7 @@ export function DayView({
   onManageCategories: () => void;
 }) {
   const { data, actions } = useStore();
+  const notify = useToast();
   const [prefs, setPrefs] = useState<Prefs>(loadPrefs);
   const [adding, setAdding] = useState<string | null>(null);
   const [listMenu, setListMenu] = useState(false);
@@ -466,6 +468,21 @@ export function DayView({
                       {prefs[key] && <Check size={18} />}
                     </button>
                   ))}
+                  {selected === today && (
+                    <button
+                      onClick={() => {
+                        const n = actions.moveUnfinishedToTomorrow(selected);
+                        setListMenu(false);
+                        notify(
+                          n ? `Moved ${n} task${n === 1 ? "" : "s"} to tomorrow` : "No unfinished tasks to move",
+                          n ? "success" : "info",
+                        );
+                      }}
+                      className="flex w-full items-center gap-3 px-4 py-4 text-left text-[16px] hover:bg-ink/5"
+                    >
+                      <CalendarArrowRight size={16} className="text-muted" /> Move unfinished to tomorrow
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       setListMenu(false);

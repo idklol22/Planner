@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { uid } from "../domain/ids";
-import type { ISODate } from "../domain/dates";
+import { addDays, type ISODate } from "../domain/dates";
 import {
   defaultData,
   makeCalorieEntry,
@@ -27,7 +27,7 @@ import {
   type Task,
 } from "../domain/model";
 import { materializeOccurrences } from "../domain/recurrence";
-import { subtasksOf } from "../domain/tasks";
+import { moveTasksToDay, subtasksOf, unfinishedTopLevelOn } from "../domain/tasks";
 import { tasksForItems, type NoteItem } from "../lib/absorb";
 import { buildHandoffMarkdown, NOTE_TASKS_EVENT } from "../lib/handoff";
 import { isTauri, storage } from "../storage";
@@ -101,6 +101,8 @@ export interface Actions {
   updateTask(id: string, patch: TaskPatch): void;
   toggleTask(id: string): void;
   moveTaskToDay(id: string, date: ISODate): void;
+  /** Move every unfinished top-level task on `date` one day forward; returns how many moved. */
+  moveUnfinishedToTomorrow(date: ISODate): number;
   duplicateTask(id: string): string | null;
   /** Soft delete (also deletes subtasks). */
   deleteTask(id: string): void;
@@ -273,14 +275,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       },
       moveTaskToDay(id, date) {
         update((d) => {
-          const stamp = nowISO();
-          return {
-            ...d,
-            tasks: d.tasks.map((t) =>
-              t.id === id || t.parentId === id ? { ...t, date, updatedAt: stamp } : t,
-            ),
-          };
+          const { tasks } = moveTasksToDay(d.tasks, [id], date, nowISO());
+          return { ...d, tasks };
         });
+      },
+      moveUnfinishedToTomorrow(date) {
+        const ids = unfinishedTopLevelOn(dataRef.current.tasks, date).map((t) => t.id);
+        const { tasks, moved } = moveTasksToDay(
+          dataRef.current.tasks,
+          ids,
+          addDays(date, 1),
+          nowISO(),
+        );
+        if (moved.length) update((d) => ({ ...d, tasks }));
+        return moved.length;
       },
       duplicateTask(id) {
         const source = dataRef.current.tasks.find((t) => t.id === id);

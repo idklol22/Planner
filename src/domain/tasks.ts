@@ -75,6 +75,47 @@ export function daySummary(tasks: Task[], categories: Category[], date: ISODate)
   };
 }
 
+/** Unfinished top-level tasks on a day, in display order. */
+export function unfinishedTopLevelOn(tasks: Task[], date: ISODate): Task[] {
+  return tasks
+    .filter((t) => !t.deletedAt && !t.parentId && !t.done && t.date === date)
+    .sort(byOrder);
+}
+
+/**
+ * Move tasks (and their live subtasks) to `targetDate`, appending the moved
+ * top-level tasks after everything already on that day. Pure — caller supplies
+ * the ISO timestamp. Missing, deleted, subtask and already-moved ids are skipped.
+ */
+export function moveTasksToDay(
+  tasks: Task[],
+  ids: string[],
+  targetDate: ISODate,
+  now: string,
+): { tasks: Task[]; moved: string[] } {
+  const maxOrder = tasks.reduce(
+    (m, t) => (t.date === targetDate && !t.deletedAt ? Math.max(m, t.order) : m),
+    0,
+  );
+  const byId = new Map(tasks.map((t) => [t.id, t]));
+  const moved: string[] = [];
+  const changed = new Map<string, Task>();
+
+  ids.forEach((id, index) => {
+    const task = byId.get(id);
+    if (!task || task.deletedAt || task.parentId || task.date === targetDate) return;
+    moved.push(id);
+    changed.set(id, { ...task, date: targetDate, order: maxOrder + 1 + index, updatedAt: now });
+    for (const sub of tasks) {
+      if (sub.parentId === id && !sub.deletedAt) {
+        changed.set(sub.id, { ...sub, date: targetDate, updatedAt: now });
+      }
+    }
+  });
+
+  return moved.length ? { tasks: tasks.map((t) => changed.get(t.id) ?? t), moved } : { tasks, moved };
+}
+
 export function subtasksOf(tasks: Task[], parentId: string): Task[] {
   return tasks.filter((t) => t.parentId === parentId && !t.deletedAt).sort(byOrder);
 }
