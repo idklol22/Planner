@@ -17,6 +17,7 @@ import { blocksToMarkdown } from "./markdown";
 import { goBack } from "./route";
 import { matchInlineMath } from "./math";
 import { schema, type PlannerEditor } from "./schema";
+import { TASK_SLASH_TITLE, taskBlockProps, taskSlashAliases } from "./slash";
 import { PLACEHOLDER_TITLE, planSync, type BlockState, type Snapshot, type SubtaskState } from "./sync";
 
 type AnyBlock = { id: string; type: string; props?: Record<string, unknown>; content?: unknown; children?: AnyBlock[] };
@@ -358,8 +359,8 @@ function TaskDocument({ task }: { task: Task }) {
               filterSuggestionItems(
                 withAfterBasic(getDefaultReactSlashMenuItems(editor), 
                   {
-                    title: "Task",
-                    aliases: ["task", "todo", "subtask", "check"],
+                    title: TASK_SLASH_TITLE,
+                    aliases: taskSlashAliases,
                     group: "Basic blocks",
                     subtext: "A real subtask you can tick off",
                     icon: <span className="text-[14px]">&#9744;</span>,
@@ -368,10 +369,7 @@ function TaskDocument({ task }: { task: Task }) {
                       if (!id) return;
                       optimistic.current.set(id, { id, title: PLACEHOLDER_TITLE, done: false });
                       lastRef.current.set(id, { title: PLACEHOLDER_TITLE, done: false });
-                      insertOrUpdateBlockForSlashMenu(editor, {
-                        type: "taskItem",
-                        props: { subtaskId: id, checked: false },
-                      } as never);
+                      insertOrUpdateBlockForSlashMenu(editor, taskBlockProps(id) as never);
                     },
                   }),
                 query,
