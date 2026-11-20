@@ -6,8 +6,8 @@ import { THEMES } from "./themes";
 
 /** The fixed canvas behind the app for scene themes. Renders nothing for the others (and for high contrast). */
 export function Scene() {
-  const { theme, animation } = useThemeState();
-  const kind = theme === "contrast" ? undefined : THEMES[theme].scene;
+  const { theme, animation, fx } = useThemeState();
+  const kind = !fx || theme === "contrast" ? undefined : THEMES[theme].scene;
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const cv = ref.current;

@@ -15,9 +15,9 @@ describe("contrastRatio", () => {
 });
 
 describe("theme list", () => {
-  it("has all 14 LetCode themes with their names", () => {
+  it("has wabi plus all 14 LetCode themes", () => {
     expect([...THEME_IDS].sort()).toEqual(
-      ["midnight", "smoke", "graphite", "contrast", "red", "orange", "ember", "emerald", "ocean", "sapphire", "citrus", "blue", "nimbus", "uzumaki"].sort(),
+      ["wabi", "midnight", "smoke", "graphite", "contrast", "red", "orange", "ember", "emerald", "ocean", "sapphire", "citrus", "blue", "nimbus", "uzumaki"].sort(),
     );
   });
   it("high contrast has no glass and no scene", () => {

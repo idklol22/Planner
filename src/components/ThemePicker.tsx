@@ -1,5 +1,5 @@
 import { paletteFor } from "../domain/palette";
-import { setAnimation, setGlass, setTheme, useThemeState } from "../theme/store";
+import { setAnimation, setFx, setGlass, setTheme, useThemeState } from "../theme/store";
 import { THEME_LIST, type ThemeDef } from "../theme/themes";
 
 /** Small scene thumbnails (the same artwork LetCode uses for its theme dots). */
@@ -72,7 +72,7 @@ function Toggle({
 
 /** Settings: a grid of theme cards (live preview of bg/surface/accent/text plus the scene thumbnail). */
 export function ThemePicker() {
-  const { theme, glass, animation } = useThemeState();
+  const { theme, glass, animation, fx } = useThemeState();
   const def = THEME_LIST.find((t) => t.id === theme)!;
   const contrast = theme === "contrast";
   return (
@@ -93,10 +93,16 @@ export function ThemePicker() {
       </div>
       <div className="mt-4 divide-y divide-line">
         <Toggle
+          label="Glass & animated backgrounds"
+          hint="Off: every theme uses plain solid surfaces and no moving scenes."
+          on={fx}
+          onChange={setFx}
+        />
+        <Toggle
           label="Glass tiles"
           hint={contrast ? "Off in high contrast." : "Translucent cards over the background."}
           on={glass}
-          disabled={contrast}
+          disabled={contrast || !fx}
           onChange={setGlass}
         />
         <Toggle
@@ -107,7 +113,7 @@ export function ThemePicker() {
               : "Drifting dust and clouds. Pauses when the tab is hidden; still with reduced motion."
           }
           on={animation}
-          disabled={contrast || !def.scene}
+          disabled={contrast || !fx || !def.scene}
           onChange={setAnimation}
         />
       </div>

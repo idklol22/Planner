@@ -112,6 +112,19 @@ export const CalorieEntrySchema = z.object({
   deletedAt: z.string().optional(),
 });
 
+/** A persistent goal pinned to a category. Not tied to a date. Local-only (not synced) for now. */
+export const CategoryGoalSchema = z.object({
+  id: z.string(),
+  categoryId: z.string(),
+  title: z.string(),
+  /** Set when achieved; absent = still open. */
+  achievedAt: z.string().optional(),
+  order: z.number(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  deletedAt: z.string().optional(),
+});
+
 export const SettingsSchema = z.object({
   /** Absolute path to a folder LearnHarness imports from. Empty = app-data/handoff. */
   handoffFolder: z.string(),
@@ -125,6 +138,16 @@ export const SettingsSchema = z.object({
 });
 
 export const AppDataSchema = z.object({
+  version: z.literal(4),
+  tasks: z.array(TaskSchema),
+  categories: z.array(CategorySchema),
+  habits: z.array(HabitSchema),
+  calories: z.array(CalorieEntrySchema),
+  goals: z.array(CategoryGoalSchema),
+  settings: SettingsSchema,
+});
+
+const V3Schema = z.object({
   version: z.literal(3),
   tasks: z.array(TaskSchema),
   categories: z.array(CategorySchema),
@@ -143,6 +166,7 @@ export type Category = z.infer<typeof CategorySchema>;
 export type TaskKind = z.infer<typeof TaskKindSchema>;
 export type Habit = z.infer<typeof HabitSchema>;
 export type CalorieEntry = z.infer<typeof CalorieEntrySchema>;
+export type CategoryGoal = z.infer<typeof CategoryGoalSchema>;
 export type Settings = z.infer<typeof SettingsSchema>;
 export type AppData = z.infer<typeof AppDataSchema>;
 
@@ -217,6 +241,11 @@ export function makeHabit(
   };
 }
 
+export function makeGoal(categoryId: string, title: string, order: number): CategoryGoal {
+  const now = new Date().toISOString();
+  return { id: uid("goal"), categoryId, title, order, createdAt: now, updatedAt: now };
+}
+
 export function makeCalorieEntry(date: string, kcal: number, label?: string): CalorieEntry {
   const now = new Date().toISOString();
   return {
@@ -231,11 +260,12 @@ export function makeCalorieEntry(date: string, kcal: number, label?: string): Ca
 
 export function defaultData(): AppData {
   return {
-    version: 3,
+    version: 4,
     tasks: [],
     categories: [],
     habits: [],
     calories: [],
+    goals: [],
     settings: {
       handoffFolder: "",
       learnharnessSubjects: [],
@@ -271,6 +301,13 @@ const V2Schema = z.object({
   settings: SettingsSchema,
 });
 
+/** v3 to v4: persistent category goals (starts empty). */
+export function migrateV3(value: unknown): AppData | null {
+  const parsed = V3Schema.safeParse(value);
+  if (!parsed.success) return null;
+  return AppDataSchema.parse({ ...parsed.data, version: 4, goals: [] });
+}
+
 /** v2 → v3: habits become scheduled ghost suggestions, calories gain sync stamps. */
 export function migrateV2(value: unknown): AppData | null {
   const parsed = V2Schema.safeParse(value);
@@ -300,7 +337,7 @@ export function migrateV2(value: unknown): AppData | null {
     createdAt: c.createdAt,
     updatedAt: c.createdAt,
   }));
-  return AppDataSchema.parse({ ...v2, version: 3, habits, calories });
+  return migrateV3({ ...v2, version: 3, habits, calories });
 }
 
 const V1TaskSchema = z.object({
@@ -377,5 +414,5 @@ export function migrateV1(value: unknown): AppData | null {
 export function parseAppData(value: unknown): AppData {
   const result = AppDataSchema.safeParse(value);
   if (result.success) return result.data;
-  return migrateV2(value) ?? migrateV1(value) ?? defaultData();
+  return migrateV3(value) ?? migrateV2(value) ?? migrateV1(value) ?? defaultData();
 }

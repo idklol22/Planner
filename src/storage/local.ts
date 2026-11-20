@@ -1,8 +1,8 @@
 import { parseAppData } from "../domain/model";
 import type { StorageAdapter } from "./port";
 
-const DATA_KEY = "todomate.data";
-const HANDOFF_PREFIX = "todomate.handoff.";
+export const DATA_KEY = "todomate.data";
+export const HANDOFF_PREFIX = "todomate.handoff.";
 
 /** Browser adapter so `npm run dev` works without the Rust toolchain.
  *  Handoff "files" are kept in localStorage under a virtual outbox path;

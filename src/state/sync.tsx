@@ -12,7 +12,7 @@ import type { AppData } from "../domain/model";
 import type { HarnessNote } from "../lib/harness";
 import { HubClient } from "../storage/hub";
 import { SyncController, type SyncStatus } from "../sync/controller";
-import { localCursorStore, CURSOR_KEY } from "../sync/engine";
+import { localCursorStore, CURSOR_KEY, LAST_SYNC_KEY } from "../sync/engine";
 import { emptyMirror, type Mirror } from "../sync/mapping";
 import { LocalOutbox } from "../sync/queue";
 import { useStore } from "./store";
@@ -59,7 +59,6 @@ export interface SyncContextValue {
 }
 
 const IDLE: SyncStatus = { syncing: false, lastSyncedAt: null, error: null, pending: 0 };
-const LAST_SYNC_KEY = "planner.lastSynced.v1";
 
 const SyncContext = createContext<SyncContextValue | null>(null);
 

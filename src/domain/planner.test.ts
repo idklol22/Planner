@@ -110,11 +110,11 @@ describe("migration v2 -> v3", () => {
   };
   it("converts habits and calories", () => {
     const out = migrateV2(v2)!;
-    expect(out.version).toBe(3);
+    expect(out.version).toBe(4);
     expect(out.habits[0]).toMatchObject({ id: "h1", categoryId: null, startDate: "2026-11-01", endDate: null });
     expect(out.habits[0].weekdays).toBeUndefined();
     expect(out.habits[1].weekdays).toHaveLength(1);
     expect(out.calories[0]).toMatchObject({ kcal: 320, label: "lunch: Soup", updatedAt: "2026-11-02T12:00:00.000Z" });
-    expect(parseAppData(v2).version).toBe(3);
+    expect(parseAppData(v2).version).toBe(4);
   });
 });

@@ -7,6 +7,8 @@ import { isNewerRow, LocalOutbox, type Outbox } from "./queue";
 export const PUSH_BATCH_SIZE = 200;
 export const RETRY_BASE_MS = 1_000;
 export const RETRY_MAX_MS = 60_000;
+/** When the hub last synced successfully (shown in Settings). */
+export const LAST_SYNC_KEY = "planner.lastSynced.v1";
 export const CURSOR_KEY = "planner.cursor.v1";
 
 type SyncClient = Pick<HubClient, "push" | "pull">;

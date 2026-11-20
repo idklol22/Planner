@@ -142,6 +142,35 @@ html[data-theme="uzumaki"] body::before {
 html[data-theme="uzumaki"] body::before {
   background: rgba(0, 0, 0, 0.35);
 }
+/* Glass & animated backgrounds off (the default): every theme gets a flat page, no scrim textures. */
+html[data-fx="0"][data-theme] body {
+  background: var(--bg);
+}
+html[data-fx="0"][data-theme] body::before {
+  display: none;
+}
+/* Wabi: matte, slightly worn. A very faint static grain, no glow. */
+html[data-fx="0"][data-theme="wabi"] body {
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 .9 0 0 0 0 .88 0 0 0 0 .8 0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E"),
+    var(--bg);
+}
+html[data-theme="wabi"] {
+  --r: 10px;
+  --r-sm: 7px;
+  --gap: 12px;
+  --pad: 14px;
+  --font-base: 15px;
+}
+html[data-theme="wabi"] .module-title {
+  letter-spacing: 0.08em;
+  font-size: 12px;
+}
+html[data-theme="wabi"] .mod-btn {
+  height: 34px;
+  min-width: 34px;
+  font-size: 14px;
+}
 #root {
   position: relative;
   z-index: 1;

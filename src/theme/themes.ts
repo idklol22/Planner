@@ -47,6 +47,7 @@ export interface ThemeDef {
 }
 
 export const THEME_IDS = [
+  "wabi",
   "midnight",
   "smoke",
   "graphite",
@@ -63,7 +64,7 @@ export const THEME_IDS = [
   "uzumaki",
 ] as const;
 export type ThemeId = (typeof THEME_IDS)[number];
-export const DEFAULT_THEME: ThemeId = "midnight";
+export const DEFAULT_THEME: ThemeId = "wabi";
 
 const SH = "0 20px 60px rgba(0,0,0,0.65)";
 
@@ -135,6 +136,16 @@ function def(
 }
 
 export const THEMES: Record<ThemeId, ThemeDef> = {
+  // Wabi-sabi black: warm near-black, matte solid surfaces, hairline borders, one restrained neon-green accent.
+  wabi: def("wabi", "Wabi", {}, [
+    "#0b0b0a", "#121210", "#191916", "#21211d",
+    "#26251f", "#706d61",
+    "#e9e6dd", "#a5a296", "#807d72",
+    "#6df0a0", "#06120b", "#6df0a0",
+    "#d98f86", "#9cc9a6", "#d2b97c",
+    "rgba(109,240,160,0.24)", "rgba(11,11,10,0.92)", "none",
+    "#86a8c4", "#c98a94", "#2b2a25",
+  ]),
   midnight: def("midnight", "Midnight", { scene: "particles", glass: true }, [
     "#060606", "#0e0e0f", "#151516", "#1e1e20",
     "rgba(255,255,255,0.08)", "#68686c",

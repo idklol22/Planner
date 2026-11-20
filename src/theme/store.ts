@@ -6,6 +6,8 @@ import { DEFAULT_THEME, THEMES, isThemeId, type ThemeId } from "./themes";
 const THEME_KEY = "planner.theme";
 const glassKey = (id: ThemeId) => `planner.glass.${id}`;
 const ANIM_KEY = "planner.anim";
+/** Master switch: "1" lets themes use glass tiles and animated scenes. Off by default. */
+const FX_KEY = "planner.fx";
 
 function read(key: string): string | null {
   try {
@@ -45,18 +47,24 @@ export function animationOn(): boolean {
   return v === null ? !lowEnd() : v === "1";
 }
 
+export function fxOn(): boolean {
+  return read(FX_KEY) === "1";
+}
+
 export interface ThemeState {
   theme: ThemeId;
+  /** Glass & animated backgrounds allowed (master switch, default off). */
+  fx: boolean;
   glass: boolean;
   animation: boolean;
 }
 
-let state: ThemeState = { theme: DEFAULT_THEME, glass: false, animation: false };
+let state: ThemeState = { theme: DEFAULT_THEME, fx: false, glass: false, animation: false };
 const listeners = new Set<() => void>();
 
 function snapshot(): ThemeState {
   const theme = loadTheme();
-  return { theme, glass: glassFor(theme), animation: animationOn() };
+  return { theme, fx: fxOn(), glass: glassFor(theme), animation: animationOn() };
 }
 
 function applyToDom(s: ThemeState) {
@@ -64,8 +72,9 @@ function applyToDom(s: ThemeState) {
   const root = document.documentElement;
   const def = THEMES[s.theme];
   root.dataset.theme = s.theme;
-  root.dataset.scene = def.scene && s.theme !== "contrast" ? "1" : "0";
-  root.dataset.layout = s.glass ? "tiles" : "flat";
+  root.dataset.fx = s.fx ? "1" : "0";
+  root.dataset.scene = s.fx && def.scene && s.theme !== "contrast" ? "1" : "0";
+  root.dataset.layout = s.fx && s.glass ? "tiles" : "flat";
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content", def.tokens.bg);
 }
 
@@ -81,6 +90,10 @@ export function initTheme() {
 
 export function setTheme(id: ThemeId) {
   write(THEME_KEY, id);
+  commit(snapshot());
+}
+export function setFx(on: boolean) {
+  write(FX_KEY, on ? "1" : "0");
   commit(snapshot());
 }
 export function setGlass(on: boolean) {

@@ -14,11 +14,13 @@ import {
   defaultData,
   makeCalorieEntry,
   makeCategory,
+  makeGoal,
   makeHabit,
   makeNote,
   makeTask,
   type AppData,
   type Category,
+  type CategoryGoal,
   type HandoffState,
   type Note,
   type Settings,
@@ -52,6 +54,13 @@ function mapCategory(data: AppData, id: string, fn: (c: Category) => Category): 
   return {
     ...data,
     categories: data.categories.map((c) => (c.id === id ? { ...fn(c), updatedAt: nowISO() } : c)),
+  };
+}
+
+function mapGoal(data: AppData, id: string, fn: (g: CategoryGoal) => CategoryGoal): AppData {
+  return {
+    ...data,
+    goals: data.goals.map((g) => (g.id === id ? { ...fn(g), updatedAt: nowISO() } : g)),
   };
 }
 
@@ -121,6 +130,15 @@ export interface Actions {
   deleteHabit(id: string): void;
   /** Turn a habit's ghost on `date` into a real task. */
   acceptGhost(habitId: string, date: ISODate): string | null;
+
+  /** Persistent per-category goals (independent of the selected day). Returns the new id ("" when empty). */
+  addGoal(categoryId: string, title: string): string;
+  editGoal(id: string, title: string): void;
+  /** Persist a new order from a list of goal ids (one category). */
+  reorderGoals(ids: string[]): void;
+  achieveGoal(id: string): void;
+  unachieveGoal(id: string): void;
+  deleteGoal(id: string): void;
 
   addCalorie(date: ISODate, kcal: number, label?: string): void;
   deleteCalorie(id: string): void;
@@ -514,6 +532,48 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           return { ...d, tasks: [...d.tasks, task] };
         });
         return id;
+      },
+
+      addGoal(categoryId, title) {
+        const clean = title.trim();
+        if (!clean) return "";
+        const id = uid("goal");
+        update((d) => {
+          const order = d.goals
+            .filter((g) => g.categoryId === categoryId && !g.deletedAt)
+            .reduce((m, g) => Math.max(m, g.order + 1), 0);
+          return { ...d, goals: [...d.goals, { ...makeGoal(categoryId, clean, order), id }] };
+        });
+        return id;
+      },
+      editGoal(id, title) {
+        const clean = title.trim();
+        if (!clean) return;
+        update((d) => mapGoal(d, id, (g) => ({ ...g, title: clean })));
+      },
+      reorderGoals(ids) {
+        update((d) => {
+          const stamp = nowISO();
+          return {
+            ...d,
+            goals: d.goals.map((g) => {
+              const idx = ids.indexOf(g.id);
+              return idx === -1 || idx === g.order ? g : { ...g, order: idx, updatedAt: stamp };
+            }),
+          };
+        });
+      },
+      achieveGoal(id) {
+        update((d) => mapGoal(d, id, (g) => ({ ...g, achievedAt: g.achievedAt ?? nowISO() })));
+      },
+      unachieveGoal(id) {
+        update((d) => mapGoal(d, id, (g) => ({ ...g, achievedAt: undefined })));
+      },
+      deleteGoal(id) {
+        update((d) => {
+          const stamp = nowISO();
+          return mapGoal(d, id, (g) => ({ ...g, deletedAt: stamp, updatedAt: stamp }));
+        });
       },
 
       addCalorie(date, kcal, label) {

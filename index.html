@@ -16,20 +16,22 @@
     <script>
       /* Pre-paint theme: sets data-theme before first paint so there is no flash. Kept in sync with src/theme (tested). */
       (function () {
-        var ALL = ["midnight", "smoke", "graphite", "contrast", "red", "orange", "ember", "emerald", "ocean", "sapphire", "citrus", "blue", "nimbus", "uzumaki"];
+        var ALL = ["wabi", "midnight", "smoke", "graphite", "contrast", "red", "orange", "ember", "emerald", "ocean", "sapphire", "citrus", "blue", "nimbus", "uzumaki"];
         var SCENES = ["midnight", "smoke", "nimbus", "uzumaki"];
         var GLASS = ["midnight", "smoke", "ember", "nimbus", "uzumaki"];
-        var BG = { midnight: "#060606", smoke: "#0a0a0b", graphite: "#1c1d20", contrast: "#000000", red: "#0b0707", orange: "#0b0805", ember: "#140a07", emerald: "#04110c", ocean: "#041218", sapphire: "#070b1a", citrus: "#0e1206", blue: "#f5f8fe", nimbus: "#05060f", uzumaki: "#0b0b0a" };
-        var t = "midnight", g = null;
+        var BG = { wabi: "#0b0b0a", midnight: "#060606", smoke: "#0a0a0b", graphite: "#1c1d20", contrast: "#000000", red: "#0b0707", orange: "#0b0805", ember: "#140a07", emerald: "#04110c", ocean: "#041218", sapphire: "#070b1a", citrus: "#0e1206", blue: "#f5f8fe", nimbus: "#05060f", uzumaki: "#0b0b0a" };
+        var t = "wabi", g = null, fx = false;
         try {
           var v = localStorage.getItem("planner.theme");
           if (ALL.indexOf(v) >= 0) t = v;
           g = localStorage.getItem("planner.glass." + t);
+          fx = localStorage.getItem("planner.fx") === "1";
         } catch (e) {}
-        var glass = t === "contrast" ? false : g === null ? GLASS.indexOf(t) >= 0 : g === "1";
+        var glass = !fx || t === "contrast" ? false : g === null ? GLASS.indexOf(t) >= 0 : g === "1";
         var r = document.documentElement;
         r.setAttribute("data-theme", t);
-        r.setAttribute("data-scene", t !== "contrast" && SCENES.indexOf(t) >= 0 ? "1" : "0");
+        r.setAttribute("data-fx", fx ? "1" : "0");
+        r.setAttribute("data-scene", fx && t !== "contrast" && SCENES.indexOf(t) >= 0 ? "1" : "0");
         r.setAttribute("data-layout", glass ? "tiles" : "flat");
         var m = document.querySelector('meta[name="theme-color"]');
         if (m) m.setAttribute("content", BG[t]);

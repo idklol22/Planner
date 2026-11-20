@@ -20,6 +20,7 @@ import { CalorieBar } from "./CalorieBar";
 import { DeadlinesCard } from "./DeadlinesCard";
 import { Flower } from "./Flower";
 import { HabitEditor } from "./HabitEditor";
+import { CategoryGoals } from "./CategoryGoals";
 import { CategoryIcon } from "./icons";
 import { DaySummaryCard, WeekSummaryCard } from "./Summaries";
 import { TaskRow } from "./TaskRow";
@@ -207,6 +208,7 @@ function CategorySection({
           </div>
         </>
       )}
+      {cat && <CategoryGoals categoryId={cat.id} color={color} />}
       {body && (
         <div className="space-y-0.5">
           {section.tasks.map((task) => (
@@ -298,8 +300,15 @@ export function DayView({
         : base;
     return withInbox
       .map((section) => ({ section, ghosts: forSection(section) }))
-      .filter((row) => !prefs.hideEmpty || row.section.tasks.length > 0 || row.ghosts.length > 0);
-  }, [data.tasks, data.categories, data.habits, selected, today, prefs]);
+      .filter(
+        (row) =>
+          !prefs.hideEmpty ||
+          row.section.tasks.length > 0 ||
+          row.ghosts.length > 0 ||
+          (!!row.section.category &&
+            data.goals.some((g) => g.categoryId === row.section.category!.id && !g.deletedAt && !g.achievedAt)),
+      );
+  }, [data.tasks, data.categories, data.habits, data.goals, selected, today, prefs]);
 
   const dayTasks = tasksForDay(data.tasks, selected);
   const open = dayTasks.filter((t) => !t.done).length;

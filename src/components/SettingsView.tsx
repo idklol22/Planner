@@ -1,12 +1,61 @@
 import { useState } from "react";
 import { Check, Cloud, Link2, Palette, PlugZap, RefreshCw, Target } from "lucide-react";
-import { DEFAULT_HARNESS_URL } from "../domain/model";
+import { DEFAULT_HARNESS_URL, defaultData } from "../domain/model";
+import { isTauri, storage } from "../storage";
+import { clearPlannerLocalData } from "../storage/reset";
 import { HarnessClient } from "../lib/harness";
 import { useStore } from "../state/store";
 import { useSync } from "../state/sync";
 import { useToast } from "../state/toast";
 import { ThemePicker } from "./ThemePicker";
 import { Button, Input, Panel, SectionTitle } from "./ui";
+
+function ResetAll() {
+  const [open, setOpen] = useState(false);
+  const [word, setWord] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function run() {
+    setBusy(true);
+    try {
+      clearPlannerLocalData(localStorage);
+      // The native build keeps its data in a file: overwrite it with an empty planner.
+      if (isTauri) await storage.save(defaultData());
+    } finally {
+      window.location.reload();
+    }
+  }
+  return (
+    <div className="mt-4 border-t border-line pt-3">
+      {!open ? (
+        <Button variant="danger" onClick={() => setOpen(true)}>
+          Reset all data…
+        </Button>
+      ) : (
+        <div role="alertdialog" aria-label="Reset all data" className="space-y-2">
+          <p className="text-xs leading-relaxed text-muted">
+            This deletes every task, category, goal, habit, calorie entry and note on this device, plus the sync outbox,
+            sync cursor, cloud mirror, LetCode progress and hand-off state. Theme and Hub URL/token are kept. Type RESET
+            to confirm.
+          </p>
+          <div className="flex gap-2">
+            <Input aria-label="Type RESET to confirm" value={word} onChange={(e) => setWord(e.target.value)} placeholder="RESET" />
+            <Button variant="danger" disabled={word !== "RESET" || busy} onClick={run}>
+              Reset
+            </Button>
+            <Button
+              onClick={() => {
+                setOpen(false);
+                setWord("");
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function SettingsView() {
   const { data, isNative, actions } = useStore();
@@ -243,6 +292,7 @@ export function SettingsView() {
             ? "Tasks, habits, calories and notes live in a local JSON file in the app-data directory. Nothing leaves your machine except notes handed to the configured LearnHarness server."
             : "Browser dev mode stores everything in localStorage. Build the Tauri shell to use local files."}
         </p>
+        <ResetAll />
       </Panel>
     </div>
   );

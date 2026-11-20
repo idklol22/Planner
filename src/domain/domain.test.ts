@@ -39,7 +39,7 @@ describe("migration v1 -> v2", () => {
   it("turns distinct heading titles into categories and keeps tasks", () => {
     const out = migrateV1(v1)!;
     expect(AppDataSchema.safeParse(out).success).toBe(true);
-    expect(out.version).toBe(3);
+    expect(out.version).toBe(4);
     expect(out.categories.map((c) => c.name)).toEqual(["Study", "Gym"]);
     const study = out.categories[0];
     expect(study.linkedSubjectId).toBe("Biology");
@@ -52,7 +52,7 @@ describe("migration v1 -> v2", () => {
   });
 
   it("parseAppData migrates v1 and falls back on garbage", () => {
-    expect(parseAppData(v1).version).toBe(3);
+    expect(parseAppData(v1).version).toBe(4);
     expect(parseAppData({ nope: 1 }).tasks).toEqual([]);
   });
 });
