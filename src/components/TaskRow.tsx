@@ -1,4 +1,5 @@
-import { useRef, useState, type KeyboardEvent } from "react";
+import { useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { createPortal } from "react-dom";
 import { Clock, Flag, ListChecks, MoreHorizontal, Repeat, StickyNote } from "lucide-react";
 import { addDays } from "../domain/dates";
 import type { Task } from "../domain/model";
@@ -23,6 +24,27 @@ export function TaskRow({
   const hasNote = !!task.note?.content.trim();
   const [menu, setMenu] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
+  const popover = useRef<HTMLDivElement>(null);
+  const [popoverPos, setPopoverPos] = useState({ top: 0, left: 0 });
+
+  // The menu is portalled to <body>: `animate-row` leaves a permanent transform on the row,
+  // which would size the fixed catcher to the row, trap the popover in the row's stacking
+  // context, and let `main`'s overflow clip it. Measure the real popover before paint so the
+  // right-aligned position is exact and it flips above the button when there's no room below.
+  useLayoutEffect(() => {
+    if (!menu) return;
+    const rect = menuButton.current?.getBoundingClientRect();
+    const el = popover.current;
+    if (!rect || !el) return;
+    const width = el.offsetWidth;
+    const height = el.offsetHeight;
+    const gap = 4;
+    const edge = 8;
+    const left = Math.max(edge, Math.min(rect.right - width, window.innerWidth - width - edge));
+    const below = rect.bottom + gap;
+    const top = below + height + edge <= window.innerHeight ? below : Math.max(edge, rect.top - gap - height);
+    setPopoverPos({ top, left });
+  }, [menu]);
 
   function onMenuKeyDown(e: KeyboardEvent) {
     e.stopPropagation();
@@ -85,32 +107,36 @@ export function TaskRow({
       >
         <MoreHorizontal size={18} />
       </button>
-      {menu && (
-        <>
-          <button
-            aria-label="Close menu"
-            className="fixed inset-0 z-10 cursor-default"
-            onClick={() => setMenu(false)}
-            onKeyDown={onMenuKeyDown}
-          />
-          <div
-            role="menu"
-            onKeyDown={onMenuKeyDown}
-            className="animate-pop absolute right-1 top-full z-20 mt-1 w-52 origin-top-right overflow-hidden rounded-2xl border border-line-2 bg-[var(--pop)] p-1 shadow-2xl shadow-black"
-          >
+      {menu &&
+        createPortal(
+          <>
             <button
-              role="menuitem"
-              onClick={() => {
-                actions.moveTaskToDay(task.id, addDays(task.date, 1));
-                setMenu(false);
-              }}
-              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[15px] font-medium hover:bg-ink/5"
+              aria-label="Close menu"
+              className="fixed inset-0 z-10 cursor-default"
+              onClick={() => setMenu(false)}
+              onKeyDown={onMenuKeyDown}
+            />
+            <div
+              ref={popover}
+              role="menu"
+              onKeyDown={onMenuKeyDown}
+              style={{ top: popoverPos.top, left: popoverPos.left }}
+              className="animate-pop fixed z-20 w-52 origin-top-right overflow-hidden rounded-2xl border border-line-2 bg-[var(--pop)] p-1 shadow-2xl shadow-black"
             >
-              <CalendarArrowRight size={16} className="text-muted" /> Move to tomorrow
-            </button>
-          </div>
-        </>
-      )}
+              <button
+                role="menuitem"
+                onClick={() => {
+                  actions.moveTaskToDay(task.id, addDays(task.date, 1));
+                  setMenu(false);
+                }}
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[15px] font-medium hover:bg-ink/5"
+              >
+                <CalendarArrowRight size={16} className="text-muted" /> Move to tomorrow
+              </button>
+            </div>
+          </>,
+          document.body,
+        )}
     </div>
   );
 }
