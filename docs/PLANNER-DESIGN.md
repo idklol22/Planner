@@ -62,3 +62,43 @@ Note      { (unchanged from ToDoMate) + updatedAt }
   shown (a child copy with the same title, `parentId` = null, and a field `seriesId` = template id), so done-state is
   per day.
 - Every record has `updatedAt` and a soft `deletedAt`, needed for sync (latest edit wins per record).
+
+---
+
+# v1.1 changes (owner feedback, 2026-11-20), replacing the earlier screens where they conflict
+
+1. **One page.** Remove the drawer menu, the phone bottom tab bar and the separate Today/Calendar/Notes/Habits/Calories
+   screens. The only screen is the Day page. A ☰ button (top-right) opens a small menu with **Categories** and
+   **Settings** only.
+2. **Calendar header**: `‹  [M|W]  ›`. The Month/Week toggle is a round button centred between the arrows (it shows
+   "M" or "W", and clicking switches the strip between the week row and the month grid). The month title sits above
+   or left as before.
+3. **Habits = ghost suggestions.** A habit belongs to a category and has a schedule: `every day` from a start date,
+   either until an end date or forever (optionally on certain weekdays). On days it applies, it shows under its
+   category pill as a faded ("ghost") row with a dashed flower. Tap it → it becomes a real task for that day. If it is
+   not added, it simply disappears after that day (nothing is stored). A category that has nothing but ghosts on
+   a day still shows. Habits are created from the + menu on a pill ("Add as habit…") and edited in Categories.
+4. **Task page (document), not a side sheet.** Clicking a task opens a full-page document view (route
+   `#/task/<id>`, back arrow returns to the day): title, a small meta row (category, date, time, repeat, kind), then a
+   Notion-like block editor (BlockNote): headings, lists, checklists, quotes, code, maths, and images (paste, drag or
+   upload, stored as data URLs for now). Typing `/task` inserts a task block that is a real subtask (its checkbox and
+   title sync with the subtask). Dictation comes later. The note stores BlockNote JSON plus a Markdown export.
+5. **Calories on the Day page**: a slim bar under the calendar showing `1,240 / 2,000 kcal` with a progress line.
+   Tap to type a number (with an optional label) and Enter adds it to the day's sum. Tapping the total lists today's
+   entries (deletable). The Calendar month view shows a tiny kcal dot per day (green when within ±10% of goal).
+   Summaries: a "Day summary" card appears at the bottom of the day after 21:00 or on past days (tasks done/total, kcal,
+   categories worked on). A "Week summary" shows on Sundays and when opening the week view (tasks done, kcal average,
+   days on goal, per-category counts).
+6. **Hand-off to LearnHarness.** A task whose category is linked to a Harness subject sends its note when the task is
+   completed, or at day end (first app open after midnight, for the previous day) if it isn't done, marked
+   `finished: false`. It's sent again when the note changes after being sent. It goes through the Harness API (below);
+   the handoff status chip on the task page shows not sent / sent / failed (retry).
+7. **Categories → linked subject** is a dropdown of the real Harness subjects, fetched from the Harness API. Settings
+   holds the Harness URL (default `http://localhost:3000`). If the Harness isn't reachable, the dropdown says so and
+   keeps the saved link.
+
+## Harness API used by the Planner (CORS-enabled for the Planner origin)
+- `GET  /api/planner/subjects` → `{ subjects: [{ id, name, color, topics: [{ id, name }] }] }`
+- `POST /api/planner/notes` `{ externalId, subjectId, topicId?, title, date, markdown, finished }` → stores or updates a
+  text material in that subject named `<date> <title>.md`, upserted by `externalId` (the task id). Unfinished notes get
+  a first line `> Unfinished notes (task not completed)`.
