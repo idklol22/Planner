@@ -15,7 +15,7 @@ import {
 import { dayKcal, hasEntries, onGoal } from "../domain/calories";
 import { daySummary } from "../domain/tasks";
 import { useStore } from "../state/store";
-import { nearestCategoryColor } from "../domain/palette";
+import { catColor } from "../theme/store";
 import { Flower } from "./Flower";
 
 export type CalendarMode = "week" | "month";
@@ -85,7 +85,7 @@ export function CalendarStrip({
             onClick={() => onModeChange(mode === "week" ? "month" : "week")}
             aria-label={mode === "week" ? "Switch to month view" : "Switch to week view"}
             title={mode === "week" ? "Show month" : "Show week"}
-            className="mod-btn !min-w-10 !px-0 !bg-white/[0.07] !text-ink"
+            className="mod-btn !min-w-10 !px-0 !bg-ink/[0.07] !text-ink"
           >
             <span key={mode} className="animate-fade">
               {mode === "week" ? "W" : "M"}
@@ -152,7 +152,7 @@ export function CalendarStrip({
                   size={sizes.flower}
                   filled={summary.allDone}
                   checked={summary.allDone}
-                  color={summary.color ? nearestCategoryColor(summary.color) : "#fff"}
+                  color={summary.color ? catColor(summary.color) : "var(--accent)"}
                   count={summary.open}
                   className="transition-transform duration-200 group-hover:scale-110"
                 />
@@ -161,7 +161,7 @@ export function CalendarStrip({
                     isSel
                       ? "bg-[var(--accent)] text-[var(--accent-ink)]"
                       : isToday
-                        ? "bg-white/[0.12] text-ink"
+                        ? "bg-ink/[0.12] text-ink"
                         : weekendClass(date) || "text-ink"
                   }`}
                 >
@@ -171,7 +171,7 @@ export function CalendarStrip({
                   <span
                     aria-hidden
                     className={`-mt-0.5 h-1 w-1 rounded-full transition-colors ${
-                      logged ? (goodDay ? "bg-mint" : "bg-white/35") : "bg-transparent"
+                      logged ? (goodDay ? "bg-mint" : "bg-ink/35") : "bg-transparent"
                     }`}
                   />
                 )}

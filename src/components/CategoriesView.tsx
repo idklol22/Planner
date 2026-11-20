@@ -1,9 +1,11 @@
-import { nearestCategoryColor } from "../domain/palette";
-import { useEffect, useState } from "react";
+import { catColor } from "../theme/store";
+import { useEffect, useMemo, useState } from "react";
 import { Archive, ArchiveRestore, ChevronDown, ChevronUp, GripVertical, Plus } from "lucide-react";
 import { CATEGORY_COLORS, DEFAULT_HARNESS_URL, type Category } from "../domain/model";
 import { HarnessClient, type HarnessSubject } from "../lib/harness";
 import { useStore } from "../state/store";
+import { useSync } from "../state/sync";
+import { mirrorSubjects } from "../sync/mirror-view";
 import { CATEGORY_ICONS, CategoryIcon } from "./icons";
 
 function CategoryRow({
@@ -45,11 +47,11 @@ function CategoryRow({
         <button onClick={onToggle} className="flex min-w-0 flex-1 items-center gap-3 py-2 text-left">
           <span
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
-            style={{ background: `${nearestCategoryColor(cat.color)}26` }}
+            style={{ background: `${catColor(cat.color)}26` }}
           >
-            <CategoryIcon name={cat.icon} size={17} color={nearestCategoryColor(cat.color)} />
+            <CategoryIcon name={cat.icon} size={17} color={catColor(cat.color)} />
           </span>
-          <span className="min-w-0 flex-1 truncate text-[17px] font-semibold" style={{ color: nearestCategoryColor(cat.color) }}>
+          <span className="min-w-0 flex-1 truncate text-[17px] font-semibold" style={{ color: catColor(cat.color) }}>
             {cat.name}
           </span>
           {cat.linkedSubjectId && (
@@ -101,11 +103,11 @@ function CategoryRow({
                   key={c}
                   onClick={() => actions.updateCategory(cat.id, { color: c })}
                   aria-label={`Colour ${c}`}
-                  aria-pressed={nearestCategoryColor(cat.color) === c}
+                  aria-pressed={catColor(cat.color) === c}
                   className="h-8 w-8 rounded-full transition-transform active:scale-90"
                   style={{
-                    background: c,
-                    boxShadow: nearestCategoryColor(cat.color) === c ? `0 0 0 2px #111, 0 0 0 4px ${c}` : "none",
+                    background: catColor(c),
+                    boxShadow: catColor(cat.color) === c ? `0 0 0 2px var(--surface), 0 0 0 4px ${catColor(c)}` : "none",
                   }}
                 />
               ))}
@@ -122,10 +124,10 @@ function CategoryRow({
                   aria-label={`Icon ${key}`}
                   aria-pressed={cat.icon === key}
                   className={`flex h-10 w-10 items-center justify-center rounded-xl transition-colors ${
-                    cat.icon === key ? "bg-white/15" : "bg-surface-2 hover:bg-surface-3"
+                    cat.icon === key ? "bg-ink/15" : "bg-surface-2 hover:bg-surface-3"
                   }`}
                 >
-                  <CategoryIcon name={key} size={18} color={cat.icon === key ? nearestCategoryColor(cat.color) : "#aaa"} />
+                  <CategoryIcon name={key} size={18} color={cat.icon === key ? catColor(cat.color) : "var(--text-faint)"} />
                 </button>
               ))}
             </div>
@@ -206,8 +208,16 @@ export function CategoriesView() {
   const [subjects, setSubjects] = useState<HarnessSubject[]>([]);
   const [unreachable, setUnreachable] = useState(false);
   const harnessUrl = data.settings.harnessUrl || DEFAULT_HARNESS_URL;
+  const hub = useSync();
+  const hubSubjects = useMemo(() => mirrorSubjects(hub.mirror), [hub.mirror]);
 
   useEffect(() => {
+    if (hub.configured) {
+      // Hub mode: subjects/topics come from the synced Harness mirror.
+      setSubjects(hubSubjects);
+      setUnreachable(false);
+      return;
+    }
     let alive = true;
     setUnreachable(false);
     void new HarnessClient(harnessUrl).subjects().then((result) => {
@@ -224,7 +234,7 @@ export function CategoriesView() {
     return () => {
       alive = false;
     };
-  }, [harnessUrl]);
+  }, [harnessUrl, hub.configured, hubSubjects]);
 
   const active = data.categories.filter((c) => !c.archived).sort((a, b) => a.order - b.order);
   const archived = data.categories.filter((c) => c.archived);
@@ -267,14 +277,14 @@ export function CategoriesView() {
           onClick={add}
           disabled={!name.trim()}
           aria-label="Add category"
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-black transition-all active:scale-90 disabled:bg-surface-3 disabled:text-faint"
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-accent-ink transition-all active:scale-90 disabled:bg-surface-3 disabled:text-faint"
         >
           <Plus size={20} strokeWidth={2.5} />
         </button>
       </div>
 
       {active.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-white/15 px-4 py-10 text-center text-[14px] text-muted">
+        <div className="rounded-2xl border border-dashed border-ink/15 px-4 py-10 text-center text-[14px] text-muted">
           No categories yet. Add one above to start sorting your days.
         </div>
       ) : (
@@ -316,7 +326,7 @@ export function CategoriesView() {
           <div className="space-y-2">
             {archived.map((cat) => (
               <div key={cat.id} className="flex min-h-[52px] items-center gap-3 rounded-2xl bg-surface px-4">
-                <span className="h-3 w-3 rounded-full opacity-60" style={{ background: nearestCategoryColor(cat.color) }} />
+                <span className="h-3 w-3 rounded-full opacity-60" style={{ background: catColor(cat.color) }} />
                 <span className="min-w-0 flex-1 truncate text-[16px] text-muted">{cat.name}</span>
                 <button
                   onClick={() => actions.archiveCategory(cat.id, false)}

@@ -1,30 +1,30 @@
 /* BlockNote in the app's true-black theme, Notion-like reading typography. */
 .planner-editor.bn-container {
-  --bn-colors-editor-text: rgba(255, 255, 255, 0.9);
-  --bn-colors-editor-background: #000;
-  --bn-colors-menu-text: #fff;
-  --bn-colors-menu-background: #111;
-  --bn-colors-tooltip-text: #fff;
-  --bn-colors-tooltip-background: #1a1a1a;
-  --bn-colors-hovered-text: #fff;
-  --bn-colors-hovered-background: #1f1f1f;
-  --bn-colors-selected-text: #fff;
-  --bn-colors-selected-background: #2a2a2a;
-  --bn-colors-disabled-text: rgba(255, 255, 255, 0.35);
-  --bn-colors-disabled-background: #111;
-  --bn-colors-shadow: rgba(0, 0, 0, 0.8);
-  --bn-colors-border: rgba(255, 255, 255, 0.12);
-  --bn-colors-side-menu: rgba(255, 255, 255, 0.4);
+  --bn-colors-editor-text: var(--text);
+  --bn-colors-editor-background: var(--bg);
+  --bn-colors-menu-text: var(--text);
+  --bn-colors-menu-background: var(--surface-raised);
+  --bn-colors-tooltip-text: var(--text);
+  --bn-colors-tooltip-background: var(--surface-raised);
+  --bn-colors-hovered-text: var(--text);
+  --bn-colors-hovered-background: var(--surface-2);
+  --bn-colors-selected-text: var(--text);
+  --bn-colors-selected-background: var(--surface-raised);
+  --bn-colors-disabled-text: var(--text-faint);
+  --bn-colors-disabled-background: var(--surface-raised);
+  --bn-colors-shadow: var(--scrim);
+  --bn-colors-border: var(--border);
+  --bn-colors-side-menu: var(--text-faint);
   --bn-font-family: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
   --bn-border-radius: 12px;
-  background: #000;
+  background: var(--bg);
 }
 
 .planner-editor .bn-editor {
   padding-inline: 0;
   font-size: 17px;
   line-height: 1.65;
-  background: #000;
+  background: var(--bg);
 }
 .planner-editor .bn-block-content {
   padding-block: 2px;
@@ -47,20 +47,20 @@
   margin-top: 0.4em;
 }
 .planner-editor [data-content-type="quote"] blockquote {
-  border-left: 3px solid rgba(255, 255, 255, 0.35);
+  border-left: 3px solid var(--border-strong);
   margin: 0.3em 0;
   padding-left: 1em;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--text-muted);
 }
 .planner-editor [data-content-type="codeBlock"] {
-  background: #111;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
   border-radius: 12px;
   font-family: "JetBrains Mono Variable", ui-monospace, monospace;
   font-size: 14px;
 }
 .planner-editor code {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--hover-strong);
   border-radius: 5px;
   padding: 0.1em 0.35em;
   font-family: "JetBrains Mono Variable", ui-monospace, monospace;
@@ -71,7 +71,7 @@
 }
 .planner-editor .bn-inline-content:has(> .ProseMirror-trailingBreak:only-child)::before,
 .planner-editor [data-is-empty-and-focused] .bn-inline-content::before {
-  color: rgba(255, 255, 255, 0.28);
+  color: var(--text-faint);
 }
 
 /* Task block (bound to a subtask) */
@@ -87,9 +87,9 @@
   padding-top: 1px;
 }
 .task-block[data-checked="true"] .inline-content {
-  color: rgba(255, 255, 255, 0.38);
+  color: var(--text-faint);
   text-decoration: line-through;
-  text-decoration-color: rgba(255, 255, 255, 0.25);
+  text-decoration-color: var(--text-faint);
 }
 .task-check {
   flex: none;
@@ -97,7 +97,7 @@
   padding: 0;
   border: 0;
   background: none;
-  color: #fff;
+  color: var(--text);
   line-height: 0;
   transition: transform 0.12s ease;
 }
@@ -106,13 +106,13 @@
 }
 .task-check-ring {
   fill: none;
-  stroke: rgba(255, 255, 255, 0.45);
+  stroke: var(--border-strong);
   stroke-width: 1.8;
   transition: fill 0.15s ease, stroke 0.15s ease;
 }
 .task-check-tick {
   fill: none;
-  stroke: #000;
+  stroke: var(--bg);
   stroke-width: 2.2;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -120,8 +120,8 @@
   transition: opacity 0.12s ease;
 }
 .task-block[data-checked="true"] .task-check-ring {
-  fill: #fff;
-  stroke: #fff;
+  fill: var(--text);
+  stroke: var(--text);
 }
 .task-block[data-checked="true"] .task-check-tick {
   opacity: 1;
@@ -135,12 +135,12 @@
   transition: background 0.12s ease;
 }
 .math-chip:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--hover-strong);
 }
 .math-input {
-  background: #1a1a1a;
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: var(--surface-raised);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 0 6px;
   font-family: "JetBrains Mono Variable", ui-monospace, monospace;

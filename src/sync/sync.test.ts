@@ -3,6 +3,8 @@ import type {
   CategoryRow,
   HubOp,
   PullResult,
+  PullRow,
+  PullTable,
   PushResult,
   SyncRow,
   TaskRow,
@@ -104,9 +106,9 @@ function cursorStore(initial = 0): CursorStore & { value(): number } {
 
 function engineFor(
   client: FakeClient,
-  local = new Map<string, SyncRow>(),
+  local = new Map<string, PullRow>(),
   cursor = cursorStore(),
-  applied: Array<{ table: HubOp["table"]; row: SyncRow }> = [],
+  applied: Array<{ table: PullTable; row: PullRow }> = [],
 ) {
   const engine = new SyncEngine({
     client,
@@ -185,11 +187,11 @@ describe("outbox", () => {
 describe("pull", () => {
   it("applies only rows newer than the local copy and saves the cursor", async () => {
     const client = fakeClient();
-    const local = new Map<string, SyncRow>([
+    const local = new Map<string, PullRow>([
       ["task:keep", task("keep", T1, "local wins")],
       ["task:same", task("same", T1)],
     ]);
-    const applied: Array<{ table: HubOp["table"]; row: SyncRow }> = [];
+    const applied: Array<{ table: PullTable; row: PullRow }> = [];
     const cursor = cursorStore();
     client.pull.mockResolvedValue({
       changes: [

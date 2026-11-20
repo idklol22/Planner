@@ -5,6 +5,7 @@ import { describeSchedule } from "../domain/habits";
 import type { Habit } from "../domain/model";
 import { activeCategories } from "../domain/tasks";
 import { useStore } from "../state/store";
+import { catColor } from "../theme/store";
 
 // Monday first, values are JS weekdays (0 = Sunday).
 const DAYS: [string, number][] = [
@@ -20,7 +21,7 @@ const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Satu
 
 const LABEL = "mb-1.5 block text-[12px] font-semibold uppercase tracking-wider text-faint";
 const FIELD =
-  "h-11 rounded-xl bg-black px-3 text-[15px] text-ink outline-none focus:ring-1 focus:ring-white/30";
+  "h-11 rounded-xl bg-canvas px-3 text-[15px] text-ink outline-none focus:ring-1 focus:ring-ink/30";
 
 /** Bottom sheet on phone, centred card on desktop. Creates or edits a habit. */
 export function HabitEditor({
@@ -70,16 +71,16 @@ export function HabitEditor({
       <button
         aria-label="Close"
         onClick={onClose}
-        className="animate-fade absolute inset-0 cursor-default bg-black/75 backdrop-blur-[2px]"
+        className="animate-fade absolute inset-0 cursor-default bg-scrim backdrop-blur-[2px]"
       />
       <div
         role="dialog"
         aria-label={habit ? "Edit habit" : "New habit"}
         className="animate-sheet-up relative max-h-[92dvh] w-full max-w-[460px] overflow-y-auto rounded-t-[28px] bg-surface-2 px-5 pb-[calc(20px+var(--safe-bottom))] pt-3 md:rounded-[28px] md:pb-5"
       >
-        <div className="mx-auto mb-3 h-1 w-9 rounded-full bg-white/20 md:hidden" />
+        <div className="mx-auto mb-3 h-1 w-9 rounded-full bg-ink/20 md:hidden" />
         <div className="mb-4 flex items-center gap-2.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-black">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-canvas">
             <Flame size={17} className="text-amber" />
           </span>
           <h2 className="text-[19px] font-bold tracking-tight">{habit ? "Edit habit" : "Add as habit"}</h2>
@@ -117,7 +118,7 @@ export function HabitEditor({
                 aria-label={DAY_NAMES[i]}
                 onClick={() => setDays((d) => (on ? d.filter((x) => x !== value) : [...d, value]))}
                 className={`flex h-10 flex-1 items-center justify-center rounded-full text-[14px] font-semibold transition-all active:scale-90 ${
-                  on ? "bg-white text-black" : "bg-black text-muted hover:text-ink"
+                  on ? "bg-accent text-accent-ink" : "bg-canvas text-muted hover:text-ink"
                 }`}
               >
                 {label}
@@ -141,14 +142,14 @@ export function HabitEditor({
           </div>
           <div>
             <label className={LABEL}>Ends</label>
-            <div className="flex h-11 rounded-xl bg-black p-0.5">
+            <div className="flex h-11 rounded-xl bg-canvas p-0.5">
               {([true, false] as const).map((f) => (
                 <button
                   key={String(f)}
                   type="button"
                   onClick={() => setForever(f)}
                   className={`flex-1 rounded-[10px] text-[13px] font-semibold transition-colors ${
-                    forever === f ? "bg-white text-black" : "text-muted"
+                    forever === f ? "bg-accent text-accent-ink" : "text-muted"
                   }`}
                 >
                   {f ? "Never" : "On date"}
@@ -175,21 +176,21 @@ export function HabitEditor({
                 onClose();
               }}
               aria-label="Delete habit"
-              className="flex h-12 w-12 items-center justify-center rounded-full bg-black text-rose transition-transform active:scale-90"
+              className="flex h-12 w-12 items-center justify-center rounded-full bg-canvas text-rose transition-transform active:scale-90"
             >
               <Trash2 size={18} />
             </button>
           )}
           <button
             onClick={onClose}
-            className="h-12 flex-1 rounded-full bg-black text-[15px] font-semibold text-muted transition-transform active:scale-95"
+            className="h-12 flex-1 rounded-full bg-canvas text-[15px] font-semibold text-muted transition-transform active:scale-95"
           >
             Cancel
           </button>
           <button
             onClick={save}
             disabled={!valid}
-            className="h-12 flex-[1.4] rounded-full bg-white text-[15px] font-semibold text-black transition-all active:scale-95 disabled:opacity-30"
+            className="h-12 flex-[1.4] rounded-full bg-accent text-[15px] font-semibold text-accent-ink transition-all active:scale-95 disabled:opacity-30"
           >
             {habit ? "Save" : "Add habit"}
           </button>
@@ -225,7 +226,7 @@ export function HabitsList({ date }: { date: ISODate }) {
             >
               <span
                 className="h-2.5 w-2.5 shrink-0 rounded-full"
-                style={{ backgroundColor: cat?.color ?? "#777" }}
+                style={{ backgroundColor: cat ? catColor(cat.color) : "var(--text-faint)" }}
               />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[16px] font-semibold">{h.title}</span>

@@ -4,7 +4,10 @@ import { TaskPage } from "./components/task-page/TaskPage";
 import { taskIdFromHash } from "./components/task-page/route";
 import { useHandoff } from "./lib/handoff";
 import { StoreProvider, useStore } from "./state/store";
+import { SyncProvider } from "./state/sync";
 import { ToastProvider } from "./state/toast";
+import { Scene } from "./theme/Scene";
+import { useThemeState } from "./theme/store";
 
 /** Keeps the hand-off engine alive for the whole app session. */
 function HandoffRunner() {
@@ -16,6 +19,7 @@ function HandoffRunner() {
  *  (the day view stays mounted underneath so its date and mode are kept). */
 function Routes() {
   const { ready } = useStore();
+  useThemeState(); // category colours are re-lit per theme
   const [taskId, setTaskId] = useState(() => taskIdFromHash(window.location.hash));
   useEffect(() => {
     const onHash = () => setTaskId(taskIdFromHash(window.location.hash));
@@ -33,10 +37,13 @@ function Routes() {
 export function App() {
   return (
     <StoreProvider>
-      <ToastProvider>
-        <HandoffRunner />
-        <Routes />
-      </ToastProvider>
+      <SyncProvider>
+        <ToastProvider>
+          <Scene />
+          <HandoffRunner />
+          <Routes />
+        </ToastProvider>
+      </SyncProvider>
     </StoreProvider>
   );
 }

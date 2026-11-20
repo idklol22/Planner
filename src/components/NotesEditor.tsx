@@ -94,7 +94,7 @@ export function NoteEditor({ task }: { task: Task }) {
       <div className="overflow-hidden rounded-2xl border border-line bg-surface">
         {!note ? (
           <div className="flex flex-col items-center justify-center gap-3 py-10">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-line bg-white/[0.03] text-accent">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-line bg-ink/[0.03] text-accent">
               <FileText size={24} />
             </div>
             <p className="text-sm text-muted">This task has no note yet.</p>
@@ -104,7 +104,7 @@ export function NoteEditor({ task }: { task: Task }) {
           </div>
         ) : (
           <>
-            <div className="flex flex-wrap items-center gap-1 border-b border-line bg-black/10 px-4 py-2.5">
+            <div className="flex flex-wrap items-center gap-1 border-b border-line bg-canvas/10 px-4 py-2.5">
               <IconButton onClick={() => insert("**bold**", 2)} title="Bold" className="h-7 w-7">
                 <Bold size={14} />
               </IconButton>
@@ -113,7 +113,7 @@ export function NoteEditor({ task }: { task: Task }) {
               </IconButton>
               <button
                 onClick={() => insert("\n## Heading\n", 9)}
-                className="rounded-md px-2 py-1 text-[11px] font-semibold text-muted hover:bg-white/[0.06] hover:text-ink"
+                className="rounded-md px-2 py-1 text-[11px] font-semibold text-muted hover:bg-ink/[0.06] hover:text-ink"
               >
                 H2
               </button>
@@ -127,13 +127,13 @@ export function NoteEditor({ task }: { task: Task }) {
               </IconButton>
               <button
                 onClick={() => insert("\n$$\nE = mc^2\n$$\n", 5)}
-                className="rounded-md px-2 py-1 text-[11px] font-medium text-muted hover:bg-white/[0.06] hover:text-ink"
+                className="rounded-md px-2 py-1 text-[11px] font-medium text-muted hover:bg-ink/[0.06] hover:text-ink"
               >
                 $$ block
               </button>
               <button
                 onClick={() => insert("\n- [ ] subtask\n", 7)}
-                className="rounded-md px-2 py-1 text-[11px] font-medium text-muted hover:bg-white/[0.06] hover:text-ink"
+                className="rounded-md px-2 py-1 text-[11px] font-medium text-muted hover:bg-ink/[0.06] hover:text-ink"
               >
                 ☑ task
               </button>
@@ -173,10 +173,10 @@ export function NoteEditor({ task }: { task: Task }) {
                   placeholder={
                     "Write notes in Markdown…\n\n- [ ] nested tasks\n$x^2$ inline math, $$blocks$$\n[[wikilinks]] and pasted images"
                   }
-                  className="min-h-[16rem] w-full resize-y rounded-xl border border-line bg-black p-4 font-mono text-[13px] leading-7 text-ink outline-none transition-colors placeholder:text-faint focus:border-white/40"
+                  className="min-h-[16rem] w-full resize-y rounded-xl border border-line bg-canvas p-4 font-mono text-[13px] leading-7 text-ink outline-none transition-colors placeholder:text-faint focus:border-ink/40"
                 />
               ) : (
-                <div className="md-preview min-h-[16rem] rounded-xl border border-line bg-black p-5">
+                <div className="md-preview min-h-[16rem] rounded-xl border border-line bg-canvas p-5">
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm, remarkMath]}
                     rehypePlugins={[rehypeKatex]}
@@ -213,7 +213,7 @@ export function NoteEditor({ task }: { task: Task }) {
               )}
             </div>
 
-            <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-line bg-black/10 px-4 py-4">
+            <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-line bg-canvas/10 px-4 py-4">
               <Button
                 variant="secondary"
                 onClick={() => actions.markNoteDone(task.id)}

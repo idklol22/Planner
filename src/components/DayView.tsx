@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, ListFilter, Menu, Plus, Repeat, Settings2, Sparkles, Tags, Settings, Flame } from "lucide-react";
+import { Check, Library, ListFilter, Menu, Plus, Repeat, Settings2, Sparkles, Tags, Settings, Flame } from "lucide-react";
 import {
   addDays,
   formatDayTitle,
@@ -10,19 +10,21 @@ import {
 } from "../domain/dates";
 import { ghostsFor } from "../domain/habits";
 import { type Habit } from "../domain/model";
-import { CATEGORY_COLORS, nearestCategoryColor } from "../domain/palette";
+import { CATEGORY_COLORS } from "../domain/palette";
+import { catColor } from "../theme/store";
 import { dayKcal } from "../domain/calories";
 import { sectionsForDay, tasksForDay, type Section } from "../domain/tasks";
 import { useStore } from "../state/store";
 import { CalendarStrip, type CalendarMode } from "./CalendarStrip";
 import { CalorieBar } from "./CalorieBar";
+import { DeadlinesCard } from "./DeadlinesCard";
 import { Flower } from "./Flower";
 import { HabitEditor } from "./HabitEditor";
 import { CategoryIcon } from "./icons";
 import { DaySummaryCard, WeekSummaryCard } from "./Summaries";
 import { TaskRow } from "./TaskRow";
 
-export type MenuPage = "categories" | "settings";
+export type MenuPage = "categories" | "library" | "settings";
 
 interface Prefs {
   showCompleted: boolean;
@@ -56,7 +58,7 @@ function InlineAdd({
     ref.current?.scrollIntoView({ block: "center", behavior: "smooth" });
   }, []);
   return (
-    <div className="animate-row flex min-h-[52px] items-center gap-3.5 rounded-xl bg-white/[0.05] px-2 py-1">
+    <div className="animate-row flex min-h-[52px] items-center gap-3.5 rounded-xl bg-ink/[0.05] px-2 py-1">
       <Flower size={32} color={color} />
       <input
         ref={ref}
@@ -95,7 +97,7 @@ function GhostRow({
   onEdit: () => void;
 }) {
   return (
-    <div className="animate-row group flex min-h-[52px] items-center gap-3.5 rounded-xl px-2 py-1 opacity-55 transition-[opacity,background-color] hover:bg-white/[0.04] hover:opacity-90">
+    <div className="animate-row group flex min-h-[52px] items-center gap-3.5 rounded-xl px-2 py-1 opacity-55 transition-[opacity,background-color] hover:bg-ink/[0.04] hover:opacity-90">
       <button
         onClick={onAccept}
         aria-label={`Add "${habit.title}" as a task`}
@@ -110,7 +112,7 @@ function GhostRow({
       <button
         onClick={onEdit}
         aria-label={`Edit habit ${habit.title}`}
-        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-faint transition-colors hover:bg-white/10 hover:text-ink active:scale-90"
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-faint transition-colors hover:bg-ink/10 hover:text-ink active:scale-90"
       >
         <Settings2 size={17} />
       </button>
@@ -140,7 +142,7 @@ function CategorySection({
   const { actions } = useStore();
   const [menu, setMenu] = useState(false);
   const cat = section.category;
-  const color = cat ? nearestCategoryColor(cat.color) : "#d8d8da";
+  const color = cat ? catColor(cat.color) : "var(--accent)";
   const name = cat?.name ?? "Inbox";
   const body = section.tasks.length > 0 || ghosts.length > 0 || adding;
   return (
@@ -161,7 +163,7 @@ function CategorySection({
           aria-label={`Add to ${name}`}
           aria-expanded={menu}
           aria-haspopup="menu"
-          className="mod-btn !min-w-10 !px-0 !bg-white/[0.07] !text-ink"
+          className="mod-btn !min-w-10 !px-0 !bg-ink/[0.07] !text-ink"
         >
           <Plus
             size={20}
@@ -188,7 +190,7 @@ function CategorySection({
                 setMenu(false);
                 setAdding(true);
               }}
-              className="flex w-full items-center gap-3 px-4 py-4 text-left text-[16px] font-medium hover:bg-white/5"
+              className="flex w-full items-center gap-3 px-4 py-4 text-left text-[16px] font-medium hover:bg-ink/5"
             >
               <Plus size={18} className="text-muted" /> Add task
             </button>
@@ -198,7 +200,7 @@ function CategorySection({
                 setMenu(false);
                 onAddHabit(cat?.id ?? null);
               }}
-              className="flex w-full items-center gap-3 border-t border-line px-4 py-4 text-left text-[16px] font-medium hover:bg-white/5"
+              className="flex w-full items-center gap-3 border-t border-line px-4 py-4 text-left text-[16px] font-medium hover:bg-ink/5"
             >
               <Flame size={18} className="text-muted" /> Add as habit…
             </button>
@@ -348,7 +350,7 @@ export function DayView({
           {selected !== today && (
             <button
               onClick={() => onSelect(today)}
-              className="animate-fade h-10 rounded-xl bg-white/[0.07] px-4 text-[15px] font-semibold text-muted transition-colors hover:bg-white/[0.12] hover:text-ink active:scale-95"
+              className="animate-fade h-10 rounded-xl bg-ink/[0.07] px-4 text-[15px] font-semibold text-muted transition-colors hover:bg-ink/[0.12] hover:text-ink active:scale-95"
             >
               Today
             </button>
@@ -358,7 +360,7 @@ export function DayView({
             aria-label="Menu"
             aria-expanded={mainMenu}
             aria-haspopup="menu"
-            className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.07] text-ink transition-colors hover:bg-white/[0.12] active:scale-90"
+            className="flex h-10 w-10 items-center justify-center rounded-xl bg-ink/[0.07] text-ink transition-colors hover:bg-ink/[0.12] active:scale-90"
           >
             <Menu size={20} />
           </button>
@@ -376,6 +378,7 @@ export function DayView({
                 {(
                   [
                     ["categories", "Categories", Tags],
+                    ["library", "Library", Library],
                     ["settings", "Settings", Settings],
                   ] as const
                 ).map(([page, label, Icon], i) => (
@@ -386,7 +389,7 @@ export function DayView({
                       setMainMenu(false);
                       onOpenPage(page);
                     }}
-                    className={`flex w-full items-center gap-3 px-4 py-4 text-left text-[16px] font-medium hover:bg-white/5 ${
+                    className={`flex w-full items-center gap-3 px-4 py-4 text-left text-[16px] font-medium hover:bg-ink/5 ${
                       i > 0 ? "border-t border-line" : ""
                     }`}
                   >
@@ -459,7 +462,7 @@ export function DayView({
                     <button
                       key={key}
                       onClick={() => setPrefs((p) => ({ ...p, [key]: !p[key] }))}
-                      className="flex w-full items-center justify-between px-4 py-4 text-left text-[16px] hover:bg-white/5"
+                      className="flex w-full items-center justify-between px-4 py-4 text-left text-[16px] hover:bg-ink/5"
                     >
                       {label}
                       {prefs[key] && <Check size={18} />}
@@ -470,7 +473,7 @@ export function DayView({
                       setListMenu(false);
                       onManageCategories();
                     }}
-                    className="w-full border-t border-line px-4 py-4 text-left text-[16px] hover:bg-white/5"
+                    className="w-full border-t border-line px-4 py-4 text-left text-[16px] hover:bg-ink/5"
                   >
                     Reorder categories
                   </button>
@@ -482,7 +485,7 @@ export function DayView({
       </div>
 
       {!hasCategories && sections.length === 0 ? (
-        <div className="animate-fade module !border !border-dashed !border-white/15 px-5 py-10 text-center">
+        <div className="animate-fade module !border !border-dashed !border-ink/15 px-5 py-10 text-center">
           <div className="mx-auto mb-4 flex w-fit">
             <Flower size={56} filled color={CATEGORY_COLORS[8]} />
           </div>
@@ -495,7 +498,7 @@ export function DayView({
               <button
                 key={name}
                 onClick={() => actions.addCategory(name, CATEGORY_COLORS[[8, 4, 0, 6][i]])}
-                className="flex items-center gap-1.5 rounded-xl bg-white/[0.07] px-4 py-2.5 text-[15px] font-semibold transition-colors hover:bg-white/[0.12] active:scale-95"
+                className="flex items-center gap-1.5 rounded-xl bg-ink/[0.07] px-4 py-2.5 text-[15px] font-semibold transition-colors hover:bg-ink/[0.12] active:scale-95"
               >
                 <Plus size={15} /> {name}
               </button>
@@ -529,13 +532,15 @@ export function DayView({
             );
           })}
           {sections.length === 0 && (
-            <div className="rounded-2xl border border-dashed border-white/12 px-4 py-8 text-center text-[15px] text-muted">
+            <div className="rounded-2xl border border-dashed border-ink/12 px-4 py-8 text-center text-[15px] text-muted">
               <Sparkles size={20} className="mx-auto mb-2 text-faint" />
               Nothing to show. Turn off &quot;Hide empty categories&quot; in the list menu to add tasks.
             </div>
           )}
         </div>
       )}
+
+      <DeadlinesCard date={selected} />
 
       {(showDaySummary || showWeekSummary) && (
         <div className="mt-4 space-y-4">

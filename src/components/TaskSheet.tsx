@@ -5,6 +5,7 @@ import { TASK_KINDS, type Task } from "../domain/model";
 import { parseDays, REPEAT_OPTIONS } from "../domain/recurrence";
 import { activeCategories, subtaskProgress, subtasksOf } from "../domain/tasks";
 import { useStore } from "../state/store";
+import { catColor } from "../theme/store";
 import { useToast } from "../state/toast";
 import { FlowerCheck } from "./Flower";
 import { NoteEditor } from "./NotesEditor";
@@ -32,11 +33,11 @@ function Switch({ on, onChange, label }: { on: boolean; onChange: (v: boolean) =
       aria-checked={on}
       aria-label={label}
       onClick={() => onChange(!on)}
-      className={`relative h-[30px] w-[50px] rounded-full transition-colors ${on ? "bg-white" : "bg-surface-3"}`}
+      className={`relative h-[30px] w-[50px] rounded-full transition-colors ${on ? "bg-accent" : "bg-surface-3"}`}
     >
       <span
         className={`absolute top-[3px] h-6 w-6 rounded-full transition-all duration-200 ${
-          on ? "left-[23px] bg-black" : "left-[3px] bg-white/70"
+          on ? "left-[23px] bg-accent-ink" : "left-[3px] bg-ink/70"
         }`}
       />
     </button>
@@ -60,7 +61,7 @@ function SheetBody({
   const isSub = !!task.parentId;
   const parent = isSub ? data.tasks.find((t) => t.id === task.parentId) : undefined;
   const category = data.categories.find((c) => c.id === task.categoryId);
-  const color = category?.color ?? "#ffffff";
+  const color = category ? catColor(category.color) : "var(--accent)";
   const subs = subtasksOf(data.tasks, task.id);
   const progress = subtaskProgress(data.tasks, task.id);
   const cats = activeCategories(data.categories);
@@ -90,7 +91,7 @@ function SheetBody({
   return (
     <>
       <div className="shrink-0 px-4 pb-2 pt-3">
-        <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-white/20 md:hidden" />
+        <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-ink/20 md:hidden" />
         <div className="flex h-9 items-center justify-between">
           {isSub && parent ? (
             <button
@@ -141,7 +142,7 @@ function SheetBody({
             onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), e.currentTarget.blur())}
             aria-label="Task title"
             className={`min-w-0 flex-1 resize-none bg-transparent py-1 text-[24px] font-bold leading-tight tracking-tight outline-none [field-sizing:content] ${
-              task.done ? "text-faint line-through decoration-white/30" : ""
+              task.done ? "text-faint line-through decoration-ink/30" : ""
             }`}
           />
         </div>
@@ -158,12 +159,12 @@ function SheetBody({
                       onClick={() => actions.updateTask(task.id, { categoryId: c.id })}
                       className="flex shrink-0 items-center gap-2 rounded-full px-3.5 py-2 text-[14px] font-semibold transition-all active:scale-95"
                       style={{
-                        color: c.color,
-                        background: on ? `${c.color}26` : "#1a1a1a",
-                        boxShadow: on ? `inset 0 0 0 1.5px ${c.color}` : "none",
+                        color: catColor(c.color),
+                        background: on ? `${catColor(c.color)}26` : "var(--surface-raised)",
+                        boxShadow: on ? `inset 0 0 0 1.5px ${catColor(c.color)}` : "none",
                       }}
                     >
-                      <span className="h-2.5 w-2.5 rounded-full" style={{ background: c.color }} />
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ background: catColor(c.color) }} />
                       {c.name}
                     </button>
                   );
@@ -247,7 +248,7 @@ function SheetBody({
                         onClick={() => toggleDay(day)}
                         aria-pressed={on}
                         className={`h-9 w-9 rounded-full text-[13px] font-semibold transition-colors ${
-                          on ? "bg-white text-black" : "bg-surface-2 text-muted hover:bg-surface-3"
+                          on ? "bg-accent text-accent-ink" : "bg-surface-2 text-muted hover:bg-surface-3"
                         }`}
                       >
                         {name}
@@ -304,7 +305,7 @@ function SheetBody({
                     <button
                       onClick={() => onOpen(sub.id)}
                       className={`min-w-0 flex-1 truncate py-1.5 text-left text-[16px] ${
-                        sub.done ? "text-faint line-through decoration-white/30" : ""
+                        sub.done ? "text-faint line-through decoration-ink/30" : ""
                       }`}
                     >
                       {sub.title}
@@ -342,7 +343,7 @@ function SheetBody({
         <NoteEditor task={task} />
       </div>
 
-      <footer className="flex shrink-0 items-center gap-2 border-t border-line bg-black px-4 py-3 pb-[max(0.75rem,var(--safe-bottom))]">
+      <footer className="flex shrink-0 items-center gap-2 border-t border-line bg-canvas px-4 py-3 pb-[max(0.75rem,var(--safe-bottom))]">
         <button
           onClick={() => {
             actions.deleteTask(task.id);
@@ -400,12 +401,12 @@ export function TaskSheet({
       <button
         aria-label="Close task"
         onClick={close}
-        className="animate-fade fixed inset-0 z-40 cursor-default bg-black/70 backdrop-blur-[2px] md:hidden"
+        className="animate-fade fixed inset-0 z-40 cursor-default bg-scrim backdrop-blur-[2px] md:hidden"
       />
       <aside
         role="dialog"
         aria-label="Task"
-        className="sheet-panel fixed inset-x-0 bottom-0 z-50 flex h-[92dvh] flex-col overflow-hidden rounded-t-[28px] border-t border-line-2 bg-black md:static md:z-auto md:h-full md:w-[380px] md:shrink-0 md:rounded-none md:border-l md:border-t-0 lg:w-[460px]"
+        className="sheet-panel fixed inset-x-0 bottom-0 z-50 flex h-[92dvh] flex-col overflow-hidden rounded-t-[28px] border-t border-line-2 bg-canvas md:static md:z-auto md:h-full md:w-[380px] md:shrink-0 md:rounded-none md:border-l md:border-t-0 lg:w-[460px]"
       >
         <SheetBody key={task.id} task={task} onClose={close} onOpen={onOpen} />
       </aside>

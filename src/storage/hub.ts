@@ -70,6 +70,68 @@ export interface MealRow {
 
 export type SyncRow = CategoryRow | TaskRow | GoalRow | MealRow;
 
+/** Read-only tables mirrored from LearnHarness; pulled but never pushed. */
+export type MirrorTable = "h_subject" | "h_topic" | "h_material" | "h_deadline";
+export type PullTable = SyncTable | MirrorTable;
+
+export interface HSubjectRow {
+  id: string;
+  name: string;
+  color: string;
+  order: number;
+  updatedAt: string;
+  deletedAt?: string | null;
+}
+export interface HTopicRow {
+  id: string;
+  subjectId: string;
+  name: string;
+  order: number;
+  updatedAt: string;
+  deletedAt?: string | null;
+}
+export interface HMaterialRow {
+  id: string;
+  subjectId: string;
+  topicId: string | null;
+  fileName: string;
+  title: string;
+  kind: "pdf" | "text";
+  sha256: string;
+  pageCount: number;
+  lecture: string | null;
+  date: string | null;
+  addedAt: string;
+  updatedAt: string;
+  deletedAt?: string | null;
+}
+export interface HDeadlineRow {
+  id: string;
+  subjectId: string;
+  topicId: string | null;
+  title: string;
+  due: string;
+  kind: string;
+  done: boolean;
+  updatedAt: string;
+  deletedAt?: string | null;
+}
+export type MirrorRow = HSubjectRow | HTopicRow | HMaterialRow | HDeadlineRow;
+export type PullRow = SyncRow | MirrorRow;
+
+export function isMirrorTable(table: string): table is MirrorTable {
+  return table.startsWith("h_");
+}
+
+export type CommandStatus = "queued" | "claimed" | "done" | "failed";
+export interface CommandRecord {
+  id: string;
+  type: string;
+  payload: unknown;
+  status: CommandStatus;
+  result: unknown;
+}
+
 export interface HubOp {
   table: SyncTable;
   row: SyncRow;
@@ -81,7 +143,7 @@ export interface PushResult {
 }
 
 export interface PullResult {
-  changes: Array<{ table: SyncTable; row: SyncRow }>;
+  changes: Array<{ table: PullTable; row: PullRow }>;
   cursor: number;
   more: boolean;
 }
@@ -157,5 +219,49 @@ export class HubClient {
       method: "POST",
       body: JSON.stringify(event),
     });
+  }
+
+  /** Events after `since` (a rowid cursor, or an ISO timestamp for old data). */
+  getEvents(since: number | string = 0): Promise<{
+    events: EventRecord[];
+    cursor: number | string;
+    more?: boolean;
+  }> {
+    return this.request(`/events?since=${encodeURIComponent(String(since))}`);
+  }
+
+  /** Queue a command for the laptop agent (for example `harness.note`). */
+  postCommand(type: string, payload: unknown, id?: string): Promise<{ id: string }> {
+    return this.request<{ id: string }>("/commands", {
+      method: "POST",
+      body: JSON.stringify({ type, payload, ...(id ? { id } : {}) }),
+    });
+  }
+
+  /** Current state of a command; null when the hub has no such route/command. */
+  async getCommand(id: string): Promise<CommandRecord | null> {
+    try {
+      const out = await this.request<{ command: CommandRecord | null }>(
+        `/commands/${encodeURIComponent(id)}`,
+      );
+      return out?.command ?? null;
+    } catch (error) {
+      if (error instanceof HubError && (error.status === 404 || error.status === 405)) return null;
+      throw error;
+    }
+  }
+
+  /** Download a stored file (PDF) with the bearer token. */
+  async getFile(sha256: string): Promise<Blob> {
+    const response = await fetch(`${this.base}/files/${encodeURIComponent(sha256)}`, {
+      headers: { Authorization: `Bearer ${this.token}` },
+    });
+    if (!response.ok) throw new HubError(`file ${response.status}`, response.status);
+    return response.blob();
+  }
+
+  /** Cheap authenticated probe for "Test connection". */
+  async ping(): Promise<void> {
+    await this.pull(Number.MAX_SAFE_INTEGER);
   }
 }
