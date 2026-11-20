@@ -94,12 +94,15 @@ export interface Actions {
   duplicateTask(id: string): string | null;
   /** Soft delete (also deletes subtasks). */
   deleteTask(id: string): void;
-  addSubtask(parentId: string, title: string): void;
+  /** Returns the new subtask id (empty string when nothing was created). */
+  addSubtask(parentId: string, title: string): string;
   /** Create missing recurring occurrences for these days (idempotent). */
   materialize(dates: ISODate[]): void;
 
   ensureNote(taskId: string): void;
   updateNote(taskId: string, content: string): void;
+  /** Task page: store BlockNote JSON plus its Markdown export. */
+  updateNoteBlocks(taskId: string, blocks: unknown[], content: string): void;
   addImage(taskId: string, image: { name: string; dataUrl: string }): void;
   removeImage(taskId: string, imageId: string): void;
   markNoteDone(taskId: string): void;
@@ -280,18 +283,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       },
       addSubtask(parentId, title) {
         const clean = title.trim();
-        if (!clean) return;
+        if (!clean) return "";
+        const id = uid("task");
         update((d) => {
           const parent = d.tasks.find((t) => t.id === parentId);
           if (!parent) return d;
           const order = d.tasks.filter((t) => t.parentId === parentId).length;
           const sub: Task = {
             ...makeTask(parent.date, clean, order),
+            id,
             parentId,
             categoryId: parent.categoryId,
           };
           return { ...d, tasks: [...d.tasks, sub] };
         });
+        return id;
       },
       materialize(dates) {
         update((d) => {
@@ -303,6 +309,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       ensureNote(taskId) {
         update((d) =>
           mapTask(d, taskId, (task) => (task.note ? task : { ...task, note: makeNote(taskId) })),
+        );
+      },
+      updateNoteBlocks(taskId, blocks, content) {
+        update((d) =>
+          patchNote(d, taskId, (note) => ({
+            ...note,
+            blocks,
+            content,
+            handoff: { status: "not-done" },
+          })),
         );
       },
       updateNote(taskId, content) {

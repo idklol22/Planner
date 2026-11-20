@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { ChevronLeft, Copy, ListChecks, Plus, SunMoon, Trash2, X } from "lucide-react";
+import { ChevronLeft, Copy, FileText, ListChecks, Plus, SunMoon, Trash2, X } from "lucide-react";
 import { addDays } from "../domain/dates";
 import { TASK_KINDS, type Task } from "../domain/model";
 import { parseDays, REPEAT_OPTIONS } from "../domain/recurrence";
@@ -8,6 +8,7 @@ import { useStore } from "../state/store";
 import { useToast } from "../state/toast";
 import { FlowerCheck } from "./Flower";
 import { NoteEditor } from "./NotesEditor";
+import { taskHref } from "./task-page/route";
 
 const DAY_NAMES = ["S", "M", "T", "W", "T", "F", "S"];
 const DURATIONS = [15, 30, 45, 60, 90, 120, 180];
@@ -102,6 +103,15 @@ function SheetBody({
           ) : (
             <span className="text-[13px] font-semibold uppercase tracking-[0.14em] text-faint">Task</span>
           )}
+          <div className="flex items-center gap-2">
+          <a
+            href={taskHref(task.id)}
+            aria-label="Open as page"
+            title="Open as page"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-2 text-muted transition-colors hover:bg-surface-3 hover:text-ink active:scale-90"
+          >
+            <FileText size={17} />
+          </a>
           <button
             onClick={onClose}
             aria-label="Close"
@@ -109,6 +119,7 @@ function SheetBody({
           >
             <X size={18} />
           </button>
+          </div>
         </div>
       </div>
 

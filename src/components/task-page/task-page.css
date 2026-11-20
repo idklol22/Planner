@@ -1,0 +1,152 @@
+/* BlockNote in the app's true-black theme, Notion-like reading typography. */
+.planner-editor.bn-container {
+  --bn-colors-editor-text: rgba(255, 255, 255, 0.9);
+  --bn-colors-editor-background: #000;
+  --bn-colors-menu-text: #fff;
+  --bn-colors-menu-background: #111;
+  --bn-colors-tooltip-text: #fff;
+  --bn-colors-tooltip-background: #1a1a1a;
+  --bn-colors-hovered-text: #fff;
+  --bn-colors-hovered-background: #1f1f1f;
+  --bn-colors-selected-text: #fff;
+  --bn-colors-selected-background: #2a2a2a;
+  --bn-colors-disabled-text: rgba(255, 255, 255, 0.35);
+  --bn-colors-disabled-background: #111;
+  --bn-colors-shadow: rgba(0, 0, 0, 0.8);
+  --bn-colors-border: rgba(255, 255, 255, 0.12);
+  --bn-colors-side-menu: rgba(255, 255, 255, 0.4);
+  --bn-font-family: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --bn-border-radius: 12px;
+  background: #000;
+}
+
+.planner-editor .bn-editor {
+  padding-inline: 0;
+  font-size: 17px;
+  line-height: 1.65;
+  background: #000;
+}
+.planner-editor .bn-block-content {
+  padding-block: 2px;
+}
+.planner-editor [data-content-type="heading"][data-level="1"] {
+  font-size: 1.9em;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-top: 0.8em;
+}
+.planner-editor [data-content-type="heading"][data-level="2"] {
+  font-size: 1.5em;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  margin-top: 0.6em;
+}
+.planner-editor [data-content-type="heading"][data-level="3"] {
+  font-size: 1.22em;
+  font-weight: 650;
+  margin-top: 0.4em;
+}
+.planner-editor [data-content-type="quote"] blockquote {
+  border-left: 3px solid rgba(255, 255, 255, 0.35);
+  margin: 0.3em 0;
+  padding-left: 1em;
+  color: rgba(255, 255, 255, 0.7);
+}
+.planner-editor [data-content-type="codeBlock"] {
+  background: #111;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  font-family: "JetBrains Mono Variable", ui-monospace, monospace;
+  font-size: 14px;
+}
+.planner-editor code {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 5px;
+  padding: 0.1em 0.35em;
+  font-family: "JetBrains Mono Variable", ui-monospace, monospace;
+  font-size: 0.88em;
+}
+.planner-editor [data-content-type="image"] img {
+  border-radius: 12px;
+}
+.planner-editor .bn-inline-content:has(> .ProseMirror-trailingBreak:only-child)::before,
+.planner-editor [data-is-empty-and-focused] .bn-inline-content::before {
+  color: rgba(255, 255, 255, 0.28);
+}
+
+/* Task block (bound to a subtask) */
+.task-block {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+}
+.task-block .inline-content {
+  flex: 1;
+  min-width: 0;
+  padding-top: 1px;
+}
+.task-block[data-checked="true"] .inline-content {
+  color: rgba(255, 255, 255, 0.38);
+  text-decoration: line-through;
+  text-decoration-color: rgba(255, 255, 255, 0.25);
+}
+.task-check {
+  flex: none;
+  margin-top: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #fff;
+  line-height: 0;
+  transition: transform 0.12s ease;
+}
+.task-check:active {
+  transform: scale(0.88);
+}
+.task-check-ring {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.45);
+  stroke-width: 1.8;
+  transition: fill 0.15s ease, stroke 0.15s ease;
+}
+.task-check-tick {
+  fill: none;
+  stroke: #000;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.task-block[data-checked="true"] .task-check-ring {
+  fill: #fff;
+  stroke: #fff;
+}
+.task-block[data-checked="true"] .task-check-tick {
+  opacity: 1;
+}
+
+/* Inline maths */
+.math-chip {
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 0 3px;
+  transition: background 0.12s ease;
+}
+.math-chip:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.math-input {
+  background: #1a1a1a;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  padding: 0 6px;
+  font-family: "JetBrains Mono Variable", ui-monospace, monospace;
+  font-size: 0.88em;
+  outline: none;
+}
+.katex {
+  font-size: 1.08em;
+}
