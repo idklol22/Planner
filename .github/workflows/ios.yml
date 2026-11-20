@@ -1,0 +1,84 @@
+name: iOS build (unsigned IPA for AltStore)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    name: Build Planner.ipa
+    runs-on: macos-14
+    steps:
+      - name: Check out repository
+        id: checkout
+        uses: actions/checkout@v4
+
+      - name: Checkout failed
+        if: always() && steps.checkout.outcome == 'failure'
+        run: |
+          echo "::error::Checkout failed. Check the workflow permissions and that the master branch exists."
+          exit 1
+
+      - name: Set up Node 20
+        id: setup_node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Node setup failed
+        if: always() && steps.setup_node.outcome == 'failure'
+        run: |
+          echo "::error::Node 20 setup failed. Check the setup-node step and package-lock.json."
+          exit 1
+
+      - name: Install dependencies
+        run: npm ci || { echo "::error::npm ci failed. Regenerate package-lock.json so it matches package.json."; exit 1; }
+
+      - name: Build web app
+        run: npm run build || { echo "::error::Web build failed. Fix the TypeScript or Vite error above before building iOS."; exit 1; }
+
+      - name: Sync Capacitor iOS project
+        run: npx cap sync ios || { echo "::error::Capacitor sync failed. Check capacitor.config.ts and the ios/ project."; exit 1; }
+
+      - name: Install CocoaPods
+        run: |
+          cd ios/App || { echo "::error::ios/App directory is missing from the repository."; exit 1; }
+          pod install || { echo "::error::pod install failed. Check the Podfile and the CocoaPods output above."; exit 1; }
+
+      - name: Archive with Xcode (signing disabled)
+        run: |
+          cd ios/App || { echo "::error::ios/App directory is missing from the repository."; exit 1; }
+          xcodebuild -workspace App.xcworkspace -scheme App -configuration Release -sdk iphoneos \
+            -archivePath build/App.xcarchive archive \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            || { echo "::error::xcodebuild archive failed. Read the Xcode errors above; this build is intentionally unsigned."; exit 1; }
+
+      - name: Package Payload/App.app into Planner.ipa
+        run: |
+          APP="$GITHUB_WORKSPACE/ios/App/build/App.xcarchive/Products/Applications/App.app"
+          if [ ! -d "$APP" ]; then
+            echo "::error::Archived App.app was not found at $APP."
+            exit 1
+          fi
+          cd "$GITHUB_WORKSPACE/ios/App/build" || { echo "::error::Build directory is missing."; exit 1; }
+          rm -rf Payload
+          mkdir -p Payload || { echo "::error::Could not create the Payload directory."; exit 1; }
+          cp -R "$APP" Payload/App.app || { echo "::error::Could not copy App.app into Payload."; exit 1; }
+          zip -q -r "$GITHUB_WORKSPACE/Planner.ipa" Payload || { echo "::error::Could not zip Payload/App.app into Planner.ipa."; exit 1; }
+
+      - name: Upload Planner.ipa
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: Planner.ipa
+          path: Planner.ipa
+          if-no-files-found: error
+
+      - name: Upload failed
+        if: always() && steps.upload.outcome == 'failure'
+        run: |
+          echo "::error::Artifact upload failed. Check that Planner.ipa exists and that this workflow can upload artifacts."
+          exit 1
