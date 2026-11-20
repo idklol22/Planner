@@ -18,3 +18,4 @@ Thumbs.db
 supabase/.env.local
 .env.local
 supabase/.temp/
+supabase/device-tokens.local.json
