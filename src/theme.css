@@ -150,8 +150,11 @@ html[data-theme="uzumaki"] body::before {
   z-index: 0;
   pointer-events: none;
 }
+/* The cloud scene is the brightest backdrop; dim it so the --scrim on glass tiles holds text contrast
+   (including the faint out-of-month dates) over its brightest part. */
 #scene[data-scene="clouds"] {
   image-rendering: pixelated;
+  opacity: 0.6;
 }
 
 /* ── Module card (LetCode tile) ──────────────────────────────────────────── */
