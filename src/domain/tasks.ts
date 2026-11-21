@@ -116,6 +116,42 @@ export function moveTasksToDay(
   return moved.length ? { tasks: tasks.map((t) => changed.get(t.id) ?? t), moved } : { tasks, moved };
 }
 
+export interface MoveToTodayResult {
+  tasks: Task[];
+  /** Ids of the unfinished top-level tasks that actually moved, in display order. */
+  moved: string[];
+  /** Original, unmodified objects for every moved parent and its live subtasks. */
+  previous: Task[];
+}
+
+/**
+ * Move every unfinished top-level task on `sourceDate` to `today`, together
+ * with its live subtasks. Pure — the caller supplies the ISO timestamp. The
+ * `previous` snapshot lets the caller undo just these tasks by id.
+ */
+export function moveUnfinishedToToday(
+  tasks: Task[],
+  sourceDate: ISODate,
+  today: ISODate,
+  now: string,
+): MoveToTodayResult {
+  const ids = unfinishedTopLevelOn(tasks, sourceDate).map((t) => t.id);
+  const result = moveTasksToDay(tasks, ids, today, now);
+  if (!result.moved.length) return { ...result, previous: [] };
+  const moved = new Set(result.moved);
+  const previous = tasks.filter(
+    (t) => moved.has(t.id) || (!!t.parentId && moved.has(t.parentId) && !t.deletedAt),
+  );
+  return { ...result, previous };
+}
+
+/** Replace only the snapshotted ids by id; every other task is left untouched. */
+export function restoreTasks(tasks: Task[], snapshot: Task[]): Task[] {
+  if (!snapshot.length) return tasks;
+  const byId = new Map(snapshot.map((t) => [t.id, t]));
+  return tasks.map((t) => byId.get(t.id) ?? t);
+}
+
 export function subtasksOf(tasks: Task[], parentId: string): Task[] {
   return tasks.filter((t) => t.parentId === parentId && !t.deletedAt).sort(byOrder);
 }

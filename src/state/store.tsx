@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { uid } from "../domain/ids";
-import { addDays, type ISODate } from "../domain/dates";
+import { addDays, todayISO, type ISODate } from "../domain/dates";
 import {
   defaultData,
   makeCalorieEntry,
@@ -27,7 +27,13 @@ import {
   type Task,
 } from "../domain/model";
 import { materializeOccurrences } from "../domain/recurrence";
-import { moveTasksToDay, subtasksOf, unfinishedTopLevelOn } from "../domain/tasks";
+import {
+  moveTasksToDay,
+  moveUnfinishedToToday as moveUnfinishedToTodayDomain,
+  restoreTasks,
+  subtasksOf,
+  unfinishedTopLevelOn,
+} from "../domain/tasks";
 import { tasksForItems, type NoteItem } from "../lib/absorb";
 import { buildHandoffMarkdown, NOTE_TASKS_EVENT } from "../lib/handoff";
 import { isTauri, storage } from "../storage";
@@ -103,6 +109,8 @@ export interface Actions {
   moveTaskToDay(id: string, date: ISODate): void;
   /** Move every unfinished top-level task on `date` one day forward; returns how many moved. */
   moveUnfinishedToTomorrow(date: ISODate): number;
+  /** Move every unfinished top-level task on `date` to today; returns the count and an undo. */
+  moveUnfinishedToToday(date: ISODate): { moved: number; undo: () => void };
   duplicateTask(id: string): string | null;
   /** Soft delete (also deletes subtasks). */
   deleteTask(id: string): void;
@@ -296,6 +304,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         );
         if (moved.length) update((d) => ({ ...d, tasks }));
         return moved.length;
+      },
+      moveUnfinishedToToday(date) {
+        const result = moveUnfinishedToTodayDomain(
+          dataRef.current.tasks,
+          date,
+          todayISO(),
+          nowISO(),
+        );
+        update((d) => ({ ...d, tasks: result.tasks }));
+        return {
+          moved: result.moved.length,
+          undo: () => update((d) => ({ ...d, tasks: restoreTasks(d.tasks, result.previous) })),
+        };
       },
       duplicateTask(id) {
         const source = dataRef.current.tasks.find((t) => t.id === id);

@@ -13,7 +13,7 @@ import { type Habit } from "../domain/model";
 import { CATEGORY_COLORS } from "../domain/palette";
 import { catColor } from "../theme/store";
 import { dayKcal } from "../domain/calories";
-import { sectionsForDay, tasksForDay, type Section } from "../domain/tasks";
+import { sectionsForDay, tasksForDay, unfinishedTopLevelOn, type Section } from "../domain/tasks";
 import { useStore } from "../state/store";
 import { useToast } from "../state/toast";
 import { CalendarStrip, type CalendarMode } from "./CalendarStrip";
@@ -302,6 +302,15 @@ export function DayView({
 
   const dayTasks = tasksForDay(data.tasks, selected);
   const open = dayTasks.filter((t) => !t.done).length;
+  const canMoveAllToToday = selected < today && unfinishedTopLevelOn(data.tasks, selected).length > 0;
+
+  function moveAllToToday() {
+    const { moved, undo } = actions.moveUnfinishedToToday(selected);
+    notify(`Moved ${moved} unfinished task${moved === 1 ? "" : "s"} to today`, "success", {
+      label: "Undo",
+      onClick: undo,
+    });
+  }
 
   // `n` shortcut: open the inline input of the first category.
   const firstKey = sections[0] ? (sections[0].section.category?.id ?? "__inbox") : null;
@@ -427,12 +436,24 @@ export function DayView({
       <div className="mt-4 min-w-0 lg:mt-0">
 
       <div className="relative mb-3 flex items-center justify-between px-1">
-        <div className="text-[15px] font-medium text-muted">
-          {dayTasks.length === 0
-            ? "Nothing planned"
-            : open === 0
-              ? "All done. Nice work."
-              : `${open} left of ${dayTasks.length}`}
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+          <div className="text-[15px] font-medium text-muted">
+            {dayTasks.length === 0
+              ? "Nothing planned"
+              : open === 0
+                ? "All done. Nice work."
+                : `${open} left of ${dayTasks.length}`}
+          </div>
+          {canMoveAllToToday && (
+            <button
+              onClick={moveAllToToday}
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-accent px-3.5 py-2 text-[14px] font-semibold text-accent-ink transition-transform active:scale-95 focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <CalendarArrowRight size={16} />
+              <span className="hidden sm:inline">Move all to today</span>
+              <span className="sm:hidden">Move all</span>
+            </button>
+          )}
         </div>
         {hasCategories && (
           <>
