@@ -36,7 +36,7 @@ export function categoryToRow(c: Category): CategoryRow {
     archived: c.archived,
     createdAt: c.createdAt,
     updatedAt: c.updatedAt,
-    deletedAt: null,
+    deletedAt: c.deletedAt ?? null,
   };
 }
 
@@ -149,6 +149,7 @@ export function applyRemoteRow(data: AppData, table: SyncTable, row: SyncRow): A
         archived: Boolean(r.archived) || Boolean(r.deletedAt),
         createdAt: r.createdAt,
         updatedAt: r.updatedAt,
+        deletedAt: r.deletedAt ?? undefined,
       };
       return { ...data, categories: upsert(data.categories, next) };
     }

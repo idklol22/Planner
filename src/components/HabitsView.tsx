@@ -18,7 +18,8 @@ export function HabitsView({ date }: { date: ISODate }) {
   const { active, archived } = partitionHabits(data.habits);
 
   // Archived categories still supply the saved name/colour — the habit is not deleted.
-  const categoryFor = (habit: Habit) => data.categories.find((c) => c.id === habit.categoryId);
+  const categoryFor = (habit: Habit) =>
+    data.categories.find((c) => c.id === habit.categoryId && !c.deletedAt);
   const detail = (habit: Habit) => {
     const cat = categoryFor(habit);
     return `${cat?.name ?? "Inbox"} · ${describeSchedule(habit)}`;

@@ -9,13 +9,21 @@ import { AlertCircle, CheckCircle2, Info, X } from "lucide-react";
 
 type Tone = "success" | "error" | "info";
 
+interface ToastAction {
+  label: string;
+  run: () => void;
+}
+
 interface Toast {
   id: number;
   message: string;
   tone: Tone;
+  action?: ToastAction;
 }
 
-const ToastContext = createContext<(message: string, tone?: Tone) => void>(() => {});
+type Notify = (message: string, tone?: Tone, action?: ToastAction) => void;
+
+const ToastContext = createContext<Notify>(() => {});
 
 const toneStyles: Record<Tone, { icon: typeof Info; color: string }> = {
   success: { icon: CheckCircle2, color: "text-mint" },
@@ -26,12 +34,12 @@ const toneStyles: Record<Tone, { icon: typeof Info; color: string }> = {
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
-  const notify = useCallback((message: string, tone: Tone = "success") => {
+  const notify = useCallback<Notify>((message, tone = "success", action) => {
     const id = Date.now() + Math.random();
-    setToasts((current) => [...current, { id, message, tone }]);
+    setToasts((current) => [...current, { id, message, tone, action }]);
     setTimeout(() => {
       setToasts((current) => current.filter((toast) => toast.id !== id));
-    }, 3200);
+    }, action ? 6000 : 3200);
   }, []);
 
   return (
@@ -40,6 +48,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       <div className="pointer-events-none fixed left-1/2 top-5 z-[100] flex -translate-x-1/2 flex-col items-center gap-2">
         {toasts.map((toast) => {
           const { icon: Icon, color } = toneStyles[toast.tone];
+          const action = toast.action;
           return (
             <div
               key={toast.id}
@@ -47,6 +56,17 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             >
               <Icon size={16} className={color} />
               <span>{toast.message}</span>
+              {action && (
+                <button
+                  onClick={() => {
+                    action.run();
+                    setToasts((current) => current.filter((item) => item.id !== toast.id));
+                  }}
+                  className="font-semibold text-accent hover:underline"
+                >
+                  {action.label}
+                </button>
+              )}
               <button
                 onClick={() =>
                   setToasts((current) => current.filter((item) => item.id !== toast.id))

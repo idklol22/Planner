@@ -1,12 +1,15 @@
 import { catColor } from "../theme/store";
 import { useEffect, useMemo, useState } from "react";
-import { Archive, ArchiveRestore, ChevronDown, ChevronUp, GripVertical, Plus } from "lucide-react";
+import { Archive, ArchiveRestore, ChevronDown, ChevronUp, GripVertical, Plus, Trash2 } from "lucide-react";
+import { countCategoryTasks, type CategoryDeleteMode } from "../domain/categories";
 import { CATEGORY_COLORS, DEFAULT_HARNESS_URL, type Category } from "../domain/model";
 import { HarnessClient, type HarnessSubject } from "../lib/harness";
 import { useStore } from "../state/store";
 import { useSync } from "../state/sync";
+import { useToast } from "../state/toast";
 import { mirrorSubjects } from "../sync/mirror-view";
 import { CATEGORY_ICONS, CategoryIcon } from "./icons";
+import { Button, IconButton } from "./ui";
 
 function CategoryRow({
   cat,
@@ -17,6 +20,7 @@ function CategoryRow({
   dragProps,
   dragging,
   onMove,
+  onDelete,
   subjects,
   unreachable,
 }: {
@@ -28,6 +32,7 @@ function CategoryRow({
   dragProps: React.HTMLAttributes<HTMLDivElement>;
   dragging: boolean;
   onMove: (dir: -1 | 1) => void;
+  onDelete: () => void;
   subjects: HarnessSubject[];
   unreachable: boolean;
 }) {
@@ -194,14 +199,99 @@ function CategoryRow({
           >
             <Archive size={16} /> Archive
           </button>
+          <button
+            onClick={onDelete}
+            aria-label={`Delete category: ${cat.name}`}
+            className="flex items-center gap-2 rounded-full bg-surface-2 px-4 py-2.5 text-[14px] font-semibold text-rose hover:bg-rose/10 active:scale-95"
+          >
+            <Trash2 size={15} /> Delete
+          </button>
         </div>
       )}
     </div>
   );
 }
 
+/** Confirmation sheet for a category deletion. Escape and the scrim cancel;
+ *  role="dialog" keeps AppShell from also closing the Categories page. */
+function DeleteCategoryDialog({
+  cat,
+  count,
+  mode,
+  onMode,
+  onCancel,
+  onConfirm,
+}: {
+  cat: Category;
+  count: number;
+  mode: CategoryDeleteMode;
+  onMode: (mode: CategoryDeleteMode) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCancel();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onCancel]);
+
+  const body = count === 0 ? "No tasks" : count === 1 ? "1 task" : `This category holds ${count} tasks.`;
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+      <button
+        aria-label="Cancel"
+        onClick={onCancel}
+        className="absolute inset-0 cursor-default bg-scrim backdrop-blur-[2px]"
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Delete ${cat.name}?`}
+        className="relative w-full max-w-[420px] rounded-[24px] bg-surface-2 p-5 shadow-2xl"
+      >
+        <h2 className="text-[19px] font-bold">Delete {cat.name}?</h2>
+        <p className="mt-2 text-[14px] text-muted">{body}</p>
+        <div className="mt-4 space-y-2">
+          <label className="flex items-center gap-3 rounded-xl bg-surface px-3.5 py-3 text-[15px]">
+            <input
+              type="radio"
+              checked={mode === "reassign"}
+              onChange={() => onMode("reassign")}
+              style={{ accentColor: "var(--accent)" }}
+            />
+            Move tasks to Uncategorized
+          </label>
+          <label className="flex items-center gap-3 rounded-xl bg-surface px-3.5 py-3 text-[15px]">
+            <input
+              type="radio"
+              checked={mode === "delete"}
+              onChange={() => onMode("delete")}
+              style={{ accentColor: "var(--accent)" }}
+            />
+            Delete tasks too
+          </label>
+        </div>
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="secondary" autoFocus onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button variant="danger" onClick={onConfirm}>
+            Delete category
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function CategoriesView() {
   const { data, actions } = useStore();
+  const notify = useToast();
+  const [deleting, setDeleting] = useState<Category | null>(null);
+  const [mode, setMode] = useState<CategoryDeleteMode>("reassign");
   const [name, setName] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
@@ -236,8 +326,10 @@ export function CategoriesView() {
     };
   }, [harnessUrl, hub.configured, hubSubjects]);
 
-  const active = data.categories.filter((c) => !c.archived).sort((a, b) => a.order - b.order);
-  const archived = data.categories.filter((c) => c.archived);
+  const active = data.categories
+    .filter((c) => !c.archived && !c.deletedAt)
+    .sort((a, b) => a.order - b.order);
+  const archived = data.categories.filter((c) => c.archived && !c.deletedAt);
 
   function add() {
     if (!name.trim()) return;
@@ -251,6 +343,25 @@ export function CategoriesView() {
     ids.splice(toIndex, 0, fromId);
     // Archived categories keep their relative slots after the active ones.
     actions.reorderCategories([...ids, ...archived.map((c) => c.id)]);
+  }
+
+  function askDelete(cat: Category) {
+    setMode("reassign");
+    setDeleting(cat);
+  }
+
+  function confirmDelete() {
+    if (!deleting) return;
+    const id = deleting.id;
+    setDeleting(null);
+    actions.deleteCategory(id, mode);
+    notify("Category deleted", "success", {
+      label: "Undo",
+      run: () => {
+        actions.undoDeleteCategory();
+        notify("Delete undone");
+      },
+    });
   }
 
   return (
@@ -299,6 +410,7 @@ export function CategoriesView() {
               onToggle={() => setExpanded(expanded === cat.id ? null : cat.id)}
               dragging={dragId === cat.id}
               onMove={(dir) => reorder(cat.id, i + dir)}
+              onDelete={() => askDelete(cat)}
               subjects={subjects}
               unreachable={unreachable}
               dragProps={{
@@ -334,10 +446,27 @@ export function CategoriesView() {
                 >
                   <ArchiveRestore size={15} /> Restore
                 </button>
+                <IconButton
+                  onClick={() => askDelete(cat)}
+                  aria-label={`Delete category: ${cat.name}`}
+                >
+                  <Trash2 size={15} />
+                </IconButton>
               </div>
             ))}
           </div>
         </section>
+      )}
+
+      {deleting && (
+        <DeleteCategoryDialog
+          cat={deleting}
+          count={countCategoryTasks(data, deleting.id)}
+          mode={mode}
+          onMode={setMode}
+          onCancel={() => setDeleting(null)}
+          onConfirm={confirmDelete}
+        />
       )}
     </div>
   );

@@ -20,7 +20,7 @@ export function DeadlinesCard({ date }: { date: ISODate }) {
 
   const groups: Array<{ key: string; label: string; color: string | null; rows: HDeadlineRow[] }> = [];
   const used = new Set<string>();
-  for (const cat of data.categories.filter((c) => !c.archived && c.linkedSubjectId)) {
+  for (const cat of data.categories.filter((c) => !c.archived && !c.deletedAt && c.linkedSubjectId)) {
     const rows = deadlinesForCategory(mirror, cat.linkedSubjectId, cat.linkedTopicId).filter(
       (d) => inWindow(d) && !used.has(d.id),
     );

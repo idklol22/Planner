@@ -193,7 +193,7 @@ export function SettingsView() {
   const lastSynced = sync.status.lastSyncedAt
     ? new Date(sync.status.lastSyncedAt).toLocaleString()
     : "never";
-  const activeCategories = data.categories.filter((c) => !c.archived);
+  const activeCategories = data.categories.filter((c) => !c.archived && !c.deletedAt);
 
   return (
     <div className="mx-auto max-w-3xl space-y-5">
