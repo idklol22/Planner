@@ -1,11 +1,9 @@
 import { useEffect, useState } from "react";
 import { Flame, Trash2 } from "lucide-react";
 import type { ISODate } from "../domain/dates";
-import { describeSchedule } from "../domain/habits";
 import type { Habit } from "../domain/model";
 import { activeCategories } from "../domain/tasks";
 import { useStore } from "../state/store";
-import { catColor } from "../theme/store";
 
 // Monday first, values are JS weekdays (0 = Sunday).
 const DAYS: [string, number][] = [
@@ -83,7 +81,7 @@ export function HabitEditor({
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-canvas">
             <Flame size={17} className="text-amber" />
           </span>
-          <h2 className="text-[19px] font-bold tracking-tight">{habit ? "Edit habit" : "Add as habit"}</h2>
+          <h2 className="text-[19px] font-bold tracking-tight">{habit ? "Edit habit" : "New habit"}</h2>
         </div>
 
         <label className={LABEL}>Habit</label>
@@ -172,10 +170,10 @@ export function HabitEditor({
           {habit && (
             <button
               onClick={() => {
-                actions.deleteHabit(habit.id);
+                actions.archiveHabit(habit.id, true);
                 onClose();
               }}
-              aria-label="Delete habit"
+              aria-label="Archive habit"
               className="flex h-12 w-12 items-center justify-center rounded-full bg-canvas text-rose transition-transform active:scale-90"
             >
               <Trash2 size={18} />
@@ -197,48 +195,5 @@ export function HabitEditor({
         </div>
       </div>
     </div>
-  );
-}
-
-/** Compact list of habits, mounted under Categories in the menu page. */
-export function HabitsList({ date }: { date: ISODate }) {
-  const { data } = useStore();
-  const [editing, setEditing] = useState<Habit | null>(null);
-  const habits = data.habits.filter((h) => !h.deletedAt);
-  if (habits.length === 0) {
-    return (
-      <p className="mt-8 px-1 text-[13px] leading-relaxed text-faint">
-        Habits are daily suggestions. Add one from the + on a category pill, then edit it here.
-      </p>
-    );
-  }
-  return (
-    <section className="mt-8" aria-label="Habits">
-      <h2 className="mb-2 px-1 text-[13px] font-semibold uppercase tracking-wider text-faint">Habits</h2>
-      <div className="space-y-1.5">
-        {habits.map((h) => {
-          const cat = data.categories.find((c) => c.id === h.categoryId);
-          return (
-            <button
-              key={h.id}
-              onClick={() => setEditing(h)}
-              className="flex w-full items-center gap-3 rounded-2xl bg-surface px-4 py-3 text-left transition-colors hover:bg-surface-2"
-            >
-              <span
-                className="h-2.5 w-2.5 shrink-0 rounded-full"
-                style={{ backgroundColor: cat ? catColor(cat.color) : "var(--text-faint)" }}
-              />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[16px] font-semibold">{h.title}</span>
-                <span className="block truncate text-[12px] text-faint">
-                  {cat?.name ?? "Inbox"} · {describeSchedule(h)}
-                </span>
-              </span>
-            </button>
-          );
-        })}
-      </div>
-      {editing && <HabitEditor habit={editing} date={date} onClose={() => setEditing(null)} />}
-    </section>
   );
 }

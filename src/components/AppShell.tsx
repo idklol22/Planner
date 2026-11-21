@@ -6,12 +6,13 @@ import { useThemeState } from "../theme/store";
 import { CategoriesView } from "./CategoriesView";
 import { DayView, type MenuPage } from "./DayView";
 import { Flower } from "./Flower";
-import { HabitsList } from "./HabitEditor";
+import { HabitsView } from "./HabitsView";
 import { LibraryView } from "./LibraryView";
 import { SettingsView } from "./SettingsView";
 
 const TITLES: Record<MenuPage, string> = {
   categories: "Categories",
+  habits: "Habits",
   library: "Library",
   settings: "Settings",
 };
@@ -39,15 +40,7 @@ function useOnTaskRoute(): boolean {
 }
 
 /** Full-screen page opened from the menu, with a back arrow. */
-function MenuPageView({
-  page,
-  date,
-  onBack,
-}: {
-  page: MenuPage;
-  date: ISODate;
-  onBack: () => void;
-}) {
+function MenuPageView({ page, onBack }: { page: MenuPage; onBack: () => void }) {
   const [title, setTitle] = useState<string | null>(null);
   return (
     <div className="animate-slide fixed inset-0 z-50 overflow-y-auto overflow-x-hidden bg-[var(--bg)]">
@@ -63,10 +56,9 @@ function MenuPageView({
           <h1 className="min-w-0 truncate text-[24px] font-bold tracking-tight">{title ?? TITLES[page]}</h1>
         </header>
         {page === "categories" ? (
-          <>
-            <CategoriesView />
-            <HabitsList date={date} />
-          </>
+          <CategoriesView />
+        ) : page === "habits" ? (
+          <HabitsView date={todayISO()} />
         ) : page === "library" ? (
           <LibraryView onTitle={setTitle} />
         ) : (
@@ -88,7 +80,8 @@ export function AppShell() {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
-        if (page) setPage(null);
+        // A full-screen sheet (e.g. the habit editor) owns Escape while it is open.
+        if (page && !document.querySelector('[role="dialog"]')) setPage(null);
         return;
       }
       if (page || onTask || isTyping(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
@@ -130,7 +123,7 @@ export function AppShell() {
           />
         </div>
       </main>
-      {page && <MenuPageView page={page} date={selected} onBack={() => setPage(null)} />}
+      {page && <MenuPageView page={page} onBack={() => setPage(null)} />}
     </div>
   );
 }

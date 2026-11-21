@@ -15,17 +15,18 @@ import { catColor } from "../theme/store";
 import { dayKcal } from "../domain/calories";
 import { sectionsForDay, tasksForDay, type Section } from "../domain/tasks";
 import { useStore } from "../state/store";
+import { useToast } from "../state/toast";
 import { CalendarStrip, type CalendarMode } from "./CalendarStrip";
 import { CalorieBar } from "./CalorieBar";
 import { DeadlinesCard } from "./DeadlinesCard";
 import { Flower } from "./Flower";
 import { HabitEditor } from "./HabitEditor";
 import { CategoryGoals } from "./CategoryGoals";
-import { CategoryIcon } from "./icons";
+import { CalendarArrowRight, CategoryIcon } from "./icons";
 import { DaySummaryCard, WeekSummaryCard } from "./Summaries";
 import { TaskRow } from "./TaskRow";
 
-export type MenuPage = "categories" | "library" | "settings";
+export type MenuPage = "categories" | "habits" | "library" | "settings";
 
 interface Prefs {
   showCompleted: boolean;
@@ -128,7 +129,6 @@ function CategorySection({
   adding,
   setAdding,
   onOpenTask,
-  onAddHabit,
   onEditHabit,
 }: {
   section: Section;
@@ -137,7 +137,6 @@ function CategorySection({
   adding: boolean;
   setAdding: (on: boolean) => void;
   onOpenTask: (id: string) => void;
-  onAddHabit: (categoryId: string | null) => void;
   onEditHabit: (habit: Habit) => void;
 }) {
   const { actions } = useStore();
@@ -195,16 +194,6 @@ function CategorySection({
             >
               <Plus size={18} className="text-muted" /> Add task
             </button>
-            <button
-              role="menuitem"
-              onClick={() => {
-                setMenu(false);
-                onAddHabit(cat?.id ?? null);
-              }}
-              className="flex w-full items-center gap-3 border-t border-line px-4 py-4 text-left text-[16px] font-medium hover:bg-ink/5"
-            >
-              <Flame size={18} className="text-muted" /> Add as habit…
-            </button>
           </div>
         </>
       )}
@@ -248,7 +237,7 @@ function useHour(): number {
   return hour;
 }
 
-type EditorState = { habit?: Habit; categoryId?: string | null } | null;
+type EditorState = Habit | null;
 
 export function DayView({
   selected,
@@ -264,6 +253,7 @@ export function DayView({
   onManageCategories: () => void;
 }) {
   const { data, actions } = useStore();
+  const notify = useToast();
   const [prefs, setPrefs] = useState<Prefs>(loadPrefs);
   const [adding, setAdding] = useState<string | null>(null);
   const [listMenu, setListMenu] = useState(false);
@@ -387,6 +377,7 @@ export function DayView({
                 {(
                   [
                     ["categories", "Categories", Tags],
+                    ["habits", "Habits", Flame],
                     ["library", "Library", Library],
                     ["settings", "Settings", Settings],
                   ] as const
@@ -477,6 +468,21 @@ export function DayView({
                       {prefs[key] && <Check size={18} />}
                     </button>
                   ))}
+                  {selected === today && (
+                    <button
+                      onClick={() => {
+                        const n = actions.moveUnfinishedToTomorrow(selected);
+                        setListMenu(false);
+                        notify(
+                          n ? `Moved ${n} task${n === 1 ? "" : "s"} to tomorrow` : "No unfinished tasks to move",
+                          n ? "success" : "info",
+                        );
+                      }}
+                      className="flex w-full items-center gap-3 px-4 py-4 text-left text-[16px] hover:bg-ink/5"
+                    >
+                      <CalendarArrowRight size={16} className="text-muted" /> Move unfinished to tomorrow
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       setListMenu(false);
@@ -535,8 +541,7 @@ export function DayView({
                 onOpenTask={(id) => {
                   window.location.hash = `#/task/${id}`;
                 }}
-                onAddHabit={(categoryId) => setEditor({ categoryId })}
-                onEditHabit={(habit) => setEditor({ habit })}
+                onEditHabit={(habit) => setEditor(habit)}
               />
             );
           })}
@@ -562,8 +567,7 @@ export function DayView({
 
       {editor && (
         <HabitEditor
-          habit={editor.habit}
-          categoryId={editor.categoryId}
+          habit={editor}
           date={selected < today ? today : selected}
           onClose={() => setEditor(null)}
         />

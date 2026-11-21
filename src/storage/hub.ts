@@ -1,6 +1,9 @@
 /** Typed client for the Planner hub Worker. No UI wiring: callers own when to
  *  push/pull. Row shapes mirror docs/PLANNER-DESIGN.md (camelCase on the wire). */
 
+/** Keepalive requests must stay well below the browser's per-request cap. */
+const KEEPALIVE_MAX_BYTES = 60_000;
+
 export type SyncTable = "category" | "task" | "goal" | "meal";
 
 export interface Note {
@@ -206,6 +209,31 @@ export class HubClient {
       method: "POST",
       body: JSON.stringify({ ops }),
     });
+  }
+
+  /** Best-effort push for unload / tab-hide. Fire-and-forget: a response cannot
+   *  be awaited during unload, so callers must leave the ops in the outbox.
+   *  Returns false when the request cannot be sent (no browser, no fetch, or
+   *  a body that is too large). */
+  pushKeepalive(ops: HubOp[]): boolean {
+    const body = JSON.stringify({ ops });
+    if (
+      typeof navigator === "undefined" ||
+      typeof fetch === "undefined" ||
+      body.length > KEEPALIVE_MAX_BYTES
+    ) {
+      return false;
+    }
+    void fetch(`${this.base}/ops`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.token}`,
+        "Content-Type": "application/json",
+      },
+      body,
+      keepalive: true,
+    }).catch(() => {});
+    return true;
   }
 
   /** Fetch at most 500 changes after `since`. Resume with the returned cursor. */

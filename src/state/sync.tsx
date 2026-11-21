@@ -10,6 +10,7 @@ import {
 } from "react";
 import type { AppData } from "../domain/model";
 import type { HarnessNote } from "../lib/harness";
+import { isTauri } from "../storage";
 import { HubClient } from "../storage/hub";
 import { SyncController, type SyncStatus } from "../sync/controller";
 import { localCursorStore, CURSOR_KEY, LAST_SYNC_KEY } from "../sync/engine";
@@ -54,6 +55,8 @@ export interface SyncContextValue {
   status: SyncStatus;
   mirror: Mirror;
   syncNow(): Promise<void>;
+  /** Best-effort save + push on tab hide / app close. */
+  flush(): void;
   testConnection(config?: HubConfig): Promise<{ ok: boolean; message: string }>;
   /** Hub mode: queue a `harness.note` command. Rejects when no hub is set. */
   sendNote(note: HarnessNote): Promise<string>;
@@ -66,7 +69,7 @@ const IDLE: SyncStatus = { syncing: false, lastSyncedAt: null, error: null, pend
 const SyncContext = createContext<SyncContextValue | null>(null);
 
 export function SyncProvider({ children }: { children: ReactNode }) {
-  const { data, ready, getData, applyData, actions } = useStore();
+  const { data, ready, getData, flush: storeFlush, applyData, actions } = useStore();
   const [config, setConfigState] = useState<HubConfig>(() => loadHubConfig());
   const [status, setStatus] = useState<SyncStatus>(IDLE);
   const [mirror, setMirror] = useState<Mirror>(emptyMirror);
@@ -115,6 +118,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       storage: localStorage,
       outbox: new LocalOutbox(),
       cursorStore,
+      keepalive: (ops) => client.pushKeepalive(ops),
       letcode: {
         addDoneTask: (categoryId, title, date) => actionsRef.current.addDoneTask(categoryId, title, date),
         toggleTask: (id) => actionsRef.current.toggleTask(id),
@@ -180,6 +184,58 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     await controllerRef.current?.syncNow();
   }, []);
 
+  // Stable for the provider's lifetime: the unload listeners hold this function
+  // directly, so it must not be replaced on re-renders.
+  const flush = useRef<() => void>(() => {
+    void storeFlush()
+      .catch(() => {})
+      .then(() => controllerRef.current?.flush());
+  }).current;
+
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", onVisibility);
+    }
+    if (typeof window !== "undefined") {
+      window.addEventListener("pagehide", flush);
+      window.addEventListener("beforeunload", flush);
+    }
+
+    if (isTauri) {
+      void (async () => {
+        const { getCurrentWindow } = await import("@tauri-apps/api/window");
+        const stop = await getCurrentWindow().onCloseRequested(async (event) => {
+          event.preventDefault();
+          flush();
+          await new Promise((r) => setTimeout(r, 300));
+          await getCurrentWindow().destroy();
+        });
+        if (disposed) stop();
+        else unlisten = stop;
+      })().catch(() => {
+        // Listener registration is best effort too.
+      });
+    }
+
+    return () => {
+      disposed = true;
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", onVisibility);
+      }
+      if (typeof window !== "undefined") {
+        window.removeEventListener("pagehide", flush);
+        window.removeEventListener("beforeunload", flush);
+      }
+      unlisten?.();
+    };
+  }, [flush]);
+
   const testConnection = useCallback(
     async (candidate?: HubConfig) => {
       const target = candidate ?? config;
@@ -207,8 +263,8 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo<SyncContextValue>(
-    () => ({ config, configured, setConfig, status, mirror, syncNow, testConnection, sendNote, client }),
-    [config, configured, setConfig, status, mirror, syncNow, testConnection, sendNote, client],
+    () => ({ config, configured, setConfig, status, mirror, syncNow, flush, testConnection, sendNote, client }),
+    [config, configured, setConfig, status, mirror, syncNow, flush, testConnection, sendNote, client],
   );
 
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;

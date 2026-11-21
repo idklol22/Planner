@@ -43,8 +43,21 @@ Native desktop (requires the [Rust toolchain](https://rustup.rs) and Tauri's sys
 ```bash
 rustup toolchain install stable   # if cargo/rustc are not installed
 npm run tauri dev
-npm run tauri build
 ```
+
+### Desktop / Windows .exe
+
+The autostart plugin needs Rust ≥ 1.90. To produce the Windows installers:
+
+```bash
+npm install
+npm run tauri build     # Windows: MSI + NSIS .exe installers
+```
+
+Installers land in `src-tauri/target/release/bundle/msi/` and
+`src-tauri/target/release/bundle/nsis/`. In the desktop build, **Settings → Desktop →
+"Open at login"** starts ToDoMate when you sign in. This toggle appears only in the
+desktop build, not in the browser dev server.
 
 ## Scripts
 
@@ -55,7 +68,7 @@ npm run tauri build
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm test` | Unit tests (date + handoff transforms) |
 | `npm run tauri dev` | Run the desktop app (needs Rust) |
-| `npm run tauri build` | Build desktop installers (needs Rust) |
+| `npm run tauri build` | Build Windows .exe installers (MSI + NSIS) under src-tauri/target/release/bundle/ |
 
 ## Layout
 

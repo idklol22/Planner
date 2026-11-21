@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { uid } from "../domain/ids";
-import type { ISODate } from "../domain/dates";
+import { addDays, type ISODate } from "../domain/dates";
 import {
   defaultData,
   makeCalorieEntry,
@@ -27,7 +27,7 @@ import {
   type Task,
 } from "../domain/model";
 import { materializeOccurrences } from "../domain/recurrence";
-import { subtasksOf } from "../domain/tasks";
+import { moveTasksToDay, subtasksOf, unfinishedTopLevelOn } from "../domain/tasks";
 import { tasksForItems, type NoteItem } from "../lib/absorb";
 import { buildHandoffMarkdown, NOTE_TASKS_EVENT } from "../lib/handoff";
 import { isTauri, storage } from "../storage";
@@ -101,6 +101,8 @@ export interface Actions {
   updateTask(id: string, patch: TaskPatch): void;
   toggleTask(id: string): void;
   moveTaskToDay(id: string, date: ISODate): void;
+  /** Move every unfinished top-level task on `date` one day forward; returns how many moved. */
+  moveUnfinishedToTomorrow(date: ISODate): number;
   duplicateTask(id: string): string | null;
   /** Soft delete (also deletes subtasks). */
   deleteTask(id: string): void;
@@ -126,6 +128,8 @@ export interface Actions {
 
   addHabit(input: HabitInput): string;
   updateHabit(id: string, patch: Partial<HabitInput>): void;
+  /** Archive (or restore) a habit. `deletedAt` is the archive flag. */
+  archiveHabit(id: string, archived?: boolean): void;
   /** Soft delete; existing tasks created from it stay. */
   deleteHabit(id: string): void;
   /** Turn a habit's ghost on `date` into a real task. */
@@ -152,6 +156,8 @@ interface StoreValue {
   data: AppData;
   /** Latest data, even between renders (used by the sync controller). */
   getData(): AppData;
+  /** Cancel the pending debounced save and persist the latest data now. */
+  flush(): Promise<void>;
   /** Apply a pure transform immediately (remote rows from the hub). */
   applyData(fn: (data: AppData) => AppData): void;
   ready: boolean;
@@ -186,19 +192,39 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!ready) return;
-    const timer = setTimeout(() => {
+    saveTimer.current = setTimeout(() => {
+      saveTimer.current = null;
       void storage.save(data).catch(() => {
         // Persistence errors are surfaced by the storage adapter in native builds.
       });
     }, 250);
-    return () => clearTimeout(timer);
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    };
   }, [data, ready]);
 
   const update = useCallback((mutator: Mutator) => {
     setData((prev) => mutator(prev));
   }, []);
+
+  const archiveHabit = useCallback(
+    (id: string, archived = true) => {
+      update((d) => {
+        const stamp = nowISO();
+        return {
+          ...d,
+          habits: d.habits.map((h) =>
+            h.id === id ? { ...h, deletedAt: archived ? stamp : undefined, updatedAt: stamp } : h,
+          ),
+        };
+      });
+    },
+    [update],
+  );
 
   const actions = useMemo<Actions>(
     () => ({
@@ -256,14 +282,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       },
       moveTaskToDay(id, date) {
         update((d) => {
-          const stamp = nowISO();
-          return {
-            ...d,
-            tasks: d.tasks.map((t) =>
-              t.id === id || t.parentId === id ? { ...t, date, updatedAt: stamp } : t,
-            ),
-          };
+          const { tasks } = moveTasksToDay(d.tasks, [id], date, nowISO());
+          return { ...d, tasks };
         });
+      },
+      moveUnfinishedToTomorrow(date) {
+        const ids = unfinishedTopLevelOn(dataRef.current.tasks, date).map((t) => t.id);
+        const { tasks, moved } = moveTasksToDay(
+          dataRef.current.tasks,
+          ids,
+          addDays(date, 1),
+          nowISO(),
+        );
+        if (moved.length) update((d) => ({ ...d, tasks }));
+        return moved.length;
       },
       duplicateTask(id) {
         const source = dataRef.current.tasks.find((t) => t.id === id);
@@ -505,14 +537,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           }),
         }));
       },
+      archiveHabit,
       deleteHabit(id) {
-        update((d) => {
-          const stamp = nowISO();
-          return {
-            ...d,
-            habits: d.habits.map((h) => (h.id === id ? { ...h, deletedAt: stamp, updatedAt: stamp } : h)),
-          };
-        });
+        archiveHabit(id, true);
       },
       acceptGhost(habitId, date) {
         const habit = dataRef.current.habits.find((h) => h.id === habitId && !h.deletedAt);
@@ -619,7 +646,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }));
       },
     }),
-    [update],
+    [update, archiveHabit],
   );
 
   const getData = useCallback(() => dataRef.current, []);
@@ -627,10 +654,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     dataRef.current = fn(dataRef.current);
     setData((prev) => fn(prev));
   }, []);
+  const flush = useCallback(async () => {
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    await storage.save(dataRef.current);
+  }, []);
 
   const value = useMemo<StoreValue>(
-    () => ({ data, getData, applyData, ready, isNative: isTauri, actions }),
-    [data, getData, applyData, ready, actions],
+    () => ({ data, getData, flush, applyData, ready, isNative: isTauri, actions }),
+    [data, getData, flush, applyData, ready, actions],
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

@@ -24,6 +24,19 @@ export function ghostsFor(date: ISODate, habits: Habit[], tasks: Task[]): Habit[
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.title.localeCompare(b.title));
 }
 
+/**
+ * Split habits into live and archived lists. `deletedAt` is the archive flag.
+ * Each list is a fresh array sorted by creation time, then title.
+ */
+export function partitionHabits(habits: Habit[]): { active: Habit[]; archived: Habit[] } {
+  const byAgeThenTitle = (a: Habit, b: Habit) =>
+    a.createdAt.localeCompare(b.createdAt) || a.title.localeCompare(b.title);
+  return {
+    active: habits.filter((h) => h.deletedAt === undefined).sort(byAgeThenTitle),
+    archived: habits.filter((h) => h.deletedAt !== undefined).sort(byAgeThenTitle),
+  };
+}
+
 const NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 /** "Every day", "Mon, Wed, Fri" (+ end date when set). */
