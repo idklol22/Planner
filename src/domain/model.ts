@@ -61,6 +61,8 @@ export const CategorySchema = z.object({
   archived: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  /** Soft-delete tombstone for a deleted category (kept locally so sync emits an op). */
+  deletedAt: z.string().optional(),
 });
 
 export const TaskSchema = z.object({

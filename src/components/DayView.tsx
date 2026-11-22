@@ -332,7 +332,7 @@ export function DayView({
         : selected === addDays(today, -1)
           ? "Yesterday"
           : null;
-  const hasCategories = data.categories.some((c) => !c.archived);
+  const hasCategories = data.categories.some((c) => !c.archived && !c.deletedAt);
   const showDaySummary = selected < today || (selected === today && hour >= 21);
   const isSunday = fromISODate(selected).getDay() === 0;
   const showWeekSummary = isSunday || (weekPinned && mode === "week");

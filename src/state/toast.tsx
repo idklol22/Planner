@@ -11,10 +11,9 @@ type Tone = "success" | "error" | "info";
 
 interface ToastAction {
   label: string;
-  onClick: () => void;
+  onClick?: () => void;
+  run?: () => void;
 }
-
-type Notify = (message: string, tone?: Tone, action?: ToastAction) => void;
 
 interface Toast {
   id: number;
@@ -23,6 +22,7 @@ interface Toast {
   action?: ToastAction;
 }
 
+type Notify = (message: string, tone?: Tone, action?: ToastAction) => void;
 const ToastContext = createContext<Notify>(() => {});
 
 const toneStyles: Record<Tone, { icon: typeof Info; color: string }> = {
@@ -59,7 +59,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               {action && (
                 <button
                   onClick={() => {
-                    action.onClick();
+                    if (action.onClick) action.onClick();
+                    else action.run?.();
                     setToasts((current) => current.filter((item) => item.id !== toast.id));
                   }}
                   className="ml-1 min-h-8 shrink-0 rounded-lg px-2 text-[13px] font-semibold text-accent transition-colors hover:bg-accent/10 active:scale-95"

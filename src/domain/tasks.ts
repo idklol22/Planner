@@ -24,7 +24,9 @@ export function tasksForDay(tasks: Task[], date: ISODate): Task[] {
 }
 
 export function activeCategories(categories: Category[]): Category[] {
-  return categories.filter((c) => !c.archived).sort((a, b) => a.order - b.order);
+  return categories
+    .filter((c) => !c.archived && !c.deletedAt)
+    .sort((a, b) => a.order - b.order);
 }
 
 export interface SectionOptions {

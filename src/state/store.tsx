@@ -10,6 +10,7 @@ import {
 } from "react";
 import { uid } from "../domain/ids";
 import { addDays, todayISO, type ISODate } from "../domain/dates";
+import { deleteCategory as deleteCategoryData, type CategoryDeleteMode } from "../domain/categories";
 import {
   defaultData,
   makeCalorieEntry,
@@ -102,6 +103,10 @@ export interface Actions {
   /** Persist a new order from a list of category ids. */
   reorderCategories(ids: string[]): void;
   archiveCategory(id: string, archived?: boolean): void;
+  /** Soft-delete a category with its tasks/goals/habits references cleaned up. */
+  deleteCategory(id: string, mode: CategoryDeleteMode): void;
+  /** Restore the last category deletion (keeps any newer calories). */
+  undoDeleteCategory(): void;
 
   addTask(date: ISODate, title: string, categoryId?: string | null, habitId?: string | null): string;
   updateTask(id: string, patch: TaskPatch): void;
@@ -180,6 +185,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const dataRef = useRef(data);
   dataRef.current = data;
+  /** Snapshot captured by the last `deleteCategory`, consumed by undo. */
+  const deleteSnapshot = useRef<AppData | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -262,6 +269,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       },
       archiveCategory(id, archived = true) {
         update((d) => mapCategory(d, id, (c) => ({ ...c, archived })));
+      },
+      deleteCategory(id, mode) {
+        const before = dataRef.current;
+        const next = deleteCategoryData(before, id, mode, nowISO());
+        if (next === before) return;
+        deleteSnapshot.current = before;
+        update(() => next);
+      },
+      undoDeleteCategory() {
+        const snapshot = deleteSnapshot.current;
+        if (!snapshot) return;
+        deleteSnapshot.current = null;
+        update((d) => ({ ...snapshot, calories: d.calories }));
       },
 
       addTask(date, title, categoryId = null, habitId = null) {

@@ -222,15 +222,15 @@ function withMeta(ops: StoreOp[], processed: Set<string>): ApplySolvedResult {
 }
 
 function letcodeCategory(data: AppData): Category | undefined {
+  const live = data.categories.filter((category) => !category.deletedAt);
   const configured = (data.settings as Settings & { letcodeCategoryId?: unknown })
     .letcodeCategoryId;
   if (typeof configured === "string" && configured.trim()) {
-    const found = data.categories.find((category) => category.id === configured);
+    const found = live.find((category) => category.id === configured);
     if (found) return found;
   }
   return (
-    data.categories.find((category) => category.name.trim().toLowerCase() === "daily") ??
-    data.categories[0]
+    live.find((category) => category.name.trim().toLowerCase() === "daily") ?? live[0]
   );
 }
 
