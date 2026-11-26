@@ -140,7 +140,6 @@ function CategorySection({
   onEditHabit: (habit: Habit) => void;
 }) {
   const { actions } = useStore();
-  const [menu, setMenu] = useState(false);
   const cat = section.category;
   const color = cat ? catColor(cat.color) : "var(--accent)";
   const name = cat?.name ?? "Inbox";
@@ -159,44 +158,19 @@ function CategorySection({
         )}
         <span className="flex-1" />
         <button
-          onClick={() => setMenu((v) => !v)}
-          aria-label={`Add to ${name}`}
-          aria-expanded={menu}
-          aria-haspopup="menu"
+          onClick={() => setAdding(!adding)}
+          aria-label={`Add task to ${name}`}
+          aria-pressed={adding}
           className="mod-btn !min-w-10 !px-0 !bg-ink/[0.07] !text-ink"
         >
           <Plus
             size={20}
             strokeWidth={2.25}
             className="transition-transform duration-200"
-            style={{ transform: menu ? "rotate(45deg)" : undefined }}
+            style={{ transform: adding ? "rotate(45deg)" : undefined }}
           />
         </button>
       </div>
-      {menu && (
-        <>
-          <button
-            aria-label="Close menu"
-            className="fixed inset-0 z-10 cursor-default"
-            onClick={() => setMenu(false)}
-          />
-          <div
-            role="menu"
-            className="animate-pop absolute right-3 top-[60px] z-20 w-60 origin-top-right overflow-hidden rounded-2xl border border-line-2 bg-[var(--pop)] shadow-2xl shadow-black"
-          >
-            <button
-              role="menuitem"
-              onClick={() => {
-                setMenu(false);
-                setAdding(true);
-              }}
-              className="flex w-full items-center gap-3 px-4 py-4 text-left text-[16px] font-medium hover:bg-ink/5"
-            >
-              <Plus size={18} className="text-muted" /> Add task
-            </button>
-          </div>
-        </>
-      )}
       {cat && <CategoryGoals categoryId={cat.id} color={color} />}
       {body && (
         <div className="space-y-0.5">
