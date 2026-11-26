@@ -4,7 +4,7 @@ import { useToast } from "../state/toast";
 import { catColor } from "../theme/store";
 
 const ACTION_BTN =
-  "flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl px-3 text-[13px] font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-accent";
+  "flex min-h-10 min-w-10 shrink-0 items-center justify-center gap-1.5 rounded-xl px-3 text-[13px] font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-accent";
 
 /** Full-screen archive of tasks: restore them to their day or delete them for good. */
 export function ArchiveView() {
@@ -54,7 +54,7 @@ export function ArchiveView() {
                 className={`${ACTION_BTN} bg-surface-2 text-ink hover:bg-surface-3`}
                 title="Restore"
               >
-                <ArchiveRestore size={16} /> <span className="hidden sm:inline">Restore</span>
+                <ArchiveRestore size={16} /> Restore
               </button>
               <button
                 onClick={() => {
@@ -65,7 +65,7 @@ export function ArchiveView() {
                 className={`${ACTION_BTN} text-rose hover:bg-rose/10`}
                 title="Delete"
               >
-                <Trash2 size={16} /> <span className="hidden sm:inline">Delete</span>
+                <Trash2 size={16} /> Delete
               </button>
             </div>
           ))}

@@ -78,8 +78,8 @@ export function TaskRow({
     }
   }
 
-  function undo() {
-    notify("Change undone", "success", {
+  function undo(message: string) {
+    notify(message, "success", {
       label: "Undo",
       run: actions.undoTaskChange,
       durationMs: 5000,
@@ -197,10 +197,11 @@ export function TaskRow({
           <Archive size={18} /> Archive
         </span>
       </div>
-      {/* Right underlay: revealed by a swipe left = Delete. */}
+      {/* Right underlay: revealed by a swipe left = Delete. Solid danger token (not a
+          tint) so the affordance reads at every width; the label uses canvas for contrast. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-y-0 right-0 z-0 flex items-center justify-end overflow-hidden rounded-xl bg-rose/15 text-rose"
+        className="pointer-events-none absolute inset-y-0 right-0 z-0 flex items-center justify-end overflow-hidden rounded-xl bg-rose text-canvas"
         style={{ width: swipe.dx < 0 ? underlayWidth : 0, opacity: swipe.dx < 0 ? underlayOpacity : 0 }}
       >
         <span className="flex shrink-0 items-center gap-1.5 px-3 text-[13px] font-semibold">
@@ -291,7 +292,7 @@ export function TaskRow({
                   role="menuitem"
                   onClick={() => {
                     actions.archiveTask(task.id);
-                    undo();
+                    undo("Task archived");
                     setMenu(false);
                   }}
                   className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[15px] font-medium hover:bg-ink/5 focus-visible:ring-2 focus-visible:ring-accent"
@@ -302,7 +303,7 @@ export function TaskRow({
                   role="menuitem"
                   onClick={() => {
                     actions.deleteTask(task.id);
-                    undo();
+                    undo("Task deleted");
                     setMenu(false);
                   }}
                   className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[15px] font-medium text-rose hover:bg-ink/5 focus-visible:ring-2 focus-visible:ring-accent"

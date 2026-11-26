@@ -42,7 +42,7 @@ function fileToDataUrl(file: File): Promise<string> {
 
 export function TaskPage({ taskId }: { taskId: string }) {
   const { data } = useStore();
-  const task = data.tasks.find((t) => t.id === taskId && !t.deletedAt);
+  const task = data.tasks.find((t) => t.id === taskId && !t.deletedAt && !t.archivedAt);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -99,7 +99,10 @@ function TaskDocument({ task }: { task: Task }) {
   const { data, actions } = useStore();
   const [title, setTitle] = useState(task.title);
   const editorRef = useRef<PlannerEditor | null>(null);
-  const subs = useMemo(() => data.tasks.filter((t) => t.parentId === task.id), [data.tasks, task.id]);
+  const subs = useMemo(
+    () => data.tasks.filter((t) => t.parentId === task.id && !t.archivedAt),
+    [data.tasks, task.id],
+  );
 
   // Always-fresh views for async callbacks.
   const subsRef = useRef(subs);

@@ -254,8 +254,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const archiveTask = useCallback(
     (id: string, archived = true) => {
       const before = dataRef.current;
+      // When restoring, leave subtasks the user archived separately alone. Keep them in
+      // archive/delete snapshots so Undo still restores their original state.
       const touched = before.tasks.filter(
-        (t) => t.id === id || (t.parentId === id && !t.deletedAt),
+        (t) =>
+          t.id === id ||
+          (t.parentId === id && !t.deletedAt && (archived || !t.archivedAt)),
       );
       if (!touched.some((t) => t.id === id)) return;
       const stamp = nowISO();
