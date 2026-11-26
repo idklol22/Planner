@@ -164,7 +164,7 @@ export interface Actions {
   unachieveGoal(id: string): void;
   deleteGoal(id: string): void;
 
-  addCalorie(date: ISODate, kcal: number, label?: string): void;
+  addCalorie(date: ISODate, kcal: number): void;
   deleteCalorie(id: string): void;
 
   updateSettings(patch: Partial<Settings>): void;
@@ -695,9 +695,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         });
       },
 
-      addCalorie(date, kcal, label) {
+      addCalorie(date, kcal) {
         if (!Number.isFinite(kcal) || kcal <= 0) return;
-        const entry = makeCalorieEntry(date, Math.round(kcal), label);
+        const entry = makeCalorieEntry(date, Math.round(kcal));
         update((d) => ({ ...d, calories: [...d.calories, entry] }));
       },
       deleteCalorie(id) {

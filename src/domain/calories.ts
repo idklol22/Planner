@@ -1,5 +1,10 @@
-import { addDays, type ISODate } from "./dates";
+import { addDays, formatTime, type ISODate } from "./dates";
 import type { CalorieEntry } from "./model";
+
+/** Device-local display of the UTC time an entry was logged. */
+export function entryTimeLabel(e: CalorieEntry): string {
+  return formatTime(e.createdAt);
+}
 
 export function entriesForDay(entries: CalorieEntry[], date: ISODate): CalorieEntry[] {
   return entries

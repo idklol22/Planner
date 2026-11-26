@@ -71,6 +71,7 @@ export function calorieToRow(c: CalorieEntry): MealRow {
     slot: "",
     label: c.label ?? "",
     kcal: c.kcal,
+    createdAt: c.createdAt,
     updatedAt: c.updatedAt,
     deletedAt: c.deletedAt ?? null,
   };
@@ -188,7 +189,7 @@ export function applyRemoteRow(data: AppData, table: SyncTable, row: SyncRow): A
         date: r.date,
         kcal: r.kcal,
         label: r.label || undefined,
-        createdAt: r.updatedAt,
+        createdAt: r.createdAt ?? r.updatedAt,
         updatedAt: r.updatedAt,
         deletedAt: r.deletedAt ?? undefined,
       };

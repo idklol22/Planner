@@ -69,6 +69,7 @@ export interface MealRow {
   slot: string;
   label: string;
   kcal: number;
+  createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
 }

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { deleteCategory } from "../domain/categories";
-import { defaultData, makeCategory, makeTask, type AppData, type Task } from "../domain/model";
-import type { CategoryRow, TaskRow } from "../storage/hub";
-import { applyRemoteRow, categoryToRow, diffOps, taskToRow } from "./mapping";
+import { defaultData, makeCalorieEntry, makeCategory, makeTask, type AppData, type CalorieEntry, type Task } from "../domain/model";
+import type { CategoryRow, MealRow, TaskRow } from "../storage/hub";
+import { applyRemoteRow, calorieToRow, categoryToRow, diffOps, taskToRow } from "./mapping";
 
 const NOW = "2026-11-21T12:00:00.000Z";
 const DAY = "2026-11-21";
@@ -111,5 +111,58 @@ describe("task archivedAt mapping", () => {
     expect(ops).toEqual([{ table: "task", row: taskToRow(archived(t)) }]);
     expect(ops).toHaveLength(1);
     expect((ops[0].row as TaskRow).archivedAt).toBe(NOW);
+  });
+});
+
+describe("meal createdAt mapping", () => {
+  const CREATED = "2026-11-21T13:42:00.000Z";
+  const UPDATED = "2026-11-22T09:15:00.000Z";
+
+  const entry = (): CalorieEntry => ({
+    ...makeCalorieEntry(DAY, 320, "Lunch"),
+    id: "meal-1",
+    createdAt: CREATED,
+    updatedAt: UPDATED,
+  });
+
+  it("calorieToRow emits createdAt next to updatedAt", () => {
+    const row = calorieToRow(entry());
+    expect(row.createdAt).toBe(CREATED);
+    expect(row.updatedAt).toBe(UPDATED);
+  });
+
+  it("applyRemoteRow falls back to updatedAt when a row lacks createdAt", () => {
+    const base = calorieToRow(entry());
+    const legacy = { ...base } as Omit<MealRow, "createdAt">;
+    delete (legacy as Partial<MealRow>).createdAt;
+    const next = applyRemoteRow(defaultData(), "meal", legacy as MealRow);
+    expect(next.calories[0].createdAt).toBe(UPDATED);
+  });
+
+  it("applyRemoteRow uses the row's createdAt when present", () => {
+    const row: MealRow = { ...calorieToRow(entry()), createdAt: CREATED };
+    const next = applyRemoteRow(defaultData(), "meal", row);
+    expect(next.calories[0].createdAt).toBe(CREATED);
+  });
+
+  it("applyRemoteRow preserves the local createdAt for an existing entry", () => {
+    const local = entry();
+    const data: AppData = { ...defaultData(), calories: [local] };
+    const remote: MealRow = {
+      ...calorieToRow(local),
+      createdAt: UPDATED,
+      updatedAt: UPDATED,
+      kcal: 400,
+    };
+    const next = applyRemoteRow(data, "meal", remote);
+    expect(next.calories[0].createdAt).toBe(CREATED);
+    expect(next.calories[0].kcal).toBe(400);
+  });
+
+  it("label still round-trips for old rows", () => {
+    const local = entry();
+    expect(calorieToRow(local).label).toBe("Lunch");
+    const remote: MealRow = { ...calorieToRow(local), createdAt: CREATED, label: "Dinner" };
+    expect(applyRemoteRow(defaultData(), "meal", remote).calories[0].label).toBe("Dinner");
   });
 });

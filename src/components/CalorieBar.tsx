@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Flame, Plus, Trash2, TriangleAlert, X } from "lucide-react";
-import { dayKcal, entriesForDay, onGoal } from "../domain/calories";
+import { dayKcal, entriesForDay, entryTimeLabel, onGoal } from "../domain/calories";
 import type { ISODate } from "../domain/dates";
 import { useStore } from "../state/store";
 
@@ -14,7 +14,6 @@ export function CalorieBar({ date }: { date: ISODate }) {
   const total = dayKcal(data.calories, date);
   const [mode, setMode] = useState<"idle" | "add" | "list">("idle");
   const [kcal, setKcal] = useState("");
-  const [label, setLabel] = useState("");
   const kcalRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => setMode("idle"), [date]);
@@ -30,9 +29,8 @@ export function CalorieBar({ date }: { date: ISODate }) {
   function submit() {
     const n = Number(kcal.replace(/,/g, ""));
     if (!Number.isFinite(n) || n <= 0) return;
-    actions.addCalorie(date, n, label);
+    actions.addCalorie(date, n);
     setKcal("");
-    setLabel("");
     kcalRef.current?.focus();
   }
 
@@ -94,20 +92,6 @@ export function CalorieBar({ date }: { date: ISODate }) {
               }}
               className="h-11 w-[92px] rounded-xl bg-canvas/50 px-3 text-[16px] font-semibold tabular-nums outline-none placeholder:font-normal placeholder:text-faint focus:ring-1 focus:ring-ink/30"
             />
-            <input
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              placeholder="Label (optional)"
-              aria-label="Label"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") submit();
-                else if (e.key === "Escape") {
-                  e.stopPropagation();
-                  setMode("idle");
-                }
-              }}
-              className="h-11 min-w-0 flex-1 rounded-xl bg-canvas/50 px-3 text-[16px] outline-none placeholder:text-faint focus:ring-1 focus:ring-ink/30"
-            />
             <button
               onClick={submit}
               disabled={!kcal}
@@ -126,13 +110,13 @@ export function CalorieBar({ date }: { date: ISODate }) {
               <ul>
                 {entries.map((e) => (
                   <li key={e.id} className="flex min-h-[44px] items-center gap-3">
-                    <span className="min-w-0 flex-1 truncate text-[16px] text-muted">
-                      {e.label || "Entry"}
+                    <span className="min-w-0 flex-1 truncate text-[15px] text-muted tabular-nums">
+                      {entryTimeLabel(e)}
                     </span>
                     <span className="text-[16px] font-semibold tabular-nums">{fmt(e.kcal)}</span>
                     <button
                       onClick={() => actions.deleteCalorie(e.id)}
-                      aria-label={`Delete ${e.label || "entry"}`}
+                      aria-label={`Delete entry at ${entryTimeLabel(e)}`}
                       className="flex h-8 w-8 items-center justify-center rounded-full text-faint transition-colors hover:bg-ink/10 hover:text-rose active:scale-90"
                     >
                       <Trash2 size={15} />
