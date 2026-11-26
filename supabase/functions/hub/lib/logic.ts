@@ -22,6 +22,7 @@ const SYNC_TABLES: SyncTable[] = [
   "task",
   "goal",
   "meal",
+  "message",
   "h_subject",
   "h_topic",
   "h_material",
@@ -60,7 +61,87 @@ export function normalize(row: Record<string, unknown>): Record<string, unknown>
     if (camel !== key && !(camel in out)) out[camel] = value;
   }
   if (out.note === undefined && out.noteJson !== undefined) out.note = out.noteJson;
+  if (out.attachments === undefined && out.attachmentsJson !== undefined) {
+    out.attachments = out.attachmentsJson;
+  }
   return out;
+}
+
+export type MessageValidation =
+  | { ok: true; row: Record<string, unknown> }
+  | { ok: false; error: string };
+
+const MESSAGE_SHA256 = /^[0-9a-f]{64}$/i;
+const MAX_TEXT_CHARS = 20_000;
+const MAX_ATTACHMENTS = 6;
+const MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024;
+
+function messageError(error: string): MessageValidation {
+  return { ok: false, error };
+}
+
+/** Pure validation of a `message` row; returns a copy with text/attachments normalised. */
+export function validateMessageRow(row: Record<string, unknown>): MessageValidation {
+  if (row.sender !== "planner" && row.sender !== "harness") {
+    return messageError("sender must be 'planner' or 'harness'");
+  }
+  if (typeof row.createdAt !== "string" || row.createdAt === "") {
+    return messageError("createdAt must be a non-empty string");
+  }
+
+  const text = row.text === undefined || row.text === null ? "" : row.text;
+  if (typeof text !== "string") return messageError("text must be a string");
+  if (text.length > MAX_TEXT_CHARS) return messageError("text must be at most 20000 characters");
+
+  const rawAttachments = row.attachments === undefined || row.attachments === null ? [] : row.attachments;
+  if (!Array.isArray(rawAttachments)) return messageError("attachments must be an array");
+  if (rawAttachments.length > MAX_ATTACHMENTS) return messageError("at most 6 attachments allowed");
+
+  const attachments: Record<string, unknown>[] = [];
+  for (const item of rawAttachments) {
+    if (!isRecord(item)) return messageError("each attachment must be an object");
+    if (typeof item.sha256 !== "string" || !MESSAGE_SHA256.test(item.sha256)) {
+      return messageError("attachment sha256 must be a 64-character hex string");
+    }
+    if (
+      typeof item.mime !== "string" ||
+      (!item.mime.startsWith("image/") && !item.mime.startsWith("audio/"))
+    ) {
+      return messageError("attachment mime must start with 'image/' or 'audio/'");
+    }
+    if (typeof item.name !== "string") return messageError("attachment name must be a string");
+    if (
+      typeof item.bytes !== "number" ||
+      !Number.isFinite(item.bytes) ||
+      item.bytes < 0 ||
+      item.bytes > MAX_ATTACHMENT_BYTES
+    ) {
+      return messageError("attachment bytes must be between 0 and 15 MB");
+    }
+    if (item.durationSec !== undefined) {
+      if (
+        typeof item.durationSec !== "number" ||
+        !Number.isFinite(item.durationSec) ||
+        item.durationSec < 0
+      ) {
+        return messageError("attachment durationSec must be a non-negative finite number");
+      }
+    }
+    const attachment: Record<string, unknown> = {
+      sha256: item.sha256,
+      name: item.name,
+      mime: item.mime,
+      bytes: item.bytes,
+    };
+    if (item.durationSec !== undefined) attachment.durationSec = item.durationSec;
+    attachments.push(attachment);
+  }
+
+  if (text.trim() === "" && attachments.length === 0) {
+    return messageError("text or an attachment required");
+  }
+
+  return { ok: true, row: { ...row, text, attachments } };
 }
 
 export function compareUpdatedAt(a: unknown, b: unknown): number {
@@ -384,7 +465,13 @@ export async function handle(
               ) {
                 throw new HttpError("row needs id and updatedAt", 400);
               }
-              ops.push({ table: op.table, row: row as unknown as SyncRow });
+              let pushed = row;
+              if (op.table === "message") {
+                const validated = validateMessageRow(row);
+                if (!validated.ok) throw new HttpError("message: " + validated.error, 400);
+                pushed = validated.row;
+              }
+              ops.push({ table: op.table, row: pushed as unknown as SyncRow });
             }
             const { applied, cursor } = await store.upsertRows(ops);
             response = json({ applied, cursor });

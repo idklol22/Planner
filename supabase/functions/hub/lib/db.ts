@@ -10,6 +10,7 @@ export type SyncTable =
   | "task"
   | "goal"
   | "meal"
+  | "message"
   | "h_subject"
   | "h_topic"
   | "h_material"
@@ -25,6 +26,27 @@ export type Note = {
   updatedAt?: string;
   [key: string]: unknown;
 };
+
+export type MessageAttachment = {
+  sha256: string;
+  name: string;
+  mime: string;
+  bytes: number;
+  durationSec?: number;
+};
+
+export interface MessageRow {
+  id: string;
+  subjectId: string | null;
+  topicId: string | null;
+  sender: "planner" | "harness";
+  text: string;
+  attachments: MessageAttachment[];
+  createdAt: string;
+  updatedAt: string;
+  deliveredAt: string | null;
+  deletedAt: string | null;
+}
 
 export interface CategoryRow {
   id: string;
@@ -58,6 +80,7 @@ export interface TaskRow {
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
+  archivedAt?: string | null;
 }
 
 export interface GoalRow {
@@ -78,6 +101,7 @@ export interface MealRow {
   kcal: number;
   updatedAt: string;
   deletedAt: string | null;
+  createdAt?: string | null;
 }
 
 export interface HSubjectRow {
@@ -131,6 +155,7 @@ export type SyncRow =
   | TaskRow
   | GoalRow
   | MealRow
+  | MessageRow
   | HSubjectRow
   | HTopicRow
   | HMaterialRow
