@@ -1,7 +1,7 @@
 import { catColor } from "../theme/store";
 import { useEffect, useMemo, useState } from "react";
 import { Archive, ArchiveRestore, ChevronDown, ChevronUp, GripVertical, Plus, Trash2 } from "lucide-react";
-import { countCategoryTasks, type CategoryDeleteMode } from "../domain/categories";
+import { countCategoryTasks } from "../domain/categories";
 import { CATEGORY_COLORS, DEFAULT_HARNESS_URL, type Category } from "../domain/model";
 import { HarnessClient, type HarnessSubject } from "../lib/harness";
 import { useStore } from "../state/store";
@@ -217,15 +217,11 @@ function CategoryRow({
 function DeleteCategoryDialog({
   cat,
   count,
-  mode,
-  onMode,
   onCancel,
   onConfirm,
 }: {
   cat: Category;
   count: number;
-  mode: CategoryDeleteMode;
-  onMode: (mode: CategoryDeleteMode) => void;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
@@ -237,7 +233,7 @@ function DeleteCategoryDialog({
     return () => window.removeEventListener("keydown", onKey);
   }, [onCancel]);
 
-  const body = count === 0 ? "No tasks" : count === 1 ? "1 task" : `This category holds ${count} tasks.`;
+  const heading = count === 0 ? `Delete ${cat.name}?` : `Delete ${cat.name} and its ${count} ${count === 1 ? "task" : "tasks"}?`;
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
@@ -249,37 +245,19 @@ function DeleteCategoryDialog({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={`Delete ${cat.name}?`}
+        aria-label={heading}
         className="relative w-full max-w-[420px] rounded-[24px] bg-surface-2 p-5 shadow-2xl"
       >
-        <h2 className="text-[19px] font-bold">Delete {cat.name}?</h2>
-        <p className="mt-2 text-[14px] text-muted">{body}</p>
-        <div className="mt-4 space-y-2">
-          <label className="flex items-center gap-3 rounded-xl bg-surface px-3.5 py-3 text-[15px]">
-            <input
-              type="radio"
-              checked={mode === "reassign"}
-              onChange={() => onMode("reassign")}
-              style={{ accentColor: "var(--accent)" }}
-            />
-            Move tasks to Uncategorized
-          </label>
-          <label className="flex items-center gap-3 rounded-xl bg-surface px-3.5 py-3 text-[15px]">
-            <input
-              type="radio"
-              checked={mode === "delete"}
-              onChange={() => onMode("delete")}
-              style={{ accentColor: "var(--accent)" }}
-            />
-            Delete tasks too
-          </label>
-        </div>
+        <h2 className="text-[19px] font-bold">{heading}</h2>
+        <p className="mt-2 text-[14px] text-muted">
+          This cannot be undone except with the Undo toast.
+        </p>
         <div className="mt-5 flex justify-end gap-2">
           <Button variant="secondary" autoFocus onClick={onCancel}>
             Cancel
           </Button>
           <Button variant="danger" onClick={onConfirm}>
-            Delete category
+            Delete
           </Button>
         </div>
       </div>
@@ -291,7 +269,6 @@ export function CategoriesView() {
   const { data, actions } = useStore();
   const notify = useToast();
   const [deleting, setDeleting] = useState<Category | null>(null);
-  const [mode, setMode] = useState<CategoryDeleteMode>("reassign");
   const [name, setName] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
@@ -346,7 +323,6 @@ export function CategoriesView() {
   }
 
   function askDelete(cat: Category) {
-    setMode("reassign");
     setDeleting(cat);
   }
 
@@ -354,7 +330,7 @@ export function CategoriesView() {
     if (!deleting) return;
     const id = deleting.id;
     setDeleting(null);
-    actions.deleteCategory(id, mode);
+    actions.deleteCategory(id);
     notify("Category deleted", "success", {
       label: "Undo",
       run: () => {
@@ -462,8 +438,6 @@ export function CategoriesView() {
         <DeleteCategoryDialog
           cat={deleting}
           count={countCategoryTasks(data, deleting.id)}
-          mode={mode}
-          onMode={setMode}
           onCancel={() => setDeleting(null)}
           onConfirm={confirmDelete}
         />

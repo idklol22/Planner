@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { defaultData, makeCategory, makeTask, type Task } from "../domain/model";
+import { deleteCategory } from "../domain/categories";
+import { defaultData, makeCategory, makeTask, type AppData, type Task } from "../domain/model";
 import type { CategoryRow, TaskRow } from "../storage/hub";
 import { applyRemoteRow, categoryToRow, diffOps, taskToRow } from "./mapping";
 
 const NOW = "2026-11-21T12:00:00.000Z";
+const DAY = "2026-11-21";
 
 describe("categoryToRow", () => {
   it("emits the category tombstone", () => {
@@ -49,6 +51,36 @@ describe("diffOps", () => {
     const ops = diffOps(prev, next);
     expect(ops).toEqual([{ table: "category", row: categoryToRow(tombstoned) }]);
     expect(ops[0].row.deletedAt).toBe(NOW);
+  });
+
+  it("emits one category op and one task op per tombstone for deleteCategory", () => {
+    const cat = makeCategory("Math", 0);
+    const top = { ...makeTask(DAY, "Top", 0), id: "top", categoryId: cat.id };
+    const sub = {
+      ...makeTask(DAY, "Sub", 1),
+      id: "sub",
+      parentId: top.id,
+      categoryId: "some-other-category",
+    };
+    const unrelated = { ...makeTask(DAY, "Other", 2), id: "other", categoryId: null };
+    const prev: AppData = { ...defaultData(), categories: [cat], tasks: [top, sub, unrelated] };
+
+    const next = deleteCategory(prev, cat.id, NOW);
+    const ops = diffOps(prev, next);
+
+    expect(ops.filter((op) => op.table === "category")).toHaveLength(1);
+    expect(ops.filter((op) => op.table === "category")[0].row.deletedAt).toBe(NOW);
+    expect(ops.filter((op) => op.table === "task")).toHaveLength(2);
+    expect(
+      ops.filter((op) => op.table === "task").map((op) => op.row.id),
+    ).toEqual(["top", "sub"]);
+    // Every tombstoned task op carries the stamp; no task is reassigned to null.
+    for (const op of ops.filter((op) => op.table === "task")) {
+      expect((op.row as TaskRow).deletedAt).toBe(NOW);
+      expect((op.row as TaskRow).categoryId).not.toBeNull();
+    }
+    // The unrelated task is unchanged, so diffOps emits no op for it.
+    expect(ops.some((op) => op.table === "task" && op.row.id === unrelated.id)).toBe(false);
   });
 });
 

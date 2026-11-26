@@ -10,7 +10,7 @@ import {
 } from "react";
 import { uid } from "../domain/ids";
 import { addDays, todayISO, type ISODate } from "../domain/dates";
-import { deleteCategory as deleteCategoryData, type CategoryDeleteMode } from "../domain/categories";
+import { deleteCategory as deleteCategoryData } from "../domain/categories";
 import {
   defaultData,
   makeCalorieEntry,
@@ -104,7 +104,8 @@ export interface Actions {
   reorderCategories(ids: string[]): void;
   archiveCategory(id: string, archived?: boolean): void;
   /** Soft-delete a category with its tasks/goals/habits references cleaned up. */
-  deleteCategory(id: string, mode: CategoryDeleteMode): void;
+  /** Cascade the deletion to all the category's tasks. */
+  deleteCategory(id: string): void;
   /** Restore the last category deletion (keeps any newer calories). */
   undoDeleteCategory(): void;
 
@@ -304,9 +305,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       archiveCategory(id, archived = true) {
         update((d) => mapCategory(d, id, (c) => ({ ...c, archived })));
       },
-      deleteCategory(id, mode) {
+      deleteCategory(id) {
         const before = dataRef.current;
-        const next = deleteCategoryData(before, id, mode, nowISO());
+        const next = deleteCategoryData(before, id, nowISO());
         if (next === before) return;
         deleteSnapshot.current = before;
         update(() => next);
