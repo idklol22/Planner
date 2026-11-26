@@ -87,6 +87,8 @@ export const TaskSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   deletedAt: z.string().optional(),
+  /** Set when the task (or a recurring occurrence) is archived; absent = live. */
+  archivedAt: z.string().optional(),
 });
 
 export const HabitSchema = z.object({

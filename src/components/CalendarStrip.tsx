@@ -51,7 +51,7 @@ export function CalendarStrip({
 
   const rangeKey = `${dates[0]}|${dates[dates.length - 1]}`;
   const ruleSig = data.tasks
-    .filter((t) => t.rrule && !t.deletedAt)
+    .filter((t) => t.rrule && !t.deletedAt && !t.archivedAt)
     .map((t) => `${t.id}${t.rrule}${t.date}`)
     .join();
   useEffect(() => {

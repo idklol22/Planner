@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { dayKcal, onGoal } from "./calories";
-import { describeSchedule, ghostsFor } from "./habits";
+import { ghostsFor, describeSchedule } from "./habits";
+import { materializeOccurrences } from "./recurrence";
 import {
   makeCalorieEntry,
   makeCategory,
@@ -8,6 +9,7 @@ import {
   makeTask,
   migrateV2,
   parseAppData,
+  type AppData,
   type Task,
 } from "./model";
 import { daySummary, weekSummary } from "./summaries";
@@ -36,6 +38,8 @@ describe("ghostsFor", () => {
     expect(ghostsFor("2026-11-21", [h], [t])).toHaveLength(1);
     expect(ghostsFor("2026-11-20", [h], [{ ...t, deletedAt: "x" }])).toHaveLength(1);
     expect(ghostsFor("2026-11-20", [h], [task({ habitId: "other" })])).toHaveLength(1);
+    // An archived (just like a deleted) task does not count as taken.
+    expect(ghostsFor("2026-11-20", [h], [{ ...t, archivedAt: "x" }])).toHaveLength(1);
   });
 
   it("ignores deleted habits and describes schedules", () => {
@@ -116,5 +120,48 @@ describe("migration v2 -> v3", () => {
     expect(out.habits[1].weekdays).toHaveLength(1);
     expect(out.calories[0]).toMatchObject({ kcal: 320, label: "lunch: Soup", updatedAt: "2026-11-02T12:00:00.000Z" });
     expect(parseAppData(v2).version).toBe(4);
+  });
+});
+
+describe("archived tasks in the planner", () => {
+  const study = makeCategory("Study", 0);
+  const cats = [study];
+
+  it("an archived task does not suppress a habit ghost", () => {
+    const h = habit();
+    expect(ghostsFor("2026-11-20", [h], [task({ habitId: h.id, archivedAt: "x" })])).toHaveLength(1);
+    // A live task for the habit still suppresses it.
+    expect(ghostsFor("2026-11-20", [h], [task({ habitId: h.id })])).toEqual([]);
+  });
+
+  it("day and week summaries exclude archived tasks", () => {
+    const archived = task({ id: "arch", categoryId: study.id, done: true, archivedAt: "x" });
+    const live = [task({ id: "1", categoryId: study.id, done: true }), task({ id: "2", categoryId: study.id })];
+    const withArchived = [...live, archived];
+    expect(daySummary("2026-11-20", withArchived, cats, [], 2000)).toMatchObject({ done: 1, total: 2 });
+    expect(weekSummary("2026-11-16", withArchived, cats, [], 2000)).toMatchObject({ done: 1, total: 2 });
+  });
+
+  it("parseAppData keeps archivedAt on a current record", () => {
+    const data: AppData = {
+      version: 4,
+      tasks: [task({ id: "arch", archivedAt: "2026-11-21T10:00:00.000Z" })],
+      categories: [],
+      habits: [],
+      calories: [],
+      goals: [],
+      settings: { handoffFolder: "", learnharnessSubjects: [], harnessUrl: "", dailyCalorieGoal: 2000 },
+    };
+    expect(parseAppData(data).tasks[0].archivedAt).toBe("2026-11-21T10:00:00.000Z");
+  });
+
+  it("an archived occurrence never re-materialises and an archived template generates none", () => {
+    const tpl = task({ id: "tpl", rrule: "daily" });
+    const days = ["2026-11-20", "2026-11-21"];
+    const [first] = materializeOccurrences([tpl], days);
+    expect(first.seriesId).toBe("tpl");
+    const archivedOccurrence = { ...first, archivedAt: "x" };
+    expect(materializeOccurrences([tpl, archivedOccurrence], days)).toEqual([]);
+    expect(materializeOccurrences([{ ...tpl, archivedAt: "x" }], days)).toEqual([]);
   });
 });

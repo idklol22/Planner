@@ -13,6 +13,8 @@ interface ToastAction {
   label: string;
   onClick?: () => void;
   run?: () => void;
+  /** Override the lifetime of an action toast (default: 6000ms). */
+  durationMs?: number;
 }
 
 interface Toast {
@@ -24,6 +26,11 @@ interface Toast {
 
 type Notify = (message: string, tone?: Tone, action?: ToastAction) => void;
 const ToastContext = createContext<Notify>(() => {});
+
+/** Undo toasts stay up to 5000ms; a plain action keeps the 6000ms default. */
+export function toastDurationMs(action?: ToastAction): number {
+  return action?.durationMs ?? (action ? 6000 : 3200);
+}
 
 const toneStyles: Record<Tone, { icon: typeof Info; color: string }> = {
   success: { icon: CheckCircle2, color: "text-mint" },
@@ -39,7 +46,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     setToasts((current) => [...current, { id, message, tone, action }]);
     setTimeout(() => {
       setToasts((current) => current.filter((toast) => toast.id !== id));
-    }, action ? 6000 : 3200);
+    }, toastDurationMs(action));
   }, []);
 
   return (

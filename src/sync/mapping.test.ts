@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { defaultData, makeCategory } from "../domain/model";
-import type { CategoryRow } from "../storage/hub";
-import { applyRemoteRow, categoryToRow, diffOps } from "./mapping";
+import { defaultData, makeCategory, makeTask, type Task } from "../domain/model";
+import type { CategoryRow, TaskRow } from "../storage/hub";
+import { applyRemoteRow, categoryToRow, diffOps, taskToRow } from "./mapping";
 
 const NOW = "2026-11-21T12:00:00.000Z";
 
@@ -49,5 +49,35 @@ describe("diffOps", () => {
     const ops = diffOps(prev, next);
     expect(ops).toEqual([{ table: "category", row: categoryToRow(tombstoned) }]);
     expect(ops[0].row.deletedAt).toBe(NOW);
+  });
+});
+
+describe("task archivedAt mapping", () => {
+  const archived = (t: Task): Task => ({ ...t, archivedAt: NOW, updatedAt: NOW });
+
+  it("taskToRow emits null when absent and the ISO string when archived", () => {
+    const live = makeTask("2026-11-21", "Live", 0);
+    const row: TaskRow = taskToRow(live);
+    expect(row.archivedAt).toBeNull();
+    expect(taskToRow(archived(live)).archivedAt).toBe(NOW);
+  });
+
+  it("applyRemoteRow maps null back to undefined and keeps a remote stamp", () => {
+    const live = makeTask("2026-11-21", "Live", 0);
+    const row: TaskRow = { ...taskToRow(live), archivedAt: null };
+    expect(applyRemoteRow(defaultData(), "task", row).tasks[0].archivedAt).toBeUndefined();
+    const remote: TaskRow = { ...row, archivedAt: NOW };
+    expect(applyRemoteRow(defaultData(), "task", remote).tasks[0].archivedAt).toBe(NOW);
+  });
+
+  it("diffOps emits exactly one task op when a task is archived", () => {
+    const t = makeTask("2026-11-21", "Archive me", 0);
+    const prev = { ...defaultData(), tasks: [t] };
+    const next = { ...prev, tasks: [archived(t)] };
+
+    const ops = diffOps(prev, next);
+    expect(ops).toEqual([{ table: "task", row: taskToRow(archived(t)) }]);
+    expect(ops).toHaveLength(1);
+    expect((ops[0].row as TaskRow).archivedAt).toBe(NOW);
   });
 });

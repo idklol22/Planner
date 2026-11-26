@@ -18,9 +18,11 @@ export interface DaySummary {
 
 const byOrder = (a: Task, b: Task) => a.order - b.order || a.createdAt.localeCompare(b.createdAt);
 
-/** Top-level, non-deleted tasks on a day. */
+/** Top-level, non-deleted, non-archived tasks on a day. */
 export function tasksForDay(tasks: Task[], date: ISODate): Task[] {
-  return tasks.filter((t) => t.date === date && !t.parentId && !t.deletedAt).sort(byOrder);
+  return tasks
+    .filter((t) => t.date === date && !t.parentId && !t.deletedAt && !t.archivedAt)
+    .sort(byOrder);
 }
 
 export function activeCategories(categories: Category[]): Category[] {
@@ -80,7 +82,9 @@ export function daySummary(tasks: Task[], categories: Category[], date: ISODate)
 /** Unfinished top-level tasks on a day, in display order. */
 export function unfinishedTopLevelOn(tasks: Task[], date: ISODate): Task[] {
   return tasks
-    .filter((t) => !t.deletedAt && !t.parentId && !t.done && t.date === date)
+    .filter(
+      (t) => !t.deletedAt && !t.archivedAt && !t.parentId && !t.done && t.date === date,
+    )
     .sort(byOrder);
 }
 
@@ -96,7 +100,7 @@ export function moveTasksToDay(
   now: string,
 ): { tasks: Task[]; moved: string[] } {
   const maxOrder = tasks.reduce(
-    (m, t) => (t.date === targetDate && !t.deletedAt ? Math.max(m, t.order) : m),
+    (m, t) => (t.date === targetDate && !t.deletedAt && !t.archivedAt ? Math.max(m, t.order) : m),
     0,
   );
   const byId = new Map(tasks.map((t) => [t.id, t]));
@@ -105,11 +109,11 @@ export function moveTasksToDay(
 
   ids.forEach((id, index) => {
     const task = byId.get(id);
-    if (!task || task.deletedAt || task.parentId || task.date === targetDate) return;
+    if (!task || task.deletedAt || task.archivedAt || task.parentId || task.date === targetDate) return;
     moved.push(id);
     changed.set(id, { ...task, date: targetDate, order: maxOrder + 1 + index, updatedAt: now });
     for (const sub of tasks) {
-      if (sub.parentId === id && !sub.deletedAt) {
+      if (sub.parentId === id && !sub.deletedAt && !sub.archivedAt) {
         changed.set(sub.id, { ...sub, date: targetDate, updatedAt: now });
       }
     }
@@ -142,7 +146,7 @@ export function moveUnfinishedToToday(
   if (!result.moved.length) return { ...result, previous: [] };
   const moved = new Set(result.moved);
   const previous = tasks.filter(
-    (t) => moved.has(t.id) || (!!t.parentId && moved.has(t.parentId) && !t.deletedAt),
+    (t) => moved.has(t.id) || (!!t.parentId && moved.has(t.parentId) && !t.deletedAt && !t.archivedAt),
   );
   return { ...result, previous };
 }
@@ -155,7 +159,9 @@ export function restoreTasks(tasks: Task[], snapshot: Task[]): Task[] {
 }
 
 export function subtasksOf(tasks: Task[], parentId: string): Task[] {
-  return tasks.filter((t) => t.parentId === parentId && !t.deletedAt).sort(byOrder);
+  return tasks
+    .filter((t) => t.parentId === parentId && !t.deletedAt && !t.archivedAt)
+    .sort(byOrder);
 }
 
 export function subtaskProgress(tasks: Task[], parentId: string): { done: number; total: number } {

@@ -60,6 +60,7 @@ export function taskToRow(t: Task): TaskRow {
     createdAt: t.createdAt,
     updatedAt: t.updatedAt,
     deletedAt: t.deletedAt ?? null,
+    archivedAt: t.archivedAt ?? null,
   };
 }
 
@@ -176,6 +177,7 @@ export function applyRemoteRow(data: AppData, table: SyncTable, row: SyncRow): A
         createdAt: r.createdAt,
         updatedAt: r.updatedAt,
         deletedAt: r.deletedAt ?? undefined,
+        archivedAt: r.archivedAt ?? undefined,
       };
       return { ...data, tasks: upsert(data.tasks, next) };
     }

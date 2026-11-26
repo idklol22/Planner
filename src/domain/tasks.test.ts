@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
-import type { Note, Task } from "./model";
+import { makeCategory, type Note, type Task } from "./model";
 import {
+  daySummary,
   moveTasksToDay,
   moveUnfinishedToToday,
   restoreTasks,
+  sectionsForDay,
+  subtasksOf,
+  tasksForDay,
   unfinishedTopLevelOn,
 } from "./tasks";
 
@@ -229,5 +233,56 @@ describe("moveUnfinishedToToday", () => {
     expect(result.moved).toEqual([]);
     expect(result.previous).toEqual([]);
     expect(result.tasks).toBe(input);
+  });
+});
+
+describe("archived tasks are hidden", () => {
+  const ARCHIVED_AT = "2026-03-02T10:00:00.000Z";
+  const cat = makeCategory("Study", 0, "#111111");
+
+  function fixture() {
+    const parent = task("parent", { order: 0, categoryId: cat.id });
+    const liveSub = task("live-sub", { parentId: "parent", order: 0 });
+    const archivedParent = task("archived-parent", {
+      order: 1,
+      categoryId: cat.id,
+      archivedAt: ARCHIVED_AT,
+    });
+    const archivedSub = task("archived-sub", {
+      parentId: "parent",
+      order: 1,
+      archivedAt: ARCHIVED_AT,
+    });
+    return [parent, liveSub, archivedParent, archivedSub];
+  }
+
+  it("excludes archived parents and subtasks from tasksForDay and sectionsForDay", () => {
+    const tasks = fixture();
+    expect(tasksForDay(tasks, DAY).map((t) => t.id)).toEqual(["parent"]);
+    expect(sectionsForDay(tasks, [cat], DAY).map((s) => s.tasks.map((t) => t.id))).toEqual([
+      ["parent"],
+    ]);
+  });
+
+  it("excludes archived tasks from unfinishedTopLevelOn and subtasksOf", () => {
+    const tasks = fixture();
+    expect(unfinishedTopLevelOn(tasks, DAY).map((t) => t.id)).toEqual(["parent"]);
+    expect(subtasksOf(tasks, "parent").map((t) => t.id)).toEqual(["live-sub"]);
+    expect(subtasksOf(tasks, "archived-parent")).toEqual([]);
+  });
+
+  it("drops archived tasks from day counts and summaries", () => {
+    const tasks = fixture();
+    const summary = daySummary(tasks, [cat], DAY);
+    expect(summary).toMatchObject({ total: 1, open: 1, done: 0, allDone: false });
+  });
+
+  it("will not move an archived task or its archived subtasks to another day", () => {
+    const tasks = fixture();
+    const result = moveTasksToDay(tasks, ["archived-parent", "parent"], TOMORROW, NOW);
+    expect(result.moved).toEqual(["parent"]);
+    expect(result.tasks.find((t) => t.id === "archived-parent")).toBe(tasks[2]);
+    expect(result.tasks.find((t) => t.id === "archived-sub")).toBe(tasks[3]);
+    expect(result.tasks.find((t) => t.id === "live-sub")!.date).toBe(TOMORROW);
   });
 });

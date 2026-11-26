@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, Library, ListFilter, Menu, Plus, Repeat, Settings2, Sparkles, Tags, Settings, Flame } from "lucide-react";
+import { Archive, Check, Library, ListFilter, Menu, Plus, Repeat, Settings2, Sparkles, Tags, Settings, Flame } from "lucide-react";
 import {
   addDays,
   formatDayTitle,
@@ -26,7 +26,7 @@ import { CalendarArrowRight, CategoryIcon } from "./icons";
 import { DaySummaryCard, WeekSummaryCard } from "./Summaries";
 import { TaskRow } from "./TaskRow";
 
-export type MenuPage = "categories" | "habits" | "library" | "settings";
+export type MenuPage = "categories" | "habits" | "library" | "archive" | "settings";
 
 interface Prefs {
   showCompleted: boolean;
@@ -362,6 +362,7 @@ export function DayView({
                     ["categories", "Categories", Tags],
                     ["habits", "Habits", Flame],
                     ["library", "Library", Library],
+                    ["archive", "Archive", Archive],
                     ["settings", "Settings", Settings],
                   ] as const
                 ).map(([page, label, Icon], i) => (

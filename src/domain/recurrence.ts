@@ -30,14 +30,17 @@ export function ruleMatches(rrule: string, start: ISODate, date: ISODate): boole
 }
 
 /** Occurrences missing for the given days. Pure and idempotent: feed the result
- *  back into `tasks` and a second call returns []. Soft-deleted occurrences still
- *  count as present, so deleting one day's copy does not resurrect it. */
+ *  back into `tasks` and a second call returns []. Soft-deleted or archived
+ *  occurrences still count as present, so removing one day's copy does not
+ *  resurrect it. An archived template stops generating occurrences. */
 export function materializeOccurrences(
   tasks: Task[],
   dates: ISODate[],
   now: string = new Date().toISOString(),
 ): Task[] {
-  const templates = tasks.filter((t) => t.rrule && !t.parentId && !t.seriesId && !t.deletedAt);
+  const templates = tasks.filter(
+    (t) => t.rrule && !t.parentId && !t.seriesId && !t.deletedAt && !t.archivedAt,
+  );
   if (!templates.length) return [];
   const existing = new Set(tasks.filter((t) => t.seriesId).map((t) => `${t.seriesId}|${t.date}`));
   const out: Task[] = [];

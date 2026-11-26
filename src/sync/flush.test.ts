@@ -24,6 +24,7 @@ function op(id: string, title = "Task"): HubOp {
       createdAt: "2026-11-21T00:00:00.000Z",
       updatedAt: "2026-11-21T00:00:00.000Z",
       deletedAt: null,
+      archivedAt: null,
     },
   };
 }

@@ -3,6 +3,7 @@ import { ChevronLeft } from "lucide-react";
 import { addDays, todayISO, type ISODate } from "../domain/dates";
 import { useStore } from "../state/store";
 import { useThemeState } from "../theme/store";
+import { ArchiveView } from "./ArchiveView";
 import { CategoriesView } from "./CategoriesView";
 import { DayView, type MenuPage } from "./DayView";
 import { Flower } from "./Flower";
@@ -14,6 +15,7 @@ const TITLES: Record<MenuPage, string> = {
   categories: "Categories",
   habits: "Habits",
   library: "Library",
+  archive: "Archive",
   settings: "Settings",
 };
 
@@ -61,6 +63,8 @@ function MenuPageView({ page, onBack }: { page: MenuPage; onBack: () => void }) 
           <HabitsView date={todayISO()} />
         ) : page === "library" ? (
           <LibraryView onTitle={setTitle} />
+        ) : page === "archive" ? (
+          <ArchiveView />
         ) : (
           <SettingsView />
         )}

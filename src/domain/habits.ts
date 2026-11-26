@@ -17,7 +17,7 @@ export function habitApplies(habit: Habit, date: ISODate): boolean {
  */
 export function ghostsFor(date: ISODate, habits: Habit[], tasks: Task[]): Habit[] {
   const taken = new Set(
-    tasks.filter((t) => t.date === date && t.habitId && !t.deletedAt).map((t) => t.habitId),
+    tasks.filter((t) => t.date === date && t.habitId && !t.deletedAt && !t.archivedAt).map((t) => t.habitId),
   );
   return habits
     .filter((h) => habitApplies(h, date) && !taken.has(h.id))

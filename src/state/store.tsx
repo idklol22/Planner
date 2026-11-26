@@ -119,6 +119,12 @@ export interface Actions {
   duplicateTask(id: string): string | null;
   /** Soft delete (also deletes subtasks). */
   deleteTask(id: string): void;
+  /** Archive (or restore) a task and its live subtasks. */
+  archiveTask(id: string, archived?: boolean): void;
+  /** Restore an archived task and its subtasks. */
+  restoreTask(id: string): void;
+  /** Undo the last delete/archive/restore by restoring only the snapshotted tasks. */
+  undoTaskChange(): void;
   /** Returns the new subtask id (empty string when nothing was created). */
   addSubtask(parentId: string, title: string): string;
   /** Create missing recurring occurrences for these days (idempotent). */
@@ -185,6 +191,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const dataRef = useRef(data);
   dataRef.current = data;
+  /** Snapshot captured by the last task archive/delete/restore, consumed by undo. */
+  const taskChangeSnapshot = useRef<Task[] | null>(null);
   /** Snapshot captured by the last `deleteCategory`, consumed by undo. */
   const deleteSnapshot = useRef<AppData | null>(null);
 
@@ -237,6 +245,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           ),
         };
       });
+    },
+    [update],
+  );
+
+  /** Stamp (or clear) `archivedAt` on a task and its live subtasks, snapshotting
+   *  the touched objects so a single Undo can restore just those by id. */
+  const archiveTask = useCallback(
+    (id: string, archived = true) => {
+      const before = dataRef.current;
+      const touched = before.tasks.filter(
+        (t) => t.id === id || (t.parentId === id && !t.deletedAt),
+      );
+      if (!touched.some((t) => t.id === id)) return;
+      const stamp = nowISO();
+      const ids = new Set(touched.map((t) => t.id));
+      taskChangeSnapshot.current = touched;
+      update((d) => ({
+        ...d,
+        tasks: d.tasks.map((t) =>
+          ids.has(t.id) ? { ...t, archivedAt: archived ? stamp : undefined, updatedAt: stamp } : t,
+        ),
+      }));
     },
     [update],
   );
@@ -355,6 +385,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             createdAt: stamp,
             updatedAt: stamp,
             deletedAt: undefined,
+            archivedAt: undefined,
           };
           const subs = subtasksOf(d.tasks, id).map((s) => ({
             ...s,
@@ -370,16 +401,31 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         });
         return newId;
       },
+      archiveTask,
+      restoreTask(id) {
+        archiveTask(id, false);
+      },
+      undoTaskChange() {
+        const snapshot = taskChangeSnapshot.current;
+        if (!snapshot) return;
+        taskChangeSnapshot.current = null;
+        update((d) => ({ ...d, tasks: restoreTasks(d.tasks, snapshot) }));
+      },
       deleteTask(id) {
-        update((d) => {
-          const stamp = nowISO();
-          return {
-            ...d,
-            tasks: d.tasks.map((t) =>
-              t.id === id || t.parentId === id ? { ...t, deletedAt: stamp, updatedAt: stamp } : t,
-            ),
-          };
-        });
+        const stamp = nowISO();
+        const ids = new Set(
+          dataRef.current.tasks
+            .filter((t) => t.id === id || t.parentId === id)
+            .map((t) => t.id),
+        );
+        if (!ids.size) return;
+        taskChangeSnapshot.current = dataRef.current.tasks.filter((t) => ids.has(t.id));
+        update((d) => ({
+          ...d,
+          tasks: d.tasks.map((t) =>
+            ids.has(t.id) ? { ...t, deletedAt: stamp, updatedAt: stamp } : t,
+          ),
+        }));
       },
       addSubtask(parentId, title) {
         const clean = title.trim();
@@ -587,9 +633,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (!habit) return null;
         const id = uid("task");
         update((d) => {
-          if (d.tasks.some((t) => t.date === date && t.habitId === habitId && !t.deletedAt)) return d;
+          if (d.tasks.some((t) => t.date === date && t.habitId === habitId && !t.deletedAt && !t.archivedAt)) return d;
           const order = d.tasks
-            .filter((t) => t.date === date && !t.parentId && !t.deletedAt)
+            .filter((t) => t.date === date && !t.parentId && !t.deletedAt && !t.archivedAt)
             .reduce((m, t) => Math.max(m, t.order + 1), 0);
           const task: Task = {
             ...makeTask(date, habit.title, order),

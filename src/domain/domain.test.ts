@@ -57,6 +57,24 @@ describe("migration v1 -> v2", () => {
   });
 });
 
+describe("archived tasks in persistence", () => {
+  it("parseAppData keeps archivedAt on current and older records", () => {
+    const archived = task({ id: "a", archivedAt: "2026-11-21T10:00:00.000Z" });
+    const out = parseAppData({
+      version: 4,
+      tasks: [archived, task({ id: "live" })],
+      categories: [],
+      habits: [],
+      calories: [],
+      goals: [],
+      settings: { handoffFolder: "", learnharnessSubjects: [], dailyCalorieGoal: 2000 },
+    });
+    expect(out.tasks[0].archivedAt).toBe("2026-11-21T10:00:00.000Z");
+    expect(out.tasks[1].archivedAt).toBeUndefined();
+    expect(AppDataSchema.safeParse(out).success).toBe(true);
+  });
+});
+
 describe("recurrence", () => {
   it("matches rules", () => {
     expect(ruleMatches("daily", "2026-11-20", "2026-11-25")).toBe(true);
@@ -69,7 +87,7 @@ describe("recurrence", () => {
     expect(ruleMatches("days:1,3", "2026-11-01", "2026-11-24")).toBe(false);
   });
 
-  it("materialises idempotently and never resurrects deleted days", () => {
+  it("materialises idempotently and never resurrects deleted or archived days", () => {
     const tpl = task({ id: "tpl", rrule: "daily", categoryId: "c1", time: "09:00" });
     const days = ["2026-11-20", "2026-11-21", "2026-11-22"];
     const first = materializeOccurrences([tpl], days);
@@ -80,6 +98,34 @@ describe("recurrence", () => {
     expect(materializeOccurrences(all, days)).toEqual([]);
     const deleted = all.map((t) => (t.date === "2026-11-21" ? { ...t, deletedAt: "x" } : t));
     expect(materializeOccurrences(deleted, days)).toEqual([]);
+    // An archived occurrence counts as present: it never comes back on its own day.
+    const archived = all.map((t) => (t.date === "2026-11-21" ? { ...t, archivedAt: "x" } : t));
+    expect(materializeOccurrences(archived, days)).toEqual([]);
+    // An archived template stops generating new occurrences altogether.
+    expect(materializeOccurrences([{ ...tpl, archivedAt: "x" }], days)).toEqual([]);
+  });
+  it("does not generate from an archived template, and never resurrects an archived occurrence", () => {
+    const tpl = task({ id: "tpl", rrule: "daily", categoryId: "c1" });
+    const days = ["2026-11-20", "2026-11-21", "2026-11-22"];
+    expect(materializeOccurrences([{ ...tpl, archivedAt: "x" }], days)).toEqual([]);
+
+    const first = materializeOccurrences([tpl], days);
+    const archived = first.map((t) => (t.date === "2026-11-21" ? { ...t, archivedAt: "x" } : t));
+    expect(materializeOccurrences([tpl, ...archived], days)).toEqual([]);
+  });
+
+  it("parseAppData keeps archivedAt (old records without it still parse)", () => {
+    const parsed = parseAppData({
+      version: 4,
+      tasks: [{ ...makeTask("2026-11-20", "Archived", 0), archivedAt: "2026-11-21T10:00:00.000Z" }],
+      categories: [],
+      habits: [],
+      calories: [],
+      goals: [],
+      settings: { handoffFolder: "", learnharnessSubjects: [], dailyCalorieGoal: 2000 },
+    });
+    expect(parsed.tasks[0].archivedAt).toBe("2026-11-21T10:00:00.000Z");
+    expect(task({}).archivedAt).toBeUndefined();
   });
 });
 
@@ -108,6 +154,21 @@ describe("day summary and sections", () => {
     const tasks = [task({ id: "1", categoryId: gym.id, done: true })];
     expect(daySummary(tasks, cats, "2026-11-20")).toMatchObject({ allDone: true, color: "#222222" });
     expect(daySummary(tasks, cats, "2026-11-21")).toMatchObject({ total: 0, allDone: false, color: null });
+  });
+
+  it("drops archived tasks and their subtasks from counts", () => {
+    const tasks = [
+      task({ id: "1", categoryId: gym.id, done: true }),
+      task({ id: "2", categoryId: study.id, archivedAt: "2026-11-20T10:00:00.000Z" }),
+      task({ id: "3", categoryId: study.id, parentId: "2" }), // subtask of an archived parent
+    ];
+    expect(daySummary(tasks, cats, "2026-11-20")).toMatchObject({
+      total: 1,
+      open: 0,
+      done: 1,
+      allDone: true,
+      color: "#222222",
+    });
   });
 
   it("groups by category order with uncategorised last and options", () => {

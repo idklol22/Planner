@@ -54,6 +54,7 @@ function task(id: string, updatedAt = T1, title = `Task ${id}`): TaskRow {
     createdAt: T0,
     updatedAt,
     deletedAt: null,
+    archivedAt: null,
   };
 }
 

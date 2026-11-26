@@ -49,6 +49,8 @@ export interface TaskRow {
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
+  /** Archive tombstone; null = live. */
+  archivedAt: string | null;
 }
 
 export interface GoalRow {
