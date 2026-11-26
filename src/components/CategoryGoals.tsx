@@ -50,7 +50,7 @@ export function CategoryGoals({ categoryId, color }: { categoryId: string; color
             if (e.key === "Enter") (e.target as HTMLInputElement).blur();
             if (e.key === "Escape") setEditing(null);
           }}
-          className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none"
+          className="min-w-0 flex-1 bg-transparent text-[16px] text-ink outline-none"
         />
       ) : (
         <button
@@ -136,7 +136,7 @@ export function CategoryGoals({ categoryId, color }: { categoryId: string; color
                     setAdding(false);
                   }
                 }}
-                className="w-full bg-transparent text-[13px] text-ink outline-none placeholder:text-faint"
+                className="w-full bg-transparent text-[16px] text-ink outline-none placeholder:text-faint"
               />
             </li>
           )}

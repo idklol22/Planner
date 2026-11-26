@@ -24,7 +24,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 
 const controlClass =
-  "rounded-lg bg-surface-2 px-3 py-1.5 text-[15px] text-ink outline-none transition-colors hover:bg-surface-3 focus:bg-surface-3";
+  "rounded-lg bg-surface-2 px-3 py-1.5 text-[16px] text-ink outline-none transition-colors hover:bg-surface-3 focus:bg-surface-3";
 
 function Switch({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
@@ -90,7 +90,7 @@ function SheetBody({
 
   return (
     <>
-      <div className="shrink-0 px-4 pb-2 pt-3">
+      <div className="shrink-0 px-4 pb-2 pt-[var(--safe-top)]">
         <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-ink/20 md:hidden" />
         <div className="flex h-9 items-center justify-between">
           {isSub && parent ? (
@@ -124,7 +124,7 @@ function SheetBody({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 pb-6">
+      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-4 pb-6">
         <div className="flex items-start gap-3">
           <div className="pt-1.5">
             <FlowerCheck
@@ -150,7 +150,7 @@ function SheetBody({
         {!isSub && (
           <>
             <div>
-              <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+              <div className="no-scrollbar -mx-4 flex flex-wrap gap-2 px-4 pb-1">
                 {cats.map((c) => {
                   const on = c.id === task.categoryId;
                   return (

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   defaultData,
   makeCategory,
@@ -164,6 +164,8 @@ describe("applySolved", () => {
 });
 
 describe("practiceStats", () => {
+  afterEach(() => vi.useRealTimers());
+
   it("counts solves within the range, by difficulty, and the longest streak", () => {
     const events = [
       solved({
@@ -219,6 +221,8 @@ describe("practiceStats", () => {
   });
 
   it("accepts a tuple, a single day and a rolling number of days", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 10, 22, 12, 0, 0));
     const events = [
       solved({
         problemId: 1,

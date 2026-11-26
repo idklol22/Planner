@@ -178,7 +178,7 @@ function CategoryRow({
                 onChange={(event) =>
                   actions.updateCategory(cat.id, { linkedTopicId: event.target.value || null })
                 }
-                className="mt-2 w-full rounded-xl bg-surface-2 px-3.5 py-2.5 text-[15px] outline-none focus:bg-surface-3 disabled:text-muted"
+                className="mt-2 w-full rounded-xl bg-surface-2 px-3.5 py-2.5 text-[16px] outline-none focus:bg-surface-3 disabled:text-muted"
               >
                 <option value="">No topic</option>
                 {cat.linkedTopicId && !selectedSubject?.topics.some((topic) => topic.id === cat.linkedTopicId) && (

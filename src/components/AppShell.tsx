@@ -43,9 +43,9 @@ function useOnTaskRoute(): boolean {
 function MenuPageView({ page, onBack }: { page: MenuPage; onBack: () => void }) {
   const [title, setTitle] = useState<string | null>(null);
   return (
-    <div className="animate-slide fixed inset-0 z-50 overflow-y-auto overflow-x-hidden bg-[var(--bg)]">
-      <div className="mx-auto w-full max-w-[720px] px-4 pb-12 md:px-6">
-        <header className="sticky top-0 z-10 -mx-4 mb-2 flex items-center gap-2 bg-[var(--bg)]/90 px-3 pb-3 pt-4 backdrop-blur-xl md:-mx-6 md:px-5">
+    <div className="animate-slide fixed inset-0 z-50 overflow-y-auto overflow-x-hidden overscroll-contain bg-[var(--bg)]">
+      <div className="mx-auto w-full max-w-[720px] overscroll-contain px-4 pb-[max(16px,var(--safe-bottom))] md:px-6">
+        <header className="sticky top-0 z-10 -mx-4 mb-2 flex items-center gap-2 bg-[var(--bg)]/90 px-3 pb-3 pt-[calc(16px+var(--safe-top))] backdrop-blur-xl md:-mx-6 md:px-5">
           <button
             onClick={onBack}
             aria-label="Back"
@@ -112,7 +112,7 @@ export function AppShell() {
 
   return (
     <div className="h-dvh overflow-hidden" hidden={onTask}>
-      <main className="h-full overflow-y-auto overflow-x-hidden pb-[var(--safe-bottom)]">
+      <main className="h-full overflow-y-auto overflow-x-hidden overscroll-contain pb-[max(16px,var(--safe-bottom))]">
         <div className="animate-fade mx-auto w-full max-w-[560px] lg:max-w-[1200px]">
           <DayView
             selected={selected}

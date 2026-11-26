@@ -327,7 +327,7 @@ export function SettingsView() {
           id="letcode-category"
           value={data.settings.letcodeCategoryId ?? ""}
           onChange={(event) => actions.updateSettings({ letcodeCategoryId: event.target.value || undefined })}
-          className="inset-field w-full bg-transparent px-3 py-2 text-sm text-ink focus:outline-none"
+          className="inset-field w-full bg-transparent px-3 py-2 text-[16px] text-ink focus:outline-none"
         >
           <option value="">Daily (default)</option>
           {activeCategories.map((c) => (

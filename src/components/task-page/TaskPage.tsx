@@ -59,11 +59,11 @@ export function TaskPage({ taskId }: { taskId: string }) {
 
   return (
     <div
-      className="task-page fixed inset-0 z-50 overflow-y-auto bg-canvas"
+      className="task-page fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-canvas"
       // Keep the day page's single-key shortcuts (n, t, arrows) from firing underneath.
       onKeyDown={(e) => e.key !== "Escape" && e.nativeEvent.stopPropagation()}
     >
-      <div className="sticky top-0 z-10 bg-scrim backdrop-blur-xl">
+      <div className="sticky top-0 z-10 bg-scrim pt-[var(--safe-top)] backdrop-blur-xl">
         <div className="mx-auto flex h-14 w-full max-w-[720px] items-center px-4 md:px-0">
           <button
             onClick={goBack}
@@ -93,7 +93,7 @@ function withAfterBasic<T extends { group?: string }>(items: T[], extra: T): T[]
 }
 
 const chip =
-  "inline-flex h-8 items-center gap-1.5 rounded-lg bg-ink/[0.06] px-2.5 text-[13.5px] text-muted outline-none transition-colors hover:bg-ink/[0.1] hover:text-ink focus:bg-ink/[0.1] focus:text-ink";
+  "inline-flex h-8 items-center gap-1.5 rounded-lg bg-ink/[0.06] px-2.5 text-[16px] text-muted outline-none transition-colors hover:bg-ink/[0.1] hover:text-ink focus:bg-ink/[0.1] focus:text-ink";
 
 function TaskDocument({ task }: { task: Task }) {
   const { data, actions } = useStore();
@@ -241,7 +241,7 @@ function TaskDocument({ task }: { task: Task }) {
   const repeatValue = task.rrule?.startsWith("days:") ? "custom" : (task.rrule ?? "");
 
   return (
-    <article className="mx-auto w-full max-w-[720px] px-4 pb-40 pt-6 md:px-0 md:pt-10">
+    <article className="mx-auto w-full max-w-[720px] px-4 pb-[max(16px,var(--safe-bottom))] pt-6 md:px-0 md:pt-10">
       <div className="flex items-start gap-3">
         <div className="pt-[0.55rem]">
           <FlowerCheck checked={task.done} color={color} onToggle={() => actions.toggleTask(task.id)} size={34} />

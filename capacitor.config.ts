@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: "Planner",
   webDir: "dist",
   ios: {
-    contentInset: "automatic",
+    contentInset: "never",
     backgroundColor: "#000000",
   },
 };

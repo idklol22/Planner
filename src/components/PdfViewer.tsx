@@ -93,7 +93,7 @@ export function PdfViewer({ blob, fileName }: { blob: Blob; fileName: string }) 
             max={Math.max(1, total)}
             value={page}
             onChange={(e) => go(Number(e.target.value) || 1)}
-            className="w-14 rounded-lg bg-surface-2 px-2 py-1 text-center text-ink"
+            className="w-14 rounded-lg bg-surface-2 px-2 py-1 text-center text-[16px] text-ink"
           />
           / {total || "…"}
         </label>
@@ -119,7 +119,7 @@ export function PdfViewer({ blob, fileName }: { blob: Blob; fileName: string }) 
           {error}
         </p>
       ) : (
-        <div className="overflow-auto rounded-2xl bg-surface-2 p-2 text-center">
+        <div className="overflow-auto overscroll-contain rounded-2xl bg-surface-2 p-2 text-center">
           {!doc && <p className="py-10 text-[14px] text-muted">Opening…</p>}
           <canvas ref={canvasRef} className="mx-auto max-w-none bg-white" />
         </div>

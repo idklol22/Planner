@@ -173,7 +173,7 @@ export function NoteEditor({ task }: { task: Task }) {
                   placeholder={
                     "Write notes in Markdown…\n\n- [ ] nested tasks\n$x^2$ inline math, $$blocks$$\n[[wikilinks]] and pasted images"
                   }
-                  className="min-h-[16rem] w-full resize-y rounded-xl border border-line bg-canvas p-4 font-mono text-[13px] leading-7 text-ink outline-none transition-colors placeholder:text-faint focus:border-ink/40"
+                  className="min-h-[16rem] w-full resize-y rounded-xl border border-line bg-canvas p-4 font-mono text-[16px] leading-7 text-ink outline-none transition-colors placeholder:text-faint focus:border-ink/40"
                 />
               ) : (
                 <div className="md-preview min-h-[16rem] rounded-xl border border-line bg-canvas p-5">
