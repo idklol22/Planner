@@ -9,13 +9,11 @@ import { CategoriesView } from "./CategoriesView";
 import { DayView, type MenuPage } from "./DayView";
 import { TaskMark } from "./TaskMark";
 import { HabitsView } from "./HabitsView";
-import { LibraryView } from "./LibraryView";
 import { SettingsView } from "./SettingsView";
 
 const TITLES: Record<MenuPage, string> = {
   categories: "Categories",
   habits: "Habits",
-  library: "Library",
   archive: "Archive",
   settings: "Settings",
 };
@@ -44,7 +42,6 @@ function useOnTaskRoute(): boolean {
 
 /** Full-screen page opened from the menu, with a back arrow. */
 function MenuPageView({ page, onBack }: { page: MenuPage; onBack: () => void }) {
-  const [title, setTitle] = useState<string | null>(null);
   return (
     <div className="animate-slide fixed inset-0 z-50 overflow-y-auto overflow-x-hidden overscroll-contain bg-[var(--bg)]/40">
       <div className="mx-auto w-full max-w-[720px] px-4 pb-[max(16px,var(--safe-bottom))] md:px-6 overscroll-contain">
@@ -52,18 +49,16 @@ function MenuPageView({ page, onBack }: { page: MenuPage; onBack: () => void }) 
           <button
             onClick={onBack}
             aria-label="Back"
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-2 transition-colors hover:bg-surface-3 active:scale-90"
+            className="flex h-11 w-11 items-center justify-center text-muted transition-colors hover:text-ink"
           >
             <ChevronLeft size={20} />
           </button>
-          <h1 className="min-w-0 truncate text-[18px] font-bold tracking-tight">{title ?? TITLES[page]}</h1>
+          <h1 className="min-w-0 truncate text-[18px] font-bold tracking-tight">{TITLES[page]}</h1>
         </header>
         {page === "categories" ? (
           <CategoriesView />
         ) : page === "habits" ? (
           <HabitsView date={todayISO()} />
-        ) : page === "library" ? (
-          <LibraryView onTitle={setTitle} />
         ) : page === "archive" ? (
           <ArchiveView />
         ) : (

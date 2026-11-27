@@ -7,6 +7,36 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/* Sections are flat: spacing separates them, never a card or a shadow. These
+   override the shared glass recipe in theme.css for every `.module` consumer. */
+.module {
+  position: relative;
+  background: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+  color: var(--color-ink);
+}
+.module-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  margin-bottom: 0;
+  padding: 0;
+}
+html[data-theme] .module {
+  background: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
 html,
 body,
 #root {
@@ -118,64 +148,62 @@ button {
 /* ── Completion mark ──────────────────────────────────────────────────── */
 .mark-btn {
   display: inline-flex;
-  min-width: 40px;
-  min-height: 40px;
+  min-width: 44px;
+  min-height: 44px;
   align-items: center;
   justify-content: center;
   border: 0;
   padding: 0;
   background: none;
-  border-radius: 10px;
   flex-shrink: 0;
-  transition: transform 0.12s ease;
-}
-.mark-btn:active {
-  transform: scale(0.86);
 }
 .task-mark {
   overflow: visible;
   flex-shrink: 0;
 }
-/* The tile fills from the bottom, then the tick is written across it. */
-.task-mark-fill {
+/* Open: a faint 1.5px circle. Done: a muted disk with a tick inside it.
+   Only a short fade/scale runs — no fill sweep and no overshoot. */
+.task-mark-disk {
+  fill: var(--color-muted);
+  opacity: 0;
   transform-box: fill-box;
-  transform-origin: bottom;
-  transform: scaleY(0);
-  transition: transform 0.22s cubic-bezier(0.3, 0.7, 0.2, 1);
+  transform-origin: center;
+  transform: scale(0.85);
+  transition: opacity 0.15s ease, transform 0.15s ease;
 }
-.task-mark.on .task-mark-fill {
-  transform: scaleY(1);
+.task-mark-ring {
+  fill: none;
+  stroke: var(--color-faint);
+  stroke-width: 1.5;
+  transition: stroke 0.15s ease;
 }
 .task-mark-tick {
   fill: none;
-  stroke: var(--text);
-  stroke-width: 2.4;
+  stroke: var(--color-canvas);
+  stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-dasharray: 24;
-  stroke-dashoffset: 24;
   opacity: 0;
-  transition: stroke-dashoffset 0.12s ease, opacity 0.1s ease;
+  transition: opacity 0.15s ease;
 }
-.task-mark-tick.under {
-  stroke: var(--bg);
-  stroke-width: 5.2;
+.task-mark.on .task-mark-disk {
+  opacity: 1;
+  transform: scale(1);
+}
+.task-mark.on .task-mark-ring {
+  stroke: var(--color-muted);
 }
 .task-mark.on .task-mark-tick {
-  stroke-dashoffset: 0;
   opacity: 1;
-  transition: stroke-dashoffset 0.24s ease 0.16s, opacity 0.01s linear 0.16s;
 }
 
-/* A finished title is struck through from left to right. */
+/* A finished title is faint and struck through. */
 .task-title {
-  color: var(--text);
-  background: linear-gradient(currentColor, currentColor) 0 55% / 0 1.5px no-repeat;
-  transition: background-size 0.28s ease 0.1s, color 0.2s ease;
+  color: var(--color-ink);
 }
 .task-title.done {
-  color: var(--text-faint);
-  background-size: 100% 1.5px;
+  color: var(--color-faint);
+  text-decoration: line-through;
 }
 
 /* ── Calendar ─────────────────────────────────────────────────────────── */
