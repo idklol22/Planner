@@ -198,6 +198,11 @@ html[data-theme="wabi"] .mod-btn {
   opacity: 0.6;
 }
 
+/* The day's single `.sheet` (recipe in index.css) is painted straight from
+   these role tokens: 96% --surface plus a blur, solid for light and contrast.
+   Its hairline is --border and its text is --color-ink, so it stays readable
+   over every theme and animated scene without per-theme overrides. */
+
 /* ── Module card (LetCode tile) ──────────────────────────────────────────── */
 .module {
   position: relative;

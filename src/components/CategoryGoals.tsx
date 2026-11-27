@@ -1,26 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { achievedGoals, openGoals, reorderedIds } from "../domain/goals";
 import { useStore } from "../state/store";
 import { TaskMark } from "./TaskMark";
 
 /** Persistent goals of one category, independent of the selected day.
- *  Takes no space until there is a goal; the category header opens the input through `adding`. */
-export function CategoryGoals({
-  categoryId,
-  color,
-  adding,
-  onAddingChange: setAdding,
-}: {
-  categoryId: string;
-  color: string;
-  adding: boolean;
-  onAddingChange: (adding: boolean) => void;
-}) {
+ *  Takes no space until there is a goal; new goals come from the one composer. */
+export function CategoryGoals({ categoryId, color }: { categoryId: string; color: string }) {
   const { data, actions } = useStore();
-  const [draft, setDraft] = useState("");
-  const draftValue = useRef("");
-  const committed = useRef(false);
-  const cancelled = useRef(false);
   const [showDone, setShowDone] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
@@ -28,30 +14,6 @@ export function CategoryGoals({
   const editCancelled = useRef(false);
   const open = openGoals(data.goals, categoryId);
   const done = achievedGoals(data.goals, categoryId);
-
-  useEffect(() => {
-    if (adding) return;
-    draftValue.current = "";
-    setDraft("");
-    committed.current = false;
-    cancelled.current = false;
-  }, [adding]);
-
-  function changeDraft(value: string) {
-    draftValue.current = value;
-    setDraft(value);
-  }
-
-  /** Enter adds and stays open; blur adds and closes. Either way, a draft is saved once. */
-  function commit(close: boolean) {
-    if (committed.current || cancelled.current) return;
-    committed.current = true;
-    const text = draftValue.current.trim();
-    if (text) actions.addGoal(categoryId, text);
-    changeDraft("");
-    if (close) setAdding(false);
-    else committed.current = false;
-  }
 
   function saveEdit() {
     const text = editValue.current.trim();
@@ -148,40 +110,11 @@ export function CategoryGoals({
     </li>
   );
 
-  if (open.length === 0 && done.length === 0 && !adding) return null;
+  if (open.length === 0 && done.length === 0) return null;
 
   return (
     <div aria-label="Goals" className="mb-1">
-      {(open.length > 0 || adding) && (
-        <ul>
-          {open.map((g, i) => row(g, i, true))}
-          {adding && (
-            <li className="flex min-h-11 items-center">
-              <input
-                autoFocus
-                value={draft}
-                placeholder="New goal"
-                aria-label="New goal"
-                onChange={(e) => changeDraft(e.target.value)}
-                onBlur={() => commit(true)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    commit(false); // stay open for the next goal
-                  }
-                  if (e.key === "Escape") {
-                    e.stopPropagation();
-                    cancelled.current = true;
-                    changeDraft("");
-                    setAdding(false);
-                  }
-                }}
-                className="w-full bg-transparent text-[16px] text-ink outline-none placeholder:text-faint"
-              />
-            </li>
-          )}
-        </ul>
-      )}
+      {open.length > 0 && <ul>{open.map((g, i) => row(g, i, true))}</ul>}
       {done.length > 0 && (
         <>
           <button

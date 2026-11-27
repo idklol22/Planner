@@ -7,7 +7,8 @@ export interface DaySectionRow {
   ghosts: Habit[];
 }
 
-/** A category with nothing on the day: shown as one quiet text button instead of a block. */
+/** Kept for callers written against the old "empty category" shape. There are
+ *  no longer any empty-category rows: a list with nothing in it is not shown. */
 export interface EmptyCategory {
   id: string;
   name: string;
@@ -19,36 +20,56 @@ export function sectionKey(section: Section): string {
   return section.category?.id ?? INBOX_KEY;
 }
 
+/** The shape returned by `partitionDaySections`: the visible rows, with two
+ *  non-enumerable compatibility aliases (an old `{ filled, empty }` caller
+ *  keeps working; `empty` is always empty now). */
+export type VisibleDaySections = DaySectionRow[] & {
+  readonly filled: DaySectionRow[];
+  readonly empty: EmptyCategory[];
+};
+
 /**
- * Split the day's sections into full blocks and the leftover empty categories.
- * A category counts as full when it has a visible task, a habit ghost, a live
- * goal (open or achieved) or an inline input open on it. Inbox is never listed
- * as an empty category: it is only ever shown when it has content.
+ * The day's visible sections, in order. A category counts as visible when it
+ * has a task, a habit ghost or a live goal (open or achieved). Inbox is only
+ * shown when it actually has content. Empty categories are simply not shown —
+ * adding happens through the one composer, never through a per-list add row.
+ *
+ * The old third argument (the id of an open inline input) is accepted for
+ * compatibility but ignored: the inline inputs no longer exist.
  */
 export function partitionDaySections(
   rows: DaySectionRow[],
   goals: CategoryGoal[],
-  adding: string | null,
-): { filled: DaySectionRow[]; empty: EmptyCategory[] } {
+  _adding?: string | null,
+): VisibleDaySections {
   const goalCategories = new Set(goals.filter((g) => !g.deletedAt).map((g) => g.categoryId));
   const filled: DaySectionRow[] = [];
-  const empty: EmptyCategory[] = [];
 
   for (const row of rows) {
     const cat = row.section.category;
     if (!cat) {
       // Inbox only renders when there is something to put in it.
-      if (row.section.tasks.length || row.ghosts.length || adding === INBOX_KEY) filled.push(row);
+      if (row.section.tasks.length || row.ghosts.length) filled.push(row);
       continue;
     }
-    const occupied =
+    if (
       row.section.tasks.length > 0 ||
       row.ghosts.length > 0 ||
-      goalCategories.has(cat.id) ||
-      adding === cat.id;
-    if (occupied) filled.push(row);
-    else empty.push({ id: cat.id, name: cat.name });
+      goalCategories.has(cat.id)
+    ) {
+      filled.push(row);
+    }
   }
 
-  return { filled, empty };
+  const visible = filled as VisibleDaySections;
+  Object.defineProperties(visible, {
+    filled: { value: visible, enumerable: false },
+    empty: { value: [] as EmptyCategory[], enumerable: false },
+  });
+  return visible;
 }
+
+/** Aliases for call sites that prefer to name what they get back. */
+export const visibleDaySections = partitionDaySections;
+export const visibleSections = partitionDaySections;
+export const sectionsWithContent = partitionDaySections;

@@ -10,6 +10,7 @@ import "./task-page.css";
 import { TASK_KINDS, type Task } from "../../domain/model";
 import { parseDays, REPEAT_OPTIONS } from "../../domain/recurrence";
 import { activeCategories } from "../../domain/tasks";
+import { useKeyboardInset } from "../../lib/keyboard";
 import { addPhoto, resolveFileUrl, scheduleUploads, setFileHubClient } from "../../lib/note-files";
 import { useStore } from "../../state/store";
 import { useSync } from "../../state/sync";
@@ -34,27 +35,6 @@ function flatten(blocks: AnyBlock[]): AnyBlock[] {
 function plainText(content: unknown): string {
   if (!Array.isArray(content)) return "";
   return content.map((n: { type: string; text?: string }) => (n.type === "text" ? (n.text ?? "") : "")).join("");
-}
-
-/** Height of the on-screen keyboard, so the bar can sit just above it. */
-function useKeyboardInset(): number {
-  const [inset, setInset] = useState(0);
-  useEffect(() => {
-    const viewport = window.visualViewport;
-    if (!viewport) return;
-    const measure = () => {
-      const hidden = window.innerHeight - viewport.height - viewport.offsetTop;
-      setInset(hidden > 80 ? Math.round(hidden) : 0);
-    };
-    measure();
-    viewport.addEventListener("resize", measure);
-    viewport.addEventListener("scroll", measure);
-    return () => {
-      viewport.removeEventListener("resize", measure);
-      viewport.removeEventListener("scroll", measure);
-    };
-  }, []);
-  return inset;
 }
 
 /** 44px bar + a little breathing room; the bar adds the safe area itself. */
