@@ -92,6 +92,9 @@ export function getLocalRow(data: AppData, table: PullTable, id: string): PullRo
       const c = data.calories.find((x) => x.id === id);
       return c ? calorieToRow(c) : null;
     }
+    case "health":
+      // Health days live in their own localStorage store, not in AppData.
+      return null;
     default:
       return null;
   }
@@ -197,6 +200,9 @@ export function applyRemoteRow(data: AppData, table: SyncTable, row: SyncRow): A
       if (old) next.createdAt = old.createdAt;
       return { ...data, calories: upsert(data.calories, next) };
     }
+    case "health":
+      // Pulled health rows are ignored here: the health provider owns them.
+      return data;
     default:
       return data;
   }

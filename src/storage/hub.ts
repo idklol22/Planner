@@ -4,7 +4,7 @@
 /** Keepalive requests must stay well below the browser's per-request cap. */
 const KEEPALIVE_MAX_BYTES = 60_000;
 
-export type SyncTable = "category" | "task" | "goal" | "meal" | "message";
+export type SyncTable = "category" | "task" | "goal" | "meal" | "message" | "health";
 
 export interface Note {
   id?: string;
@@ -97,7 +97,52 @@ export interface MessageRow {
   deletedAt: string | null;
 }
 
-export type SyncRow = CategoryRow | TaskRow | GoalRow | MealRow | MessageRow;
+/** One workout inside a health row (Apple Shortcut / HealthKit). */
+export interface HealthWorkout {
+  type: string;
+  minutes: number;
+  kcal: number | null;
+}
+
+/** Per-day Apple Health numbers. `id` is always `health_<date>`. */
+export interface HealthRow {
+  id: string;
+  date: string;
+  activeKcal: number | null;
+  steps: number | null;
+  exerciseMin: number | null;
+  distanceKm: number | null;
+  sleepHours: number | null;
+  restingHr: number | null;
+  workouts: HealthWorkout[];
+  source: "healthkit" | "shortcut";
+  updatedAt: string;
+  deletedAt: string | null;
+}
+
+/** Body of PUT /widget/profile. The widget reads categories/goals from here. */
+export interface WidgetProfile {
+  calorieGoal: number;
+  theme: {
+    bg: string;
+    surface: string;
+    text: string;
+    muted: string;
+    faint: string;
+    accent: string;
+    accentContrast: string;
+    dark: boolean;
+  };
+  goals: Array<{
+    id: string;
+    categoryId: string;
+    title: string;
+    done: boolean;
+    order: number;
+  }>;
+}
+
+export type SyncRow = CategoryRow | TaskRow | GoalRow | MealRow | MessageRow | HealthRow;
 
 /** Read-only tables mirrored from LearnHarness; pulled but never pushed. */
 export type MirrorTable = "h_subject" | "h_topic" | "h_material" | "h_deadline";
@@ -265,6 +310,23 @@ export class HubClient {
   /** Fetch at most 500 changes after `since`. Resume with the returned cursor. */
   pull(since = 0): Promise<PullResult> {
     return this.request<PullResult>(`/sync?since=${encodeURIComponent(String(since))}`);
+  }
+
+  /** Issue a new widget token. Revokes every earlier widget device. */
+  async createWidgetToken(): Promise<string> {
+    const result = await this.request<{ token?: unknown }>("/widget/token", { method: "POST" });
+    if (typeof result?.token !== "string" || !result.token) {
+      throw new HubError("hub did not return a widget token", 502);
+    }
+    return result.token;
+  }
+
+  /** Replace the single widget profile row. */
+  async putWidgetProfile(profile: WidgetProfile): Promise<void> {
+    await this.request("/widget/profile", {
+      method: "PUT",
+      body: JSON.stringify(profile),
+    });
   }
 
   /** Post an event; repeat the same idempotencyKey to deduplicate. */

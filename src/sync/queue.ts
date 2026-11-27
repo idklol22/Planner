@@ -6,7 +6,7 @@ import type { HubOp, PullRow } from "../storage/hub";
 
 export const OUTBOX_KEY = "planner.outbox.v1";
 
-const TABLES: readonly string[] = ["category", "task", "goal", "meal"];
+const TABLES: readonly string[] = ["category", "task", "goal", "meal", "health"];
 
 export interface OutboxStorage {
   getItem(key: string): string | null;

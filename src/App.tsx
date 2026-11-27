@@ -3,10 +3,13 @@ import { AppShell } from "./components/AppShell";
 import { TaskPage } from "./components/task-page/TaskPage";
 import { taskIdFromHash } from "./components/task-page/route";
 import { useHandoff } from "./lib/handoff";
+import { DeeplinkProvider } from "./state/deeplink";
+import { HealthProvider } from "./state/health";
 import { MessagesProvider } from "./state/messages";
 import { StoreProvider, useStore } from "./state/store";
 import { SyncProvider } from "./state/sync";
 import { ToastProvider } from "./state/toast";
+import { WidgetRunner } from "./state/widgets";
 import { Scene } from "./theme/Scene";
 import { useThemeState } from "./theme/store";
 
@@ -40,11 +43,16 @@ export function App() {
     <StoreProvider>
       <SyncProvider>
         <ToastProvider>
-          <MessagesProvider>
-            <Scene />
-            <HandoffRunner />
-            <Routes />
-          </MessagesProvider>
+          <HealthProvider>
+            <DeeplinkProvider>
+              <Scene />
+              <HandoffRunner />
+              <WidgetRunner />
+              <MessagesProvider>
+                <Routes />
+              </MessagesProvider>
+            </DeeplinkProvider>
+          </HealthProvider>
         </ToastProvider>
       </SyncProvider>
     </StoreProvider>

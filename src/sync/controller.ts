@@ -152,6 +152,7 @@ export class SyncController {
   }
 
   applyRemote(table: PullTable, row: PullRow): void {
+    if (table === "health") return; // health days are owned by the health provider
     if (isMirrorTable(table)) {
       this.mirror = applyMirrorRow(this.mirror, table, row as never);
       writeJson(this.o.storage, MIRROR_KEY, this.mirror);
@@ -173,6 +174,13 @@ export class SyncController {
       }
       return true;
     });
+    if (ops.length === 0) return;
+    this.o.outbox.enqueueAll(ops);
+    this.emit();
+  }
+
+  /** Queue ops from a provider that owns data outside AppData (e.g. health days). */
+  enqueue(ops: HubOp[]): void {
     if (ops.length === 0) return;
     this.o.outbox.enqueueAll(ops);
     this.emit();
