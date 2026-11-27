@@ -1,0 +1,50 @@
+diff --git a/Sources/Models/Entitlement.swift b/Sources/Models/Entitlement.swift
+index 9ec1c78..bc9b3bb 100644
+--- a/Sources/Models/Entitlement.swift
++++ b/Sources/Models/Entitlement.swift
+@@ -52,9 +52,11 @@ public extension Entitlement {
+     static let pushNotifications: Entitlement               = "aps-environment"
+     static let gameCenter: Entitlement                      = "game-center"
+     static let inAppPurchase: Entitlement                   = "in-app-purchase"
++    static let healthKit: Entitlement                       = "com.apple.developer.healthkit"
+ 
+     static let freeEntitlements: Set<Entitlement> = [
+         .appGroups,
++        .healthKit,
+         .interAppAudio,
+         .getTaskAllow,
+         .increasedMemoryLimit,
+diff --git a/Sources/Models/Feature.swift b/Sources/Models/Feature.swift
+index 554fc75..867346a 100644
+--- a/Sources/Models/Feature.swift
++++ b/Sources/Models/Feature.swift
+@@ -46,6 +46,7 @@ public struct Feature: RawRepresentable, Hashable, Codable, Sendable, Expressibl
+         case .pushNotifications:               self = .pushNotifications
+         case .gameCenter:                      self = .gameCenter
+         case .inAppPurchase:                   self = .inAppPurchase
++        case .healthKit:                       self = .healthKit
+         default:
+             return nil
+         }
+@@ -54,6 +55,7 @@ public struct Feature: RawRepresentable, Hashable, Codable, Sendable, Expressibl
+ 
+ public extension Feature {
+     static let appGroups: Feature                       = "APG3427HIY"
++    static let healthKit: Feature                       = "HK421J6T7P"
+     static let gameCenter: Feature                      = "gameCenter"
+     static let inAppPurchase: Feature                   = "inAppPurchase"
+     static let pushNotifications: Feature               = "push"
+@@ -77,11 +79,13 @@ public extension Feature {
+ 
+     static let freeFeatures: Set<Feature> = [
+         .appGroups,
++        .healthKit,
+         .interAppAudio
+     ]
+ 
+     static let paidFeatures: Set<Feature> = [
+         .appGroups,
++        .healthKit,
+         .interAppAudio,
+         .gameCenter,
+         .inAppPurchase,

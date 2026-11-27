@@ -1,0 +1,79 @@
+name: SideStore with HealthKit
+
+# Builds the official SideStore source (pinned) plus tools/sidestore-health/healthkit.patch,
+# so apps that declare HealthKit keep it when signed with your own Apple Account.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - sidestore-health
+
+permissions:
+  contents: read
+
+env:
+  # SideStore 0.6.4 and the signing library revision that release uses.
+  SIDESTORE_SHA: f93a95c079057090bea355453ef24f6e8668dfa9
+  SIDESIGN_SHA: 7f818429fec3c8d7b63871b8bfdf063603cd2115
+
+jobs:
+  build:
+    name: Build SideStore-HealthKit.ipa
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - name: Check out this repository
+        uses: actions/checkout@v4
+
+      - name: Check out the official SideStore source
+        uses: actions/checkout@v4
+        with:
+          repository: SideStore/SideStore
+          ref: ${{ env.SIDESTORE_SHA }}
+          path: sidestore
+          submodules: recursive
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Apply the HealthKit patch
+        run: |
+          test "$(git -C sidestore rev-parse HEAD)" = "$SIDESTORE_SHA" || { echo "::error::Unexpected SideStore revision"; exit 1; }
+          test "$(git -C sidestore/Dependencies/SideSign rev-parse HEAD)" = "$SIDESIGN_SHA" || { echo "::error::Unexpected SideSign revision"; exit 1; }
+          git -C sidestore/Dependencies/SideSign apply --verbose "$GITHUB_WORKSPACE/tools/sidestore-health/healthkit.patch" || { echo "::error::The patch did not apply"; exit 1; }
+
+      - name: Check the patched capability list
+        run: |
+          models=sidestore/Dependencies/SideSign/Sources/Models
+          cp tools/sidestore-health/check.swift "$RUNNER_TEMP/main.swift"
+          swiftc -swift-version 5 -o "$RUNNER_TEMP/check" "$models/Feature.swift" "$models/Entitlement.swift" "$models/Team.swift" "$models/Account.swift" "$RUNNER_TEMP/main.swift" 2> check.log || { grep -E "error:" check.log | head -8 | sed 's/^/::error::/'; exit 1; }
+          "$RUNNER_TEMP/check"
+
+      - name: Select Xcode
+        run: |
+          dir=$(ls -d /Applications/Xcode_26.4*.app /Applications/Xcode_26.2*.app 2>/dev/null | head -n 1 || true)
+          if [ -n "$dir" ]; then sudo xcode-select -s "$dir/Contents/Developer"; fi
+          xcodebuild -version
+
+      - name: Install build tools
+        run: brew install ldid xcbeautify
+
+      # The same steps SideStore's own release uses: archive unsigned, fake-sign to keep entitlements, zip.
+      - name: Build SideStore
+        working-directory: sidestore
+        run: |
+          mkdir -p build/logs
+          if ! { make -B build > build/logs/build.log 2>&1 && make fakesign >> build/logs/build.log 2>&1 && make ipa >> build/logs/build.log 2>&1; }; then
+            grep -E "(error|fatal error):" build/logs/build.log | sort -u | head -n 8 | sed 's/^/::error::/'
+            echo "::error::SideStore build failed. $(tail -n 5 build/logs/build.log | tr '\n' ' ' | cut -c1-800)"
+            exit 1
+          fi
+          test -f SideStore.ipa || { echo "::error::SideStore.ipa was not produced"; exit 1; }
+          cp SideStore.ipa "$GITHUB_WORKSPACE/SideStore-HealthKit.ipa"
+          ls -lh "$GITHUB_WORKSPACE/SideStore-HealthKit.ipa"
+
+      - name: Upload SideStore-HealthKit.ipa
+        uses: actions/upload-artifact@v4
+        with:
+          name: SideStore-HealthKit
+          path: SideStore-HealthKit.ipa
+          if-no-files-found: error
