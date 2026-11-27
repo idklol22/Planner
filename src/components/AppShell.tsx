@@ -43,9 +43,9 @@ function useOnTaskRoute(): boolean {
 /** Full-screen page opened from the menu, with a back arrow. */
 function MenuPageView({ page, onBack }: { page: MenuPage; onBack: () => void }) {
   return (
-    <div className="animate-slide fixed inset-0 z-50 overflow-y-auto overflow-x-hidden overscroll-contain bg-[var(--bg)]/40">
-      <div className="mx-auto w-full max-w-[720px] px-4 pb-[max(16px,var(--safe-bottom))] md:px-6 overscroll-contain">
-        <header className="sticky top-0 z-10 -mx-4 mb-2 flex shrink-0 items-center gap-2 bg-[var(--bg)]/90 px-3 pb-3 pt-[calc(16px+var(--safe-top))] backdrop-blur-xl md:-mx-6 md:px-5">
+    <div className="animate-slide fixed inset-0 z-50 overflow-y-auto overflow-x-hidden overscroll-contain">
+      <div className="mx-auto flex min-h-full w-full max-w-[720px] flex-col overscroll-contain">
+        <header className="flex shrink-0 items-center gap-2 px-3 pb-3 pt-[calc(16px+var(--safe-top))] md:px-5">
           <button
             onClick={onBack}
             aria-label="Back"
@@ -55,15 +55,19 @@ function MenuPageView({ page, onBack }: { page: MenuPage; onBack: () => void }) 
           </button>
           <h1 className="min-w-0 truncate text-[18px] font-bold tracking-tight">{TITLES[page]}</h1>
         </header>
-        {page === "categories" ? (
-          <CategoriesView />
-        ) : page === "habits" ? (
-          <HabitsView date={todayISO()} />
-        ) : page === "archive" ? (
-          <ArchiveView />
-        ) : (
-          <SettingsView />
-        )}
+        <div className="sheet flex-1">
+          <div className="px-3 pb-[max(24px,var(--safe-bottom))] pt-4 md:px-5">
+            {page === "categories" ? (
+              <CategoriesView />
+            ) : page === "habits" ? (
+              <HabitsView date={todayISO()} />
+            ) : page === "archive" ? (
+              <ArchiveView />
+            ) : (
+              <SettingsView />
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -123,17 +127,15 @@ export function AppShell() {
 
   return (
     <div className="h-dvh overflow-hidden" hidden={onTask}>
-      <main
-        hidden={!!page}
-        className="h-full overflow-y-auto overflow-x-hidden overscroll-contain pb-[max(16px,var(--safe-bottom))]"
-      >
-        <div className="animate-fade mx-auto w-full max-w-[560px] lg:max-w-[1200px]">
+      <main hidden={!!page} className="h-full overflow-y-auto overflow-x-hidden overscroll-contain">
+        <div className="animate-fade mx-auto flex min-h-full w-full max-w-[560px] flex-col lg:max-w-[1200px]">
           <DayView
             selected={selected}
             onSelect={setSelected}
             addSignal={addSignal}
             onOpenPage={setPage}
             onManageCategories={() => setPage("categories")}
+            active={!page && !onTask}
           />
         </div>
       </main>
