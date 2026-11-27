@@ -1,76 +1,139 @@
-/* BlockNote in the app's true-black theme, Notion-like reading typography. */
+/* Flat, monochrome note screen. No cards, pills, shadows or decorative borders. */
+
 .planner-editor.bn-container {
-  --bn-colors-editor-text: var(--text);
-  --bn-colors-editor-background: var(--bg);
-  --bn-colors-menu-text: var(--text);
-  --bn-colors-menu-background: var(--surface-raised);
-  --bn-colors-tooltip-text: var(--text);
-  --bn-colors-tooltip-background: var(--surface-raised);
-  --bn-colors-hovered-text: var(--text);
-  --bn-colors-hovered-background: var(--surface-2);
-  --bn-colors-selected-text: var(--text);
-  --bn-colors-selected-background: var(--surface-raised);
-  --bn-colors-disabled-text: var(--text-faint);
-  --bn-colors-disabled-background: var(--surface-raised);
-  --bn-colors-shadow: var(--scrim);
-  --bn-colors-border: var(--border);
-  --bn-colors-side-menu: var(--text-faint);
-  --bn-font-family: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
-  --bn-border-radius: 12px;
-  background: var(--bg);
+  --bn-colors-editor-text: var(--color-ink);
+  --bn-colors-editor-background: var(--color-canvas);
+  --bn-colors-menu-text: var(--color-ink);
+  --bn-colors-menu-background: var(--color-raised);
+  --bn-colors-tooltip-text: var(--color-ink);
+  --bn-colors-tooltip-background: var(--color-raised);
+  --bn-colors-hovered-text: var(--color-ink);
+  --bn-colors-hovered-background: var(--color-surface-2);
+  --bn-colors-selected-text: var(--color-ink);
+  --bn-colors-selected-background: var(--color-raised);
+  --bn-colors-disabled-text: var(--color-faint);
+  --bn-colors-disabled-background: var(--color-raised);
+  --bn-colors-shadow: transparent;
+  --bn-colors-border: var(--color-line);
+  --bn-colors-side-menu: var(--color-faint);
+  --bn-font-family: var(--font-sans);
+  --bn-border-radius: 0;
+  background: var(--color-canvas);
 }
 
 .planner-editor .bn-editor {
   padding-inline: 0;
-  font-size: 15px;
-  line-height: 1.6;
-  background: var(--bg);
+  font-size: 15.5px;
+  line-height: 1.55;
+  color: var(--color-ink);
+  background: var(--color-canvas);
+  overflow-x: hidden;
 }
+
 .planner-editor .bn-block-content {
-  padding-block: 2px;
+  padding-block: 1px;
+}
+.planner-editor .bn-block-outer {
+  margin-block: 0;
+}
+
+/* Headings: readable, not enormous. */
+.planner-editor [data-content-type="heading"] {
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  margin-top: 0.55em;
+  margin-bottom: 0.1em;
 }
 .planner-editor [data-content-type="heading"][data-level="1"] {
-  font-size: 1.9em;
+  font-size: 1.35em;
   font-weight: 700;
-  letter-spacing: -0.02em;
-  margin-top: 0.8em;
 }
 .planner-editor [data-content-type="heading"][data-level="2"] {
-  font-size: 1.5em;
-  font-weight: 650;
-  letter-spacing: -0.015em;
-  margin-top: 0.6em;
+  font-size: 1.18em;
 }
 .planner-editor [data-content-type="heading"][data-level="3"] {
-  font-size: 1.22em;
-  font-weight: 650;
-  margin-top: 0.4em;
+  font-size: 1.05em;
 }
+
+/* Tight lists; all indentation stays inside the note column. */
+.planner-editor .bn-editor ul,
+.planner-editor .bn-editor ol {
+  margin: 0;
+  padding-left: 1.15em;
+}
+.planner-editor .bn-editor li {
+  margin: 0;
+  padding: 0;
+}
+.planner-editor .bn-block-group .bn-block-group {
+  margin-left: 1.15em;
+}
+
 .planner-editor [data-content-type="quote"] blockquote {
-  border-left: 3px solid var(--border-strong);
-  margin: 0.3em 0;
-  padding-left: 1em;
-  color: var(--text-muted);
+  border-left: 1px solid var(--color-line);
+  margin: 0.25em 0;
+  padding-left: 0.9em;
+  color: var(--color-muted);
 }
+
+.planner-editor a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Code and tables scroll inside themselves - the page never does. */
 .planner-editor [data-content-type="codeBlock"] {
-  background: var(--surface-raised);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  font-family: "JetBrains Mono Variable", ui-monospace, monospace;
-  font-size: 14px;
+  max-width: 100%;
+  background: transparent;
+  border: 0;
+  font-family: var(--font-mono);
+  font-size: 13.5px;
 }
-.planner-editor code {
-  background: var(--hover-strong);
-  border-radius: 5px;
-  padding: 0.1em 0.35em;
-  font-family: "JetBrains Mono Variable", ui-monospace, monospace;
-  font-size: 0.88em;
+.planner-editor [data-content-type="codeBlock"] pre,
+.planner-editor [data-content-type="codeBlock"] code {
+  max-width: 100%;
+  overflow-x: auto;
+  background: transparent;
+  border: 0;
+  padding: 4px 0;
+  font-family: var(--font-mono);
+  font-size: inherit;
 }
+.planner-editor :not(pre) > code {
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  text-decoration: underline;
+  text-decoration-color: var(--color-line);
+  text-underline-offset: 3px;
+}
+.planner-editor .tableWrapper {
+  max-width: 100% !important;
+  overflow-x: auto !important;
+}
+.planner-editor table {
+  border-collapse: collapse;
+  width: max-content;
+  max-width: none;
+}
+.planner-editor th,
+.planner-editor td {
+  border: 1px solid var(--color-line);
+  padding: 4px 7px;
+  vertical-align: top;
+}
+.planner-editor th {
+  font-weight: 600;
+}
+
 /* Photos: full column width, never a horizontal scrollbar or resize handles. */
 .planner-editor [data-content-type="image"] {
   width: 100%;
-  margin-block: 10px;
   max-width: 100%;
+  margin-block: 8px;
 }
 .planner-editor [data-content-type="image"] .bn-block-content {
   padding-block: 0;
@@ -87,21 +150,139 @@
   width: 100% !important;
   max-width: 100%;
   height: auto;
-  border: 1px solid var(--border);
-  border-radius: 10px;
   object-fit: contain;
   cursor: zoom-in;
 }
 .planner-editor [data-content-type="image"] .bn-resize-handle {
   display: none !important;
 }
+
 .note-editor {
   min-width: 0;
+  max-width: 100%;
   overflow-x: hidden;
 }
 .planner-editor .bn-inline-content:has(> .ProseMirror-trailingBreak:only-child)::before,
 .planner-editor [data-is-empty-and-focused] .bn-inline-content::before {
-  color: var(--text-faint);
+  color: var(--color-faint);
+}
+
+/* Properties: one wrapping line of muted text, no boxes and no icons. */
+.property-control {
+  position: relative;
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--color-muted);
+}
+.property-dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+}
+/* Invisible native control on top keeps the iOS pickers reachable. */
+.property-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* Keyboard bar: one flat 44px row above the keyboard. */
+.keyboard-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  background: var(--color-canvas);
+  border-top: 1px solid var(--color-line);
+}
+.keyboard-bar-row {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr)) auto;
+  align-items: center;
+  gap: 2px;
+  height: 44px;
+  padding-inline: 4px;
+}
+.bar-button {
+  display: flex;
+  min-width: 0;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 15px;
+  line-height: 1;
+}
+.bar-button[aria-pressed="true"] {
+  color: var(--color-accent);
+}
+.bar-button:disabled {
+  opacity: 0.4;
+}
+.bar-button.bar-bold {
+  font-weight: 700;
+}
+.bar-button.bar-italic {
+  font-family: Georgia, serif;
+  font-style: italic;
+}
+.bar-button.bar-done {
+  padding-inline: 8px;
+  font-size: 14px;
+  color: var(--color-ink);
+}
+
+.photo-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgb(0 0 0 / 90%);
+}
+.photo-viewer-image {
+  max-height: 78vh;
+  max-width: 100%;
+  object-fit: contain;
+}
+.photo-viewer-close {
+  position: absolute;
+  top: calc(10px + var(--safe-top));
+  right: 16px;
+  display: flex;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--color-ink);
+}
+.photo-viewer-remove {
+  position: absolute;
+  bottom: calc(16px + var(--safe-bottom));
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  padding-inline: 20px;
+  border: 0;
+  background: transparent;
+  color: var(--color-rose);
+  font-size: 14px;
 }
 
 /* Task block (bound to a subtask) */
@@ -117,9 +298,9 @@
   padding-top: 1px;
 }
 .task-block[data-checked="true"] .inline-content {
-  color: var(--text-faint);
+  color: var(--color-faint);
   text-decoration: line-through;
-  text-decoration-color: var(--text-faint);
+  text-decoration-color: var(--color-faint);
 }
 .task-check {
   flex: none;
@@ -127,7 +308,7 @@
   padding: 0;
   border: 0;
   background: none;
-  color: var(--text);
+  color: var(--color-ink);
   line-height: 0;
   transition: transform 0.12s ease;
 }
@@ -137,13 +318,13 @@
 .task-check-ring {
   rx: 5.5px;
   fill: none;
-  stroke: var(--border-strong);
+  stroke: var(--color-line-2);
   stroke-width: 1.8;
   transition: fill 0.15s ease, stroke 0.15s ease;
 }
 .task-check-tick {
   fill: none;
-  stroke: var(--bg);
+  stroke: var(--color-canvas);
   stroke-width: 2.2;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -151,30 +332,33 @@
   transition: opacity 0.12s ease;
 }
 .task-block[data-checked="true"] .task-check-ring {
-  fill: var(--text);
-  stroke: var(--text);
+  fill: var(--color-ink);
+  stroke: var(--color-ink);
 }
 .task-block[data-checked="true"] .task-check-tick {
   opacity: 1;
 }
 
-/* Inline maths */
+/* Maths */
+.display-math {
+  width: 100%;
+  overflow-x: auto;
+  padding-block: 6px;
+  text-align: center;
+}
 .math-chip {
   cursor: pointer;
-  border-radius: 6px;
-  padding: 0 3px;
-  transition: background 0.12s ease;
-}
-.math-chip:hover {
-  background: var(--hover-strong);
+  border-radius: 0;
+  padding: 0 2px;
 }
 .math-input {
-  background: var(--surface-raised);
-  color: var(--text);
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  padding: 0 6px;
-  font-family: "JetBrains Mono Variable", ui-monospace, monospace;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  border: 0;
+  border-bottom: 1px solid var(--color-line);
+  border-radius: 0;
+  padding: 0 4px;
+  font-family: var(--font-mono);
   font-size: 16px;
   outline: none;
 }

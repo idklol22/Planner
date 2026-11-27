@@ -40,15 +40,32 @@ export const taskItemBlock = createReactBlockSpec(
   },
 );
 
-function Katex({ latex }: { latex: string }) {
+function Katex({ latex, display = false }: { latex: string; display?: boolean }) {
   let html = "";
   try {
-    html = katex.renderToString(latex || "\\square", { throwOnError: false, output: "html" });
+    html = katex.renderToString(latex || "\\square", { throwOnError: false, output: "html", displayMode: display });
   } catch {
     html = latex;
   }
   return <span dangerouslySetInnerHTML={{ __html: html }} />;
 }
+
+/** Block-level maths, used for `$$...$$` in Markdown notes. */
+export const displayMathBlock = createReactBlockSpec(
+  {
+    type: "displayMath",
+    propSchema: { latex: { default: "" } },
+    content: "none",
+  },
+  {
+    render: ({ block }) => (
+      <div className="display-math">
+        <Katex latex={block.props.latex} display />
+      </div>
+    ),
+    toExternalHTML: ({ block }) => <div>{`$$${block.props.latex}$$`}</div>,
+  },
+);
 
 /** Inline maths. Typing `$x^2$` converts to this node; click to edit. */
 export const mathInline = createReactInlineContentSpec(
@@ -118,7 +135,7 @@ function MathChip({
 }
 
 export const schema = BlockNoteSchema.create({
-  blockSpecs: { ...defaultBlockSpecs, taskItem: taskItemBlock() },
+  blockSpecs: { ...defaultBlockSpecs, taskItem: taskItemBlock(), displayMath: displayMathBlock() },
   inlineContentSpecs: { ...defaultInlineContentSpecs, math: mathInline },
 });
 

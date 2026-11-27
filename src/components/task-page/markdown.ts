@@ -56,6 +56,8 @@ function blockToText(block: Json, number: number): string {
       const lang = block.props?.language && block.props.language !== "text" ? block.props.language : "";
       return "```" + lang + "\n" + text + "\n```";
     }
+    case "displayMath":
+      return `$$${block.props?.latex ?? ""}$$`;
     case "image": {
       const url = block.props?.url ?? "";
       if (!url) return "";
