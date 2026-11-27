@@ -52,7 +52,7 @@ struct CaloriesWidgetView: View {
             Spacer(minLength: 2)
             if let last = calories.lastWidgetEntry {
                 interact(.undoCalories(entryId: last.id), AnyView(
-                    Text("Undo \(WidgetLogic.number(last.kcal))")
+                    Text(wide ? "Undo \(WidgetLogic.number(last.kcal))" : "Undo")
                         .font(.system(size: 14, weight: .medium).monospacedDigit())
                         .foregroundColor(palette.muted)
                         .frame(height: 32)
