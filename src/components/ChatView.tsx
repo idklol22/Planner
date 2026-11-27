@@ -85,7 +85,6 @@ export function ChatView() {
   const [subjectId, setSubjectId] = useState("");
   const [draft, setDraft] = useState("");
   const [files, setFiles] = useState<PreparedFile[]>([]);
-  const [voiceDraft, setVoiceDraft] = useState<PreparedFile | null>(null);
   const [inlineError, setInlineError] = useState<string | null>(null);
   const [viewer, setViewer] = useState<string | null>(null);
   const [urls, setUrls] = useState<Record<string, string>>({});
@@ -94,6 +93,7 @@ export function ChatView() {
   const [elapsed, setElapsed] = useState(0);
   const urlCache = useRef(new Map<string, string>());
   const pendingUrls = useRef(new Set<string>());
+  const hubGeneration = useRef(0);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
@@ -166,11 +166,26 @@ export function ChatView() {
     node.style.height = `${Math.min(node.scrollHeight, 120)}px`;
   }, [draft]);
 
+  // Cache is keyed by content hash and belongs to one hub only. Declared before
+  // the download effect so a hub change resets first and then refetches.
+  useEffect(
+    () => () => {
+      hubGeneration.current += 1;
+      pendingUrls.current.clear();
+      for (const url of urlCache.current.values()) URL.revokeObjectURL(url);
+      urlCache.current.clear();
+      setUrls({});
+      setViewer(null);
+      setFiles([]);
+    },
+    [sync.client],
+  );
+
   useEffect(() => {
     const client = sync.client;
     if (!client) return;
-    let alive = true;
-    const added = new Set<string>();
+    // A new thread (every poll) must not cancel a download that is still running.
+    const generation = hubGeneration.current;
     for (const attachment of messages.thread.flatMap((row) => row.attachments)) {
       const mime = attachment.mime;
       if (!mime.startsWith("image/") && !mime.startsWith("audio/")) continue;
@@ -183,11 +198,10 @@ export function ChatView() {
       }
       if (pendingUrls.current.has(sha)) continue;
       pendingUrls.current.add(sha);
-      added.add(sha);
       void client
         .getFile(sha)
         .then((blob) => {
-          if (!alive) return;
+          if (generation !== hubGeneration.current) return;
           const url = URL.createObjectURL(blob);
           urlCache.current.set(sha, url);
           setUrls((current) => ({ ...current, [sha]: url }));
@@ -196,40 +210,22 @@ export function ChatView() {
           // A missing attachment is shown as a placeholder, never breaks the thread.
         })
         .finally(() => {
-          // A superseded run must not clear the pending flag of its replacement.
-          if (alive) pendingUrls.current.delete(sha);
+          // A download for an old hub must not clear the new hub's pending flag.
+          if (generation === hubGeneration.current) pendingUrls.current.delete(sha);
         });
     }
-    return () => {
-      alive = false;
-      for (const sha of added) pendingUrls.current.delete(sha);
-    };
   }, [messages.thread, sync.client]);
 
-  // Cache is keyed by content hash and belongs to one hub only.
-  useEffect(() => {
-    if (viewer) {
-      URL.revokeObjectURL(viewer);
-      setViewer(null);
-    }
-    pendingUrls.current.clear();
-    for (const url of urlCache.current.values()) URL.revokeObjectURL(url);
-    urlCache.current.clear();
-    setUrls({});
-    setFiles([]);
-    setVoiceDraft(null);
-    // The viewer is read at hub-change time, not tracked as a trigger.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sync.client]);
-
+  // Leaving the page mid-recording discards the memo and releases the microphone.
   useEffect(
     () => () => {
       if (timerRef.current !== null) window.clearInterval(timerRef.current);
       const recorder = recorderRef.current;
-      if (recorder && recorder.state !== "inactive") recorder.stop();
-      pendingUrls.current.clear();
-      for (const url of urlCache.current.values()) URL.revokeObjectURL(url);
-      urlCache.current.clear();
+      if (!recorder) return;
+      recorderRef.current = null;
+      recorder.onstop = null;
+      if (recorder.state !== "inactive") recorder.stop();
+      for (const track of recorder.stream.getTracks()) track.stop();
     },
     [],
   );
@@ -239,7 +235,6 @@ export function ChatView() {
     recorderRef.current = null;
     setRecording(false);
     setElapsed(0);
-    setVoiceDraft(null);
     setInlineError(null);
     if (timerRef.current !== null) {
       window.clearInterval(timerRef.current);
@@ -307,7 +302,7 @@ export function ChatView() {
 
   async function submitMessage(textValue: string, extra: PreparedFile[]) {
     if (sending) return;
-    const all = [...files, ...(voiceDraft ? [voiceDraft] : []), ...extra];
+    const all = [...files, ...extra];
     const text = textValue.trim();
     const check = validateOutgoing({
       text: textValue,
@@ -382,6 +377,7 @@ export function ChatView() {
     }
   }
 
+  /** `sendIt` false is Cancel: the recording is thrown away. */
   async function finishRecording(sendIt: boolean) {
     const recorder = recorderRef.current;
     if (!recorder || sending) return;
@@ -404,22 +400,24 @@ export function ChatView() {
         timerRef.current = null;
       }
     }
+    if (!sendIt) return;
     if (!blob || blob.size === 0) {
-      if (sendIt) notify("No audio was recorded", "error");
+      notify("No audio was recorded", "error");
       return;
     }
     const extension = blob.type.includes("mp4") ? "m4a" : "webm";
     try {
       const prepared = await prepareBlob(blob, `voice-${Date.now()}.${extension}`, duration);
-      if (sendIt) await submitMessage(draft, [prepared]);
-      else setVoiceDraft(prepared);
+      // Staged first, so a failed send keeps the memo; success clears the draft.
+      setFiles((current) => [...current, prepared]);
+      await submitMessage(draft, [prepared]);
     } catch {
       notify("Could not prepare the voice memo", "error");
     }
   }
 
   const linkText = harnessStatus(messages.configured, harnessLink(sync.mirror.subjects));
-  const selectedSubject = subjects.find((subject) => subject.id === subjectId)?.name ?? null;
+  const subjectName = (id: string | null) => subjects.find((subject) => subject.id === id)?.name ?? null;
   const groups = groupByDay(messages.thread, dayLabel);
 
   return (
@@ -430,9 +428,6 @@ export function ChatView() {
 
       {!messages.configured ? null : (
         <>
-          <div className="mb-2 shrink-0">
-            <Chip tone="accent">{selectedSubject ?? "No subject"}</Chip>
-          </div>
           <select
             aria-label="Subject"
             value={subjectId}
@@ -491,8 +486,14 @@ export function ChatView() {
                   <div className="space-y-2">
                     {group.rows.map((row) => {
                       const mine = row.sender === "planner";
+                      const subject = subjectName(row.subjectId);
                       return (
                         <div key={row.id} className={`flex flex-col ${mine ? "items-end" : "items-start"}`}>
+                          {subject && (
+                            <span className="mb-1">
+                              <Chip tone="accent">{subject}</Chip>
+                            </span>
+                          )}
                           <div
                             className={`max-w-[82%] rounded-2xl p-3 text-[14px] leading-relaxed ${
                               mine
@@ -532,7 +533,7 @@ export function ChatView() {
                                         key={attachment.sha256}
                                         controls
                                         src={url}
-                                        className="min-h-10 w-full"
+                                        className="h-10 w-[240px] max-w-full"
                                         aria-label={attachment.name}
                                       />
                                     );
@@ -565,7 +566,7 @@ export function ChatView() {
                 {inlineError}
               </p>
             )}
-            {(files.length > 0 || voiceDraft) && (
+            {files.length > 0 && (
               <div className="mb-2 flex flex-wrap gap-2">
                 {files.map((file, index) => (
                   <Chip key={`${file.sha256}-${index}`}>
@@ -575,24 +576,11 @@ export function ChatView() {
                       aria-label={`Remove ${file.name}`}
                       className="flex items-center gap-1 hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
                     >
-                      {file.name}
+                      {file.durationSec === undefined ? file.name : "Voice memo"}
                       <X size={12} />
                     </button>
                   </Chip>
                 ))}
-                {voiceDraft && (
-                  <Chip tone="accent">
-                    <button
-                      type="button"
-                      onClick={() => setVoiceDraft(null)}
-                      aria-label="Remove voice memo"
-                      className="flex items-center gap-1 hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
-                    >
-                      Voice memo
-                      <X size={12} />
-                    </button>
-                  </Chip>
-                )}
               </div>
             )}
 

@@ -215,7 +215,14 @@ describe("moveUnfinishedToToday", () => {
 
     const result = moveUnfinishedToToday(input, DAY, TODAY, NOW);
 
-    expect(restoreTasks(result.tasks, result.previous)).toEqual(original);
+    // Everything is back, with a newer updatedAt so sync keeps the restore.
+    const later = "2026-03-03T12:00:00.000Z";
+    const restored = restoreTasks(result.tasks, result.previous, later);
+    expect(restored.find((t) => t.id === "parent")!.updatedAt).toBe(later);
+    expect(restored.find((t) => t.id === "done")).toBe(done);
+    expect(restored.map((t) => ({ ...t, updatedAt: "" }))).toEqual(
+      original.map((t) => ({ ...t, updatedAt: "" })),
+    );
     expect(input).toEqual(original);
     expect(input[0]).toBe(parent);
     expect(input[1]).toBe(liveSub);

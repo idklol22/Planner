@@ -52,7 +52,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={notify}>
       {children}
-      <div className="pointer-events-none fixed left-1/2 top-5 z-[100] flex -translate-x-1/2 flex-col items-center gap-2">
+      <div className="pointer-events-none fixed left-1/2 top-[calc(12px+var(--safe-top))] z-[100] flex w-max max-w-[calc(100vw-32px)] -translate-x-1/2 flex-col items-center gap-2">
         {toasts.map((toast) => {
           const { icon: Icon, color } = toneStyles[toast.tone];
           const action = toast.action;

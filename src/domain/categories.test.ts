@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { categoryTaskIds, countCategoryTasks, deleteCategory } from "./categories";
+import { categoryTaskIds, countCategoryTasks, deleteCategory, undoCategoryDelete } from "./categories";
 import {
   defaultData,
   makeCalorieEntry,
@@ -272,5 +272,28 @@ describe("categoryTaskIds / countCategoryTasks", () => {
     expect(next.tasks.find((t) => t.id === "foreign-parent")).toBe(foreignParent);
     expect(next.tasks.find((t) => t.id === "owned-child")).toMatchObject({ deletedAt: NOW });
     expect(next.tasks.find((t) => t.id === "owned-grandchild")).toMatchObject({ deletedAt: NOW });
+  });
+});
+
+describe("undoCategoryDelete", () => {
+  it("restores only what the delete touched, newer than the delete, and keeps later changes", () => {
+    const cat = makeCategory("Math", 0);
+    const mine = { ...makeTask(DAY, "mine", 0), categoryId: cat.id, updatedAt: OLD };
+    const other = { ...makeTask(DAY, "other", 1), updatedAt: OLD };
+    const before: AppData = { ...defaultData(), categories: [cat], tasks: [mine, other] };
+    const after = deleteCategory(before, cat.id, NOW);
+    const added = makeTask(DAY, "added afterwards", 2);
+    const current: AppData = { ...after, tasks: [...after.tasks, added] };
+
+    // Same clock reading as the delete: the restore must still be strictly newer.
+    const undone = undoCategoryDelete(current, before, after, NOW);
+
+    const restored = undone.tasks.find((t) => t.id === mine.id)!;
+    expect(restored.deletedAt).toBeUndefined();
+    expect(Date.parse(restored.updatedAt)).toBeGreaterThan(Date.parse(NOW));
+    expect(undone.categories[0].deletedAt).toBeUndefined();
+    expect(Date.parse(undone.categories[0].updatedAt)).toBeGreaterThan(Date.parse(NOW));
+    expect(undone.tasks.find((t) => t.id === other.id)).toBe(other);
+    expect(undone.tasks.find((t) => t.id === added.id)).toBe(added);
   });
 });

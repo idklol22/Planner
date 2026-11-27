@@ -1,3 +1,4 @@
+import { newerStamp } from "./stamp";
 import type { ISODate } from "./dates";
 import type { Category, Task } from "./model";
 
@@ -151,11 +152,18 @@ export function moveUnfinishedToToday(
   return { ...result, previous };
 }
 
-/** Replace only the snapshotted ids by id; every other task is left untouched. */
-export function restoreTasks(tasks: Task[], snapshot: Task[]): Task[] {
+/**
+ * Replace only the snapshotted ids by id; every other task is left untouched.
+ * A restored task gets a new `updatedAt`: with its old one, sync would treat
+ * the change being undone as newer and apply it again.
+ */
+export function restoreTasks(tasks: Task[], snapshot: Task[], now: string): Task[] {
   if (!snapshot.length) return tasks;
   const byId = new Map(snapshot.map((t) => [t.id, t]));
-  return tasks.map((t) => byId.get(t.id) ?? t);
+  return tasks.map((t) => {
+    const old = byId.get(t.id);
+    return old ? { ...old, updatedAt: newerStamp(now, t.updatedAt) } : t;
+  });
 }
 
 export function subtasksOf(tasks: Task[], parentId: string): Task[] {

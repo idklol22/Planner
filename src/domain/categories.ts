@@ -1,4 +1,5 @@
 import type { AppData } from "./model";
+import { newerStamp } from "./stamp";
 
 /**
  * Every live task that goes away when a category is deleted: tasks owned by
@@ -64,5 +65,38 @@ export function deleteCategory(data: AppData, id: string, now: string): AppData 
       data.settings.letcodeCategoryId === id
         ? { ...data.settings, letcodeCategoryId: undefined }
         : data.settings,
+  };
+}
+
+/**
+ * Undo the `deleteCategory` call that turned `before` into `after`: put back
+ * only the records it changed, so later edits and synced rows survive. Restored
+ * records get a new `updatedAt` so the hub keeps the restore, not the deletion.
+ */
+export function undoCategoryDelete(
+  current: AppData,
+  before: AppData,
+  after: AppData,
+  now: string,
+): AppData {
+  function revive<T extends { id: string; updatedAt: string }>(list: T[], old: T[], deleted: T[]): T[] {
+    const kept = new Set(deleted);
+    const touched = new Map(old.filter((item) => !kept.has(item)).map((item) => [item.id, item]));
+    return list.map((item) => {
+      const original = touched.get(item.id);
+      return original ? { ...original, updatedAt: newerStamp(now, item.updatedAt) } : item;
+    });
+  }
+
+  return {
+    ...current,
+    categories: revive(current.categories, before.categories, after.categories),
+    tasks: revive(current.tasks, before.tasks, after.tasks),
+    goals: revive(current.goals, before.goals, after.goals),
+    habits: revive(current.habits, before.habits, after.habits),
+    settings:
+      before.settings.letcodeCategoryId !== after.settings.letcodeCategoryId
+        ? { ...current.settings, letcodeCategoryId: before.settings.letcodeCategoryId }
+        : current.settings,
   };
 }

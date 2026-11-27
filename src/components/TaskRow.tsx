@@ -3,6 +3,7 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
+  type MouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { createPortal } from "react-dom";
@@ -50,6 +51,8 @@ export function TaskRow({
   const [dragging, setDragging] = useState(false);
   const start = useRef<{ x: number; y: number } | null>(null);
   const axis = useRef<"x" | "y" | null>(null);
+  /** The gesture moved the row sideways, so the click it may end with is not a tap. */
+  const swiped = useRef(false);
 
   // The menu is portalled to <body>: `animate-row` leaves a permanent transform on the row,
   // which would size the fixed catcher to the row, trap the popover in the row's stacking
@@ -87,9 +90,12 @@ export function TaskRow({
   }
 
   function onPointerDown(e: ReactPointerEvent<HTMLDivElement>) {
+    swiped.current = false;
     if (e.pointerType === "mouse") return;
-    // Checkbox, title and "..." buttons keep their taps: never start a gesture on a control.
-    if ((e.target as Element).closest("button,input,textarea,select,a")) return;
+    // The portalled "..." menu bubbles its events here through React: not part of the row.
+    if (!e.currentTarget.contains(e.target as Node)) return;
+    // A swipe may start anywhere else, including on the title: it fills most of the row.
+    if ((e.target as Element).closest("input,textarea,select")) return;
     start.current = { x: e.clientX, y: e.clientY };
     axis.current = null;
     setSwipe(
@@ -104,7 +110,21 @@ export function TaskRow({
       }),
     );
     setDragging(true);
-    e.currentTarget.setPointerCapture(e.pointerId);
+    // No pointer capture yet: a plain tap must still reach the button under the finger.
+  }
+
+  function cancelSwipe() {
+    start.current = null;
+    axis.current = null;
+    setDragging(false);
+    setSwipe(REST);
+  }
+
+  function onClickCapture(e: MouseEvent<HTMLDivElement>) {
+    if (!swiped.current) return;
+    swiped.current = false;
+    e.preventDefault();
+    e.stopPropagation();
   }
 
   function onPointerMove(e: ReactPointerEvent<HTMLDivElement>) {
@@ -133,6 +153,8 @@ export function TaskRow({
     if (next.axis === "x") {
       e.preventDefault(); // native horizontal scroll is already blocked by touch-pan-y
       axis.current = next.axis;
+      swiped.current = true;
+      e.currentTarget.setPointerCapture(e.pointerId);
     }
     setSwipe(next);
   }
@@ -182,7 +204,8 @@ export function TaskRow({
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={endSwipe}
-      onPointerCancel={endSwipe}
+      onPointerCancel={cancelSwipe}
+      onClickCapture={onClickCapture}
       className={`group relative flex min-h-[52px] touch-pan-y items-center gap-3.5 overflow-hidden rounded-xl px-2 py-1 transition-colors ${
         active ? "bg-ink/[0.07]" : "hover:bg-ink/[0.04]"
       }`}

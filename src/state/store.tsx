@@ -10,7 +10,7 @@ import {
 } from "react";
 import { uid } from "../domain/ids";
 import { addDays, todayISO, type ISODate } from "../domain/dates";
-import { deleteCategory as deleteCategoryData } from "../domain/categories";
+import { deleteCategory as deleteCategoryData, undoCategoryDelete } from "../domain/categories";
 import {
   defaultData,
   makeCalorieEntry,
@@ -195,7 +195,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   /** Snapshot captured by the last task archive/delete/restore, consumed by undo. */
   const taskChangeSnapshot = useRef<Task[] | null>(null);
   /** Snapshot captured by the last `deleteCategory`, consumed by undo. */
-  const deleteSnapshot = useRef<AppData | null>(null);
+  const deleteSnapshot = useRef<{ before: AppData; after: AppData } | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -309,14 +309,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const before = dataRef.current;
         const next = deleteCategoryData(before, id, nowISO());
         if (next === before) return;
-        deleteSnapshot.current = before;
+        deleteSnapshot.current = { before, after: next };
         update(() => next);
       },
       undoDeleteCategory() {
         const snapshot = deleteSnapshot.current;
         if (!snapshot) return;
         deleteSnapshot.current = null;
-        update((d) => ({ ...snapshot, calories: d.calories }));
+        const stamp = nowISO();
+        update((d) => undoCategoryDelete(d, snapshot.before, snapshot.after, stamp));
       },
 
       addTask(date, title, categoryId = null, habitId = null) {
@@ -370,7 +371,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         update((d) => ({ ...d, tasks: result.tasks }));
         return {
           moved: result.moved.length,
-          undo: () => update((d) => ({ ...d, tasks: restoreTasks(d.tasks, result.previous) })),
+          undo: () => {
+            const stamp = nowISO();
+            update((d) => ({ ...d, tasks: restoreTasks(d.tasks, result.previous, stamp) }));
+          },
         };
       },
       duplicateTask(id) {
@@ -414,7 +418,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const snapshot = taskChangeSnapshot.current;
         if (!snapshot) return;
         taskChangeSnapshot.current = null;
-        update((d) => ({ ...d, tasks: restoreTasks(d.tasks, snapshot) }));
+        const stamp = nowISO();
+        update((d) => ({ ...d, tasks: restoreTasks(d.tasks, snapshot, stamp) }));
       },
       deleteTask(id) {
         const stamp = nowISO();
