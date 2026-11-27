@@ -4,7 +4,7 @@
 /** Keepalive requests must stay well below the browser's per-request cap. */
 const KEEPALIVE_MAX_BYTES = 60_000;
 
-export type SyncTable = "category" | "task" | "goal" | "meal";
+export type SyncTable = "category" | "task" | "goal" | "meal" | "message";
 
 export interface Note {
   id?: string;
@@ -74,7 +74,30 @@ export interface MealRow {
   deletedAt: string | null;
 }
 
-export type SyncRow = CategoryRow | TaskRow | GoalRow | MealRow;
+export type MessageSender = "planner" | "harness";
+
+export interface MessageAttachment {
+  sha256: string;
+  name: string;
+  mime: string;
+  bytes: number;
+  durationSec?: number;
+}
+
+export interface MessageRow {
+  id: string;
+  subjectId: string | null;
+  topicId: string | null;
+  sender: MessageSender;
+  text: string;
+  attachments: MessageAttachment[];
+  createdAt: string;
+  updatedAt: string;
+  deliveredAt: string | null;
+  deletedAt: string | null;
+}
+
+export type SyncRow = CategoryRow | TaskRow | GoalRow | MealRow | MessageRow;
 
 /** Read-only tables mirrored from LearnHarness; pulled but never pushed. */
 export type MirrorTable = "h_subject" | "h_topic" | "h_material" | "h_deadline";
@@ -280,6 +303,33 @@ export class HubClient {
       if (error instanceof HubError && (error.status === 404 || error.status === 405)) return null;
       throw error;
     }
+  }
+
+  /** Upload message/file bytes under their SHA-256. Uses a plain fetch so the
+   *  body keeps its binary Content-Type instead of request()'s JSON header. */
+  async putFile(
+    sha256: string,
+    bytes: Blob | ArrayBuffer | Uint8Array,
+    mime: string,
+  ): Promise<{ sha256: string; bytes: number }> {
+    const data = bytes instanceof Blob ? await bytes.arrayBuffer() : bytes;
+    const digest = await crypto.subtle.digest("SHA-256", data as BufferSource);
+    const actual = [...new Uint8Array(digest)]
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("");
+    if (actual !== sha256) {
+      throw new HubError(`file sha256 mismatch: expected ${sha256}, got ${actual}`, 400);
+    }
+    const response = await fetch(`${this.base}/files/${sha256}`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${this.token}`, "Content-Type": mime },
+      body: data as BodyInit,
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new HubError(text || `file upload returned ${response.status}`, response.status);
+    }
+    return { sha256, bytes: data.byteLength };
   }
 
   /** Download a stored file (PDF) with the bearer token. */
