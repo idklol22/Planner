@@ -25,6 +25,7 @@ import type {
   UpsertResult,
   WidgetProfile,
 } from "./db.ts";
+import { redactCommandPayload, shouldRedactCommand } from "./command-payload.ts";
 import { compareUpdatedAt, normalize, sha256Hex } from "./logic.ts";
 
 interface StoredDevice extends Device {
@@ -197,6 +198,12 @@ export class MemoryStore implements HubStore {
       leaseUntil: null,
       updatedAt: new Date().toISOString(),
     };
+    // A successfully completed note hand-off must not keep image bytes in the
+    // stored payload. Failures and retries keep them, and a repeated completion
+    // stays idempotent because the payload is already redacted.
+    if (shouldRedactCommand(existing.type, status)) {
+      completed.payload = redactCommandPayload(existing.payload);
+    }
     this.commands.set(id, completed);
     return { ...completed };
   }

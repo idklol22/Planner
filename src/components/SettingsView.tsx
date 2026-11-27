@@ -215,8 +215,9 @@ export function SettingsView() {
           <div>
             <h3 className="text-sm font-semibold text-ink">Cloud sync</h3>
             <p className="mt-1 text-xs leading-relaxed text-muted">
-              Sync tasks, categories and meals through your hub, mirror LearnHarness subjects, files and deadlines, and
-              hand notes off through the hub. The token stays on this device. Leave both fields empty to stay offline.
+              Sync tasks, categories and meals through your hub, mirror LearnHarness subjects and deadlines, and hand
+              notes off through the hub. The token stays on this device. Leave both fields empty to stay offline.
+              Photos in notes stay on this phone. They are sent to your computer only with the task that contains them.
             </p>
           </div>
         </div>

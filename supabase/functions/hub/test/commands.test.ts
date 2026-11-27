@@ -82,4 +82,96 @@ describe("get command", () => {
     expect(missing.status).toBe(404);
   });
 });
+
+describe("stored note payloads", () => {
+  const PHOTO = "data:image/png;base64,QUJDREVGRw==";
+  const OTHER_PHOTO = "data:image/jpeg;base64,MTIzNDU2";
+
+  function notePayload(markdown: string) {
+    return {
+      externalId: "task-1",
+      subjectId: "subject-1",
+      title: "Photos",
+      date: "2026-11-27",
+      markdown,
+      finished: true,
+    };
+  }
+
+  async function enqueue(id: string, type: string, payload: unknown) {
+    const response = await call(ctx, "/commands", {
+      method: "POST",
+      token: TOKEN,
+      body: { id, type, payload },
+    });
+    expect(response.status).toBe(201);
+  }
+
+  async function complete(id: string, status: "done" | "failed") {
+    const response = await call(ctx, `/commands/${id}/complete`, {
+      method: "POST",
+      token: TOKEN,
+      body: { status, result: { ok: status === "done" } },
+    });
+    expect(response.status).toBe(200);
+    return (await response.json()) as { command: { status: string; payload: { markdown: string } } };
+  }
+
+  function markdownOf(id: string): string {
+    const payload = ctx.store.peekCommand(id)!.payload as { markdown: string };
+    return payload.markdown;
+  }
+
+  beforeAll(async () => {
+    // The "get command" test leaves cmd-get queued; clear the queue first.
+    const pending = await claim("cleanup");
+    if (pending.command?.id === "cmd-get") await complete("cmd-get", "done");
+  });
+
+  it("keeps the photos through a retry and strips them only on success", async () => {
+    const payload = notePayload(`Review ![a](${PHOTO}) and ![b](${OTHER_PHOTO})`);
+    await enqueue("cmd-photos", "harness.note", payload);
+
+    const first = await claim("agent-1");
+    expect(first.command?.id).toBe("cmd-photos");
+    expect((first.command as { payload: typeof payload }).payload.markdown).toContain(PHOTO);
+
+    // An expired lease is retried by another agent; it must still see the bytes.
+    ctx.store.setCommandLease("cmd-photos", new Date(Date.now() - 60_000).toISOString());
+    const retry = await claim("agent-2");
+    expect(retry.command?.id).toBe("cmd-photos");
+    expect((retry.command as { payload: typeof payload }).payload.markdown).toContain(PHOTO);
+    expect(ctx.store.peekCommand("cmd-photos")!.status).toBe("claimed");
+
+    const done = await complete("cmd-photos", "done");
+    expect(done.command.status).toBe("done");
+    expect(markdownOf("cmd-photos")).toBe("Review ![a](photo-removed) and ![b](photo-removed)");
+    expect(done.command.payload.markdown).not.toContain("data:image/");
+
+    const fetched = await call(ctx, "/commands/cmd-photos", { token: TOKEN });
+    expect(fetched.status).toBe(200);
+    const stored = ((await fetched.json()) as { command: { payload: { markdown: string } } }).command;
+    expect(stored.payload.markdown).toBe("Review ![a](photo-removed) and ![b](photo-removed)");
+
+    // Repeating a completion stays idempotent: already-redacted stays redacted.
+    const again = await complete("cmd-photos", "done");
+    expect(again.command.status).toBe("done");
+    expect(markdownOf("cmd-photos")).toBe("Review ![a](photo-removed) and ![b](photo-removed)");
+  });
+
+  it("leaves the payload intact on failure and for other command types", async () => {
+    await enqueue("cmd-failed", "harness.note", notePayload(`Notes ![a](${PHOTO})`));
+    const claimed = await claim("agent-3");
+    expect(claimed.command?.id).toBe("cmd-failed");
+    const failed = await complete("cmd-failed", "failed");
+    expect(failed.command.status).toBe("failed");
+    expect(markdownOf("cmd-failed")).toContain(PHOTO);
+
+    await enqueue("cmd-other", "other.task", { markdown: `![a](${PHOTO})` });
+    const other = await claim("agent-4");
+    expect(other.command?.id).toBe("cmd-other");
+    await complete("cmd-other", "done");
+    expect(markdownOf("cmd-other")).toContain(PHOTO);
+  });
+});
 
