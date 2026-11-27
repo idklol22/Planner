@@ -17,7 +17,7 @@ import { useToast } from "../state/toast";
 import { HealthSettings } from "./HealthSettings";
 import { ThemePicker } from "./ThemePicker";
 import { WidgetSettings } from "./WidgetSettings";
-import { Button, Input, Panel, SectionTitle } from "./ui";
+import { Button, Input, Panel } from "./ui";
 
 function ResetAll() {
   const [open, setOpen] = useState(false);
@@ -183,8 +183,6 @@ export function SettingsView() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-5">
-      <SectionTitle eyebrow="Connections">Settings</SectionTitle>
-
       <Panel>
         <div className="mb-4 flex items-start gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent">
