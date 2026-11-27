@@ -30,7 +30,7 @@ export const taskItemBlock = createReactBlockSpec(
           }
         >
           <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden>
-            <circle cx="12" cy="12" r="9" className="task-check-ring" />
+            <rect x="3.5" y="3.5" width="17" height="17" rx="5.5" className="task-check-ring" />
             <path d="M7.8 12.3l2.9 2.9 5.6-6" className="task-check-tick" />
           </svg>
         </button>

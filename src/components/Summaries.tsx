@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { addDays, formatDayTitle, type ISODate } from "../domain/dates";
-import { daySummary, weekSummary, type CategoryCount } from "../domain/summaries";
+import { weekSummary, type CategoryCount } from "../domain/summaries";
 import { catColor } from "../theme/store";
 import { useStore } from "../state/store";
 
@@ -9,8 +9,8 @@ const fmt = (n: number) => n.toLocaleString("en-US");
 function Stat({ value, label }: { value: string; label: string }) {
   return (
     <div className="min-w-0 flex-1 rounded-xl bg-canvas/40 px-3.5 py-3">
-      <div className="truncate text-[22px] font-semibold leading-tight tabular-nums">{value}</div>
-      <div className="truncate text-[12px] font-medium uppercase tracking-wider text-faint">{label}</div>
+      <div className="truncate text-[17px] font-semibold leading-tight tabular-nums">{value}</div>
+      <div className="truncate text-[11.5px] font-medium uppercase tracking-wider text-faint">{label}</div>
     </div>
   );
 }
@@ -22,7 +22,7 @@ function Chips({ rows }: { rows: CategoryCount[] }) {
       {rows.map((r) => (
         <span
           key={r.category?.id ?? "none"}
-          className="flex items-center gap-1.5 rounded-full bg-ink/[0.06] px-3.5 py-1.5 text-[14px] font-semibold"
+          className="flex items-center gap-1.5 rounded-full bg-ink/[0.06] px-3.5 py-1.5 text-[13px] font-semibold"
           style={{ color: r.category ? catColor(r.category.color) : "var(--text)" }}
         >
           {r.category?.name ?? "Inbox"}
@@ -32,32 +32,6 @@ function Chips({ rows }: { rows: CategoryCount[] }) {
         </span>
       ))}
     </div>
-  );
-}
-
-export function DaySummaryCard({ date }: { date: ISODate }) {
-  const { data } = useStore();
-  const goal = data.settings.dailyCalorieGoal;
-  const s = useMemo(
-    () => daySummary(date, data.tasks, data.categories, data.calories, goal),
-    [date, data.tasks, data.categories, data.calories, goal],
-  );
-  return (
-    <section aria-label="Day summary" className="module animate-rise">
-      <h3 className="module-title mb-3">Day summary</h3>
-      <div className="flex gap-2">
-        <Stat value={`${s.done}/${s.total}`} label="Tasks done" />
-        <Stat value={fmt(s.kcal)} label={`kcal of ${fmt(s.goal)}`} />
-      </div>
-      {s.worked.length > 0 ? (
-        <>
-          <div className="mt-3 text-[13px] font-medium text-muted">Worked on</div>
-          <Chips rows={s.worked} />
-        </>
-      ) : (
-        <p className="mt-3 text-[14px] text-faint">No tasks completed on this day.</p>
-      )}
-    </section>
   );
 }
 
@@ -71,7 +45,7 @@ export function WeekSummaryCard({ start }: { start: ISODate }) {
   return (
     <section aria-label="Week summary" className="module animate-rise">
       <h3 className="module-title mb-0.5">Week summary</h3>
-      <div className="mb-3 text-[13px] text-faint">
+      <div className="mb-3 text-[12px] text-faint">
         {formatDayTitle(start)} to {formatDayTitle(addDays(start, 6))}
       </div>
       <div className="flex gap-2">

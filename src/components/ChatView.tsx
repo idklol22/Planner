@@ -423,7 +423,7 @@ export function ChatView() {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <Panel className="!mb-3 !shrink-0 !p-3">
-        <p className="text-[13px] text-muted">{linkText}</p>
+        <p className="text-[12px] text-muted">{linkText}</p>
       </Panel>
 
       {!messages.configured ? null : (
@@ -445,10 +445,10 @@ export function ChatView() {
           {messages.error && (
             <div
               role="alert"
-              className="mb-3 flex shrink-0 items-center gap-2 rounded-xl border border-rose/25 bg-rose/10 px-3 py-2 text-[13px] text-rose"
+              className="mb-3 flex shrink-0 items-center gap-2 rounded-xl border border-rose/25 bg-rose/10 px-3 py-2 text-[12px] text-rose"
             >
               <span className="min-w-0 flex-1">{messages.error}</span>
-              <Button className="!min-h-8 !px-2 !text-[12px]" onClick={() => void messages.refresh()}>
+              <Button className="!min-h-8 !px-2 !text-[11.5px]" onClick={() => void messages.refresh()}>
                 Retry
               </Button>
             </div>
@@ -470,7 +470,7 @@ export function ChatView() {
                 ))}
               </div>
             ) : !messages.error && messages.thread.length === 0 ? (
-              <div className="px-4 py-10 text-center text-[14px] text-muted">
+              <div className="px-4 py-10 text-center text-[13px] text-muted">
                 No messages yet. Say hello to your laptop.
               </div>
             ) : (
@@ -495,7 +495,7 @@ export function ChatView() {
                             </span>
                           )}
                           <div
-                            className={`max-w-[82%] rounded-2xl p-3 text-[14px] leading-relaxed ${
+                            className={`max-w-[82%] rounded-2xl p-3 text-[13px] leading-relaxed ${
                               mine
                                 ? "bg-[var(--accent)] text-[var(--accent-contrast)]"
                                 : "border border-[var(--border)] bg-[var(--surface)] text-[var(--text)]"
@@ -562,7 +562,7 @@ export function ChatView() {
 
           <div className="sticky bottom-0 z-10 shrink-0 border-t border-[var(--border)] bg-[var(--bg)] pb-[max(8px,var(--safe-bottom))] pt-2">
             {inlineError && (
-              <p role="alert" className="mb-2 text-[13px] text-rose">
+              <p role="alert" className="mb-2 text-[12px] text-rose">
                 {inlineError}
               </p>
             )}
@@ -586,7 +586,7 @@ export function ChatView() {
 
             {recording ? (
               <div className="flex items-center gap-2">
-                <span className="flex h-10 items-center gap-2 rounded-xl bg-rose/10 px-3 text-[14px] font-semibold tabular-nums text-rose">
+                <span className="flex h-10 items-center gap-2 rounded-xl bg-rose/10 px-3 text-[13px] font-semibold tabular-nums text-rose">
                   <span className="h-2 w-2 animate-pulse rounded-full bg-rose" />
                   {durationText(elapsed)}
                 </span>

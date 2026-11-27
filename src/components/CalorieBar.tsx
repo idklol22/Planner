@@ -30,7 +30,9 @@ export function CalorieBar({ date }: { date: ISODate }) {
     if (nav.openCalories) setMode("add");
   }, [nav, date]);
   useEffect(() => {
-    if (mode === "add") kcalRef.current?.focus();
+    if (mode !== "add") return;
+    kcalRef.current?.focus();
+    kcalRef.current?.scrollIntoView?.({ block: "center", behavior: "smooth" });
   }, [mode]);
 
   const pct = goal > 0 ? Math.min(total / goal, 1) : 0;
@@ -49,7 +51,7 @@ export function CalorieBar({ date }: { date: ISODate }) {
   return (
     <section aria-label="Calories" className="module !p-0">
       <div className="overflow-hidden rounded-[var(--r)]">
-        <div className="flex h-16 items-center pl-2 pr-3">
+        <div className="flex h-12 items-center pl-0.5 pr-1.5">
           <button
             onClick={() => setMode((m) => (m === "list" ? "idle" : "list"))}
             aria-expanded={mode === "list"}
@@ -61,8 +63,8 @@ export function CalorieBar({ date }: { date: ISODate }) {
             ) : (
               <Flame size={19} className={total > 0 ? "text-amber" : "text-faint"} strokeWidth={2.2} />
             )}
-            <span className="text-[20px] font-semibold tabular-nums">{fmt(total)}</span>
-            <span className="text-[15px] font-medium tabular-nums text-faint">
+            <span className="text-[16px] font-semibold tabular-nums">{fmt(total)}</span>
+            <span className="text-[13.5px] font-medium tabular-nums text-faint">
               / {fmt(goal)} kcal
             </span>
           </button>
@@ -86,7 +88,7 @@ export function CalorieBar({ date }: { date: ISODate }) {
           />
         </div>
         {burnedLine && (
-          <p className="break-words px-3 py-1.5 text-[12px] leading-relaxed text-faint">{burnedLine}</p>
+          <p className="break-words px-3 py-1.5 text-[11.5px] leading-relaxed text-faint">{burnedLine}</p>
         )}
 
         {mode === "add" && (
@@ -110,7 +112,7 @@ export function CalorieBar({ date }: { date: ISODate }) {
             <button
               onClick={submit}
               disabled={!kcal}
-              className="h-11 rounded-xl bg-[var(--accent)] px-4 text-[15px] font-semibold text-accent-ink transition-opacity active:scale-95 disabled:opacity-30"
+              className="h-11 rounded-xl bg-[var(--accent)] px-4 text-[13.5px] font-semibold text-accent-ink transition-opacity active:scale-95 disabled:opacity-30"
             >
               Add
             </button>
@@ -120,12 +122,12 @@ export function CalorieBar({ date }: { date: ISODate }) {
         {mode === "list" && (
           <div className="animate-row border-t border-line px-3 py-1.5">
             {entries.length === 0 ? (
-              <p className="py-3 text-center text-[14px] text-faint">Nothing logged for this day</p>
+              <p className="py-3 text-center text-[13px] text-faint">Nothing logged for this day</p>
             ) : (
               <ul>
                 {entries.map((e) => (
                   <li key={e.id} className="flex min-h-[44px] items-center gap-3">
-                    <span className="min-w-0 flex-1 truncate text-[15px] text-muted tabular-nums">
+                    <span className="min-w-0 flex-1 truncate text-[13.5px] text-muted tabular-nums">
                       {entryTimeLabel(e)}
                     </span>
                     <span className="text-[16px] font-semibold tabular-nums">{fmt(e.kcal)}</span>
@@ -143,7 +145,7 @@ export function CalorieBar({ date }: { date: ISODate }) {
             <div className="flex justify-end pb-1">
               <button
                 onClick={() => setMode("idle")}
-                className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-medium text-faint hover:text-ink"
+                className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[11.5px] font-medium text-faint hover:text-ink"
               >
                 <X size={12} /> Close
               </button>

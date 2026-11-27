@@ -63,7 +63,7 @@ export function WidgetSettings() {
       </div>
 
       {!sync.configured && (
-        <p className="mb-3 flex items-start gap-2 rounded-xl border border-line bg-ink/[0.03] px-3 py-2.5 text-[13px] leading-relaxed text-muted">
+        <p className="mb-3 flex items-start gap-2 rounded-xl border border-line bg-ink/[0.03] px-3 py-2.5 text-[12px] leading-relaxed text-muted">
           <Cloud size={15} className="mt-0.5 shrink-0" />
           Set up cloud sync above before creating a widget code.
         </p>
@@ -92,14 +92,14 @@ export function WidgetSettings() {
         </div>
       )}
       {error && (
-        <p role="alert" className="mt-2 break-words text-[12px] leading-relaxed text-rose">
+        <p role="alert" className="mt-2 break-words text-[11.5px] leading-relaxed text-rose">
           {error}
         </p>
       )}
 
       <ol className="mt-5 space-y-2">
         {STEPS.map((step, index) => (
-          <li key={step} className="flex gap-3 text-[13px] leading-relaxed text-muted">
+          <li key={step} className="flex gap-3 text-[12px] leading-relaxed text-muted">
             <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent/15 text-[11px] font-semibold text-accent">
               {index + 1}
             </span>
@@ -107,7 +107,7 @@ export function WidgetSettings() {
           </li>
         ))}
       </ol>
-      <p className="mt-3 text-[13px] leading-relaxed text-muted">
+      <p className="mt-3 text-[12px] leading-relaxed text-muted">
         Then touch and hold the widget, tap <strong className="font-semibold text-ink">Edit Widget</strong>, paste the
         code, and choose what to show.
       </p>

@@ -1,12 +1,23 @@
 import { useState } from "react";
-import { Check, ChevronDown, ChevronRight, ChevronUp, Plus, X } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp, X } from "lucide-react";
 import { achievedGoals, openGoals, reorderedIds } from "../domain/goals";
 import { useStore } from "../state/store";
+import { TaskMark } from "./TaskMark";
 
-/** Persistent goals of one category: pinned at the top of its card, independent of the selected day. */
-export function CategoryGoals({ categoryId, color }: { categoryId: string; color: string }) {
+/** Persistent goals of one category: pinned at the top of its card, independent of the selected day.
+ *  Takes no space until there is a goal; the card header opens the input through `adding`. */
+export function CategoryGoals({
+  categoryId,
+  color,
+  adding,
+  onAddingChange: setAdding,
+}: {
+  categoryId: string;
+  color: string;
+  adding: boolean;
+  onAddingChange: (adding: boolean) => void;
+}) {
   const { data, actions } = useStore();
-  const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");
   const [showDone, setShowDone] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
@@ -27,14 +38,9 @@ export function CategoryGoals({ categoryId, color }: { categoryId: string; color
         aria-checked={!isOpen}
         aria-label={isOpen ? `Mark goal achieved: ${g.title}` : `Mark goal not achieved: ${g.title}`}
         onClick={() => (isOpen ? actions.achieveGoal(g.id) : actions.unachieveGoal(g.id))}
-        className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] border"
-        style={{
-          borderColor: color,
-          background: isOpen ? "transparent" : color,
-          color: "var(--accent-contrast)",
-        }}
+        className="flex h-6 w-6 shrink-0 items-center justify-center"
       >
-        {!isOpen && <Check size={11} strokeWidth={3} />}
+        <TaskMark color={color} done={!isOpen} size={18} />
       </button>
       {editing === g.id ? (
         <input
@@ -59,7 +65,7 @@ export function CategoryGoals({ categoryId, color }: { categoryId: string; color
             setEditing(g.id);
             setEditDraft(g.title);
           }}
-          className={`min-w-0 flex-1 truncate text-left text-[13px] ${isOpen ? "text-ink" : "text-faint line-through"}`}
+          className={`min-w-0 flex-1 truncate text-left text-[12px] ${isOpen ? "text-ink" : "text-faint line-through"}`}
         >
           {g.title}
         </button>
@@ -97,21 +103,10 @@ export function CategoryGoals({ categoryId, color }: { categoryId: string; color
     </li>
   );
 
+  if (open.length === 0 && done.length === 0 && !adding) return null;
+
   return (
-    <div aria-label="Goals" className="goals mb-1.5 border-b border-line pb-1.5">
-      <div className="flex items-center gap-2">
-        <h4 className="text-[11px] font-semibold uppercase tracking-[0.1em] text-faint">Goals</h4>
-        <span className="flex-1" />
-        {!adding && (
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            className="inline-flex items-center gap-0.5 text-[12px] text-muted hover:text-ink"
-          >
-            <Plus size={12} /> goal
-          </button>
-        )}
-      </div>
+    <div aria-label="Goals" className="goals mb-1 border-b border-line pb-1">
       {(open.length > 0 || adding) && (
         <ul className="mt-0.5">
           {open.map((g, i) => row(g, i, true))}
@@ -148,7 +143,7 @@ export function CategoryGoals({ categoryId, color }: { categoryId: string; color
             type="button"
             aria-expanded={showDone}
             onClick={() => setShowDone((v) => !v)}
-            className="mt-0.5 inline-flex items-center gap-1 text-[12px] text-muted hover:text-ink"
+            className="mt-0.5 inline-flex items-center gap-1 text-[11.5px] text-muted hover:text-ink"
           >
             {showDone ? <ChevronDown size={12} /> : <ChevronRight size={12} />} Achieved ({done.length})
           </button>

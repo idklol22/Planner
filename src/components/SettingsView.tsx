@@ -205,7 +205,7 @@ export function SettingsView() {
           </div>
           <div className="min-w-0">
             <div className="text-sm font-semibold text-ink">LearnHarness</div>
-            <p className="mt-0.5 text-[13px] text-muted">{harnessState}</p>
+            <p className="mt-0.5 text-[12px] text-muted">{harnessState}</p>
           </div>
         </div>
       </Panel>
@@ -265,12 +265,12 @@ export function SettingsView() {
           </Button>
         </div>
         {hubResult && (
-          <p className={`mt-2 text-[12px] ${hubResult.ok ? "text-mint" : "text-rose"}`} role="status">
+          <p className={`mt-2 text-[11.5px] ${hubResult.ok ? "text-mint" : "text-rose"}`} role="status">
             {hubResult.message}
           </p>
         )}
         {sync.configured && (
-          <p className="mt-3 text-[12px] text-muted" role="status">
+          <p className="mt-3 text-[11.5px] text-muted" role="status">
             Last synced: {lastSynced}
             {sync.status.pending > 0 ? ` · ${sync.status.pending} waiting to upload` : ""}
             {sync.status.error ? ` · last error: ${sync.status.error}` : ""}

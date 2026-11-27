@@ -77,7 +77,7 @@ export function NoteEditor({ task }: { task: Task }) {
     <div className="flex flex-col">
       <div className="mb-3 flex items-center gap-2 px-1">
         <FileText size={15} className="text-faint" />
-        <h3 className="text-[13px] font-semibold uppercase tracking-[0.12em] text-faint">Note</h3>
+        <h3 className="text-[12px] font-semibold uppercase tracking-[0.12em] text-faint">Note</h3>
         <div className="ml-auto flex flex-wrap items-center gap-1.5">
           {status === "ready" && <Chip tone="amber">ready for LearnHarness</Chip>}
           {status === "sent" && <Chip tone="mint">sent</Chip>}

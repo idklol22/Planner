@@ -54,11 +54,11 @@ function CategoryRow({
           >
             <CategoryIcon name={cat.icon} size={17} color={catColor(cat.color)} />
           </span>
-          <span className="min-w-0 flex-1 truncate text-[17px] font-semibold" style={{ color: catColor(cat.color) }}>
+          <span className="min-w-0 flex-1 truncate text-[14.5px] font-semibold" style={{ color: catColor(cat.color) }}>
             {cat.name}
           </span>
           {cat.linkedSubjectId && (
-            <span className="hidden shrink-0 rounded-full bg-surface-2 px-2.5 py-0.5 text-[12px] text-muted sm:block">
+            <span className="hidden shrink-0 rounded-full bg-surface-2 px-2.5 py-0.5 text-[11.5px] text-muted sm:block">
               {cat.linkedSubjectId}
             </span>
           )}
@@ -99,7 +99,7 @@ function CategoryRow({
           />
 
           <div>
-            <div className="mb-2 text-[12px] font-semibold uppercase tracking-[0.12em] text-faint">Colour</div>
+            <div className="mb-2 text-[11.5px] font-semibold uppercase tracking-[0.12em] text-faint">Colour</div>
             <div className="flex flex-wrap gap-2.5">
               {CATEGORY_COLORS.map((c) => (
                 <button
@@ -118,7 +118,7 @@ function CategoryRow({
           </div>
 
           <div>
-            <div className="mb-2 text-[12px] font-semibold uppercase tracking-[0.12em] text-faint">Icon</div>
+            <div className="mb-2 text-[11.5px] font-semibold uppercase tracking-[0.12em] text-faint">Icon</div>
             <div className="flex flex-wrap gap-2">
               {Object.keys(CATEGORY_ICONS).map((key) => (
                 <button
@@ -137,7 +137,7 @@ function CategoryRow({
           </div>
 
           <div>
-            <div className="mb-2 text-[12px] font-semibold uppercase tracking-[0.12em] text-faint">
+            <div className="mb-2 text-[11.5px] font-semibold uppercase tracking-[0.12em] text-faint">
               Linked LearnHarness subject
             </div>
             <select
@@ -186,14 +186,14 @@ function CategoryRow({
 
           <button
             onClick={() => actions.archiveCategory(cat.id)}
-            className="flex items-center gap-2 rounded-full bg-surface-2 px-4 py-2.5 text-[14px] font-semibold text-muted transition-colors hover:bg-surface-3 hover:text-ink active:scale-95"
+            className="flex items-center gap-2 rounded-full bg-surface-2 px-4 py-2.5 text-[13px] font-semibold text-muted transition-colors hover:bg-surface-3 hover:text-ink active:scale-95"
           >
             <Archive size={16} /> Archive
           </button>
           <button
             onClick={onDelete}
             aria-label={`Delete category: ${cat.name}`}
-            className="flex items-center gap-2 rounded-full bg-surface-2 px-4 py-2.5 text-[14px] font-semibold text-rose hover:bg-rose/10 active:scale-95"
+            className="flex items-center gap-2 rounded-full bg-surface-2 px-4 py-2.5 text-[13px] font-semibold text-rose hover:bg-rose/10 active:scale-95"
           >
             <Trash2 size={15} /> Delete
           </button>
@@ -239,8 +239,8 @@ function DeleteCategoryDialog({
         aria-label={heading}
         className="glass-panel relative w-full max-w-[420px] p-5 shadow-2xl"
       >
-        <h2 className="text-[19px] font-bold">{heading}</h2>
-        <p className="mt-2 text-[14px] text-muted">
+        <h2 className="text-[15.5px] font-bold">{heading}</h2>
+        <p className="mt-2 text-[13px] text-muted">
           This cannot be undone except with the Undo toast.
         </p>
         <div className="mt-5 flex justify-end gap-2">
@@ -306,11 +306,11 @@ export function CategoriesView() {
 
   return (
     <div className="px-4 pb-8 pt-2 md:px-6">
-      <p className="mb-4 px-1 text-[14px] leading-relaxed text-muted">
+      <p className="mb-4 px-1 text-[13px] leading-relaxed text-muted">
         Categories group each day&apos;s tasks. Drag to reorder, tap one to change its colour, icon or linked subject.
       </p>
       {!hub.configured && (
-        <p className="mb-4 px-1 text-[13px] text-muted">
+        <p className="mb-4 px-1 text-[12px] text-muted">
           Open LearnHarness on the laptop so it syncs.
         </p>
       )}
@@ -335,7 +335,7 @@ export function CategoriesView() {
       </div>
 
       {active.length === 0 ? (
-        <div className="glass-panel border border-dashed border-ink/15 px-4 py-10 text-center text-[14px] text-muted">
+        <div className="glass-panel border border-dashed border-ink/15 px-4 py-10 text-center text-[13px] text-muted">
           No categories yet. Add one above to start sorting your days.
         </div>
       ) : (
@@ -373,7 +373,7 @@ export function CategoriesView() {
 
       {archived.length > 0 && (
         <section className="mt-8">
-          <h3 className="mb-2 px-1 text-[12px] font-semibold uppercase tracking-[0.12em] text-faint">Archived</h3>
+          <h3 className="mb-2 px-1 text-[11.5px] font-semibold uppercase tracking-[0.12em] text-faint">Archived</h3>
           <div className="space-y-2">
             {archived.map((cat) => (
               <div key={cat.id} className="glass-panel flex min-h-[52px] items-center gap-3 px-4">
@@ -381,7 +381,7 @@ export function CategoriesView() {
                 <span className="min-w-0 flex-1 truncate text-[16px] text-muted">{cat.name}</span>
                 <button
                   onClick={() => actions.archiveCategory(cat.id, false)}
-                  className="flex items-center gap-1.5 rounded-full bg-surface-2 px-3.5 py-2 text-[13px] font-semibold hover:bg-surface-3"
+                  className="flex items-center gap-1.5 rounded-full bg-surface-2 px-3.5 py-2 text-[12px] font-semibold hover:bg-surface-3"
                 >
                   <ArchiveRestore size={15} /> Restore
                 </button>

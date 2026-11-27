@@ -22,8 +22,8 @@
 
 .planner-editor .bn-editor {
   padding-inline: 0;
-  font-size: 17px;
-  line-height: 1.65;
+  font-size: 15px;
+  line-height: 1.6;
   background: var(--bg);
 }
 .planner-editor .bn-block-content {
@@ -105,6 +105,7 @@
   transform: scale(0.88);
 }
 .task-check-ring {
+  rx: 5.5px;
   fill: none;
   stroke: var(--border-strong);
   stroke-width: 1.8;

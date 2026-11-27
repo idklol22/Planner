@@ -85,7 +85,7 @@ export function PdfViewer({ blob, fileName }: { blob: Blob; fileName: string }) 
         <button className={btn} aria-label="Previous page" disabled={page <= 1} onClick={() => go(page - 1)}>
           <ChevronLeft size={18} />
         </button>
-        <label className="flex items-center gap-1 text-[14px] text-muted">
+        <label className="flex items-center gap-1 text-[13px] text-muted">
           <input
             aria-label="Page number"
             type="number"
@@ -104,7 +104,7 @@ export function PdfViewer({ blob, fileName }: { blob: Blob; fileName: string }) 
         <button className={btn} aria-label="Zoom out" onClick={() => zoomBy(1 / 1.25)}>
           <ZoomOut size={18} />
         </button>
-        <span className="w-12 text-center text-[13px] text-muted">{Math.round(zoom * 100)}%</span>
+        <span className="w-12 text-center text-[12px] text-muted">{Math.round(zoom * 100)}%</span>
         <button className={btn} aria-label="Zoom in" onClick={() => zoomBy(1.25)}>
           <ZoomIn size={18} />
         </button>
@@ -115,12 +115,12 @@ export function PdfViewer({ blob, fileName }: { blob: Blob; fileName: string }) 
         )}
       </div>
       {error ? (
-        <p className="px-1 text-[14px] text-rose" role="status">
+        <p className="px-1 text-[13px] text-rose" role="status">
           {error}
         </p>
       ) : (
         <div className="overflow-auto overscroll-contain rounded-2xl bg-surface-2 p-2 text-center">
-          {!doc && <p className="py-10 text-[14px] text-muted">Opening…</p>}
+          {!doc && <p className="py-10 text-[13px] text-muted">Opening…</p>}
           <canvas ref={canvasRef} className="mx-auto max-w-none bg-white" />
         </div>
       )}

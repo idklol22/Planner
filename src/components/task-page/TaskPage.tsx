@@ -12,7 +12,7 @@ import { parseDays, REPEAT_OPTIONS } from "../../domain/recurrence";
 import { activeCategories } from "../../domain/tasks";
 import { useStore } from "../../state/store";
 import { catColor } from "../../theme/store";
-import { FlowerCheck } from "../Flower";
+import { TaskCheck } from "../TaskMark";
 import { blocksToMarkdown } from "./markdown";
 import { goBack } from "./route";
 import { matchInlineMath } from "./math";
@@ -93,7 +93,7 @@ function withAfterBasic<T extends { group?: string }>(items: T[], extra: T): T[]
 }
 
 const chip =
-  "inline-flex h-8 items-center gap-1.5 rounded-lg bg-ink/[0.06] px-2.5 text-[16px] text-muted outline-none transition-colors hover:bg-ink/[0.1] hover:text-ink focus:bg-ink/[0.1] focus:text-ink";
+  "inline-flex h-8 items-center gap-1.5 rounded-lg bg-ink/[0.06] px-2.5 text-[12px] text-muted outline-none transition-colors hover:bg-ink/[0.1] hover:text-ink focus:bg-ink/[0.1] focus:text-ink";
 
 function TaskDocument({ task }: { task: Task }) {
   const { data, actions } = useStore();
@@ -246,8 +246,8 @@ function TaskDocument({ task }: { task: Task }) {
   return (
     <article className="mx-auto w-full max-w-[720px] px-4 pb-[max(16px,var(--safe-bottom))] pt-6 md:px-0 md:pt-10">
       <div className="flex items-start gap-3">
-        <div className="pt-[0.55rem]">
-          <FlowerCheck checked={task.done} color={color} onToggle={() => actions.toggleTask(task.id)} size={34} />
+        <div className="-ml-2 -mt-[5px]">
+          <TaskCheck checked={task.done} color={color} onToggle={() => actions.toggleTask(task.id)} size={28} />
         </div>
         <textarea
           value={title}
@@ -263,14 +263,14 @@ function TaskDocument({ task }: { task: Task }) {
             }
           }}
           aria-label="Task title"
-          style={{ fontSize: 38, lineHeight: 1.15, fontWeight: 700, letterSpacing: "-0.025em" }}
+          style={{ fontSize: 23, lineHeight: 1.25, fontWeight: 700, letterSpacing: "-0.02em" }}
           className={`min-w-0 flex-1 resize-none bg-transparent font-bold tracking-[-0.025em] outline-none [field-sizing:content] placeholder:text-ink/25 ${
             task.done ? "text-ink/40 line-through decoration-ink/25" : ""
           }`}
         />
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-2 pl-0 md:pl-[46px]">
+      <div className="mt-3 flex flex-wrap items-center gap-1.5 pl-0 md:pl-[36px]">
         <label className={chip} style={{ color: category ? color : undefined }}>
           <span className="h-2 w-2 rounded-full" style={{ background: color }} />
           <select
@@ -348,7 +348,7 @@ function TaskDocument({ task }: { task: Task }) {
         </label>
       </div>
 
-      <div className="mt-8 border-t border-line pt-6">
+      <div className="mt-5 border-t border-line pt-4">
         <BlockNoteView
           editor={editor}
           theme="dark"
@@ -366,7 +366,7 @@ function TaskDocument({ task }: { task: Task }) {
                     aliases: taskSlashAliases,
                     group: "Basic blocks",
                     subtext: "A real subtask you can tick off",
-                    icon: <span className="text-[14px]">&#9744;</span>,
+                    icon: <span className="text-[13px]">&#9744;</span>,
                     onItemClick: () => {
                       const id = actionsRef.current.addSubtask(task.id, PLACEHOLDER_TITLE);
                       if (!id) return;

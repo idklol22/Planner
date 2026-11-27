@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Archive, Check, Library, ListFilter, Menu, MessageSquare, Plus, Repeat, Settings2, Sparkles, Tags, Settings, Flame } from "lucide-react";
+import { Archive, Check, Library, ListFilter, Menu, MessageSquare, Plus, Repeat, Settings2, Sparkles, Tags, Target, Settings, Flame } from "lucide-react";
 import {
   addDays,
   formatDayTitle,
@@ -12,19 +12,18 @@ import { ghostsFor } from "../domain/habits";
 import { type Habit } from "../domain/model";
 import { CATEGORY_COLORS } from "../domain/palette";
 import { catColor } from "../theme/store";
-import { dayKcal } from "../domain/calories";
 import { sectionsForDay, tasksForDay, unfinishedTopLevelOn, type Section } from "../domain/tasks";
 import { useMessages } from "../state/messages";
 import { useStore } from "../state/store";
 import { useToast } from "../state/toast";
-import { CalendarStrip, type CalendarMode } from "./CalendarStrip";
+import { Calendar, type CalendarMode } from "./Calendar";
 import { CalorieBar } from "./CalorieBar";
 import { DeadlinesCard } from "./DeadlinesCard";
-import { Flower } from "./Flower";
+import { TaskMark } from "./TaskMark";
 import { HabitEditor } from "./HabitEditor";
 import { CategoryGoals } from "./CategoryGoals";
 import { CalendarArrowRight, CategoryIcon } from "./icons";
-import { DaySummaryCard, WeekSummaryCard } from "./Summaries";
+import { WeekSummaryCard } from "./Summaries";
 import { TaskRow } from "./TaskRow";
 
 export type MenuPage = "categories" | "habits" | "library" | "chat" | "archive" | "settings";
@@ -61,15 +60,17 @@ function InlineAdd({
     ref.current?.scrollIntoView({ block: "center", behavior: "smooth" });
   }, []);
   return (
-    <div className="animate-row flex min-h-[52px] items-center gap-3.5 rounded-xl bg-ink/[0.05] px-2 py-1">
-      <Flower size={32} color={color} />
+    <div className="animate-row flex min-h-11 items-center gap-1.5 rounded-xl bg-ink/[0.05]">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center">
+        <TaskMark color={color} />
+      </span>
       <input
         ref={ref}
         value={value}
         onChange={(e) => setValue(e.target.value)}
         placeholder="New task, press Enter"
         enterKeyHint="done"
-        className="min-w-0 flex-1 bg-transparent py-1.5 text-[17px] text-ink outline-none placeholder:text-faint"
+        className="min-w-0 flex-1 bg-transparent py-1.5 text-[16px] text-ink outline-none placeholder:text-faint"
         onKeyDown={(e) => {
           if (e.key === "Enter" && value.trim()) {
             onAdd(value.trim());
@@ -100,16 +101,16 @@ function GhostRow({
   onEdit: () => void;
 }) {
   return (
-    <div className="animate-row group flex min-h-[52px] items-center gap-3.5 rounded-xl px-2 py-1 opacity-55 transition-[opacity,background-color] hover:bg-ink/[0.04] hover:opacity-90">
+    <div className="animate-row group flex min-h-11 items-center gap-1.5 rounded-xl opacity-55 transition-[opacity,background-color] hover:bg-ink/[0.04] hover:opacity-90">
       <button
         onClick={onAccept}
         aria-label={`Add "${habit.title}" as a task`}
-        className="flower-btn"
+        className="mark-btn"
       >
-        <Flower size={32} color={color} ghost />
+        <TaskMark color={color} ghost />
       </button>
       <button onClick={onAccept} className="flex min-w-0 flex-1 items-center gap-2 py-1.5 text-left">
-        <span className="min-w-0 flex-1 truncate text-[17px] leading-snug text-ink">{habit.title}</span>
+        <span className="min-w-0 flex-1 truncate text-[14.5px] leading-snug text-ink">{habit.title}</span>
         <Repeat size={16} className="shrink-0 text-faint" aria-label="Habit" />
       </button>
       <button
@@ -141,6 +142,7 @@ function CategorySection({
   onEditHabit: (habit: Habit) => void;
 }) {
   const { actions } = useStore();
+  const [addingGoal, setAddingGoal] = useState(false);
   const cat = section.category;
   const color = cat ? catColor(cat.color) : "var(--accent)";
   const name = cat?.name ?? "Inbox";
@@ -148,16 +150,26 @@ function CategorySection({
   return (
     <section aria-label={name} className="module">
       <div className="module-head !mb-1">
-        <CategoryIcon name={cat?.icon} size={19} color={color} />
-        <h3 className="min-w-0 truncate text-[17px] font-semibold" style={{ color }}>
+        <CategoryIcon name={cat?.icon} size={16} color={color} />
+        <h3 className="min-w-0 truncate text-[14.5px] font-semibold" style={{ color }}>
           {name}
         </h3>
         {section.tasks.length > 0 && (
-          <span className="text-[14px] font-medium tabular-nums text-faint">
+          <span className="text-[13px] font-medium tabular-nums text-faint">
             {section.tasks.filter((t) => t.done).length}/{section.tasks.length}
           </span>
         )}
         <span className="flex-1" />
+        {cat && (
+          <button
+            onClick={() => setAddingGoal(true)}
+            aria-label={`Add goal to ${name}`}
+            title="Add goal"
+            className="mod-btn !min-w-9 !px-0 !text-faint"
+          >
+            <Target size={16} />
+          </button>
+        )}
         <button
           onClick={() => setAdding(!adding)}
           aria-label={`Add task to ${name}`}
@@ -172,7 +184,9 @@ function CategorySection({
           />
         </button>
       </div>
-      {cat && <CategoryGoals categoryId={cat.id} color={color} />}
+      {cat && (
+        <CategoryGoals categoryId={cat.id} color={color} adding={addingGoal} onAddingChange={setAddingGoal} />
+      )}
       {body && (
         <div className="space-y-0.5">
           {section.tasks.map((task) => (
@@ -202,16 +216,6 @@ function CategorySection({
 
 const SUGGESTIONS = ["Study", "Work", "Health", "Personal"];
 
-/** Re-renders every minute so the "after 21:00" summary appears on its own. */
-function useHour(): number {
-  const [hour, setHour] = useState(() => new Date().getHours());
-  useEffect(() => {
-    const id = window.setInterval(() => setHour(new Date().getHours()), 60_000);
-    return () => window.clearInterval(id);
-  }, []);
-  return hour;
-}
-
 type EditorState = Habit | null;
 
 export function DayView({
@@ -237,9 +241,7 @@ export function DayView({
   const [mode, setMode] = useState<CalendarMode>(() =>
     typeof window !== "undefined" && window.matchMedia?.("(min-width: 1024px)").matches ? "month" : "week",
   );
-  const [weekPinned, setWeekPinned] = useState(false);
   const [editor, setEditor] = useState<EditorState>(null);
-  const hour = useHour();
 
   useEffect(() => {
     try {
@@ -307,34 +309,23 @@ export function DayView({
         ? "Tomorrow"
         : selected === addDays(today, -1)
           ? "Yesterday"
-          : null;
+          : fromISODate(selected).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
   const hasCategories = data.categories.some((c) => !c.archived && !c.deletedAt);
-  const showDaySummary = selected < today || (selected === today && hour >= 21);
-  const isSunday = fromISODate(selected).getDay() === 0;
-  const showWeekSummary = isSunday || (weekPinned && mode === "week");
-
-  function changeMode(next: CalendarMode) {
-    setMode(next);
-    setWeekPinned(next === "week");
-  }
+  const showWeekSummary = fromISODate(selected).getDay() === 0;
 
   return (
-    <div className="px-4 pt-[calc(12px+var(--safe-top))] md:px-6 lg:grid lg:grid-cols-[420px_minmax(0,1fr)] lg:items-start lg:gap-4 lg:px-8 lg:pt-6">
-      <div className="flex flex-col gap-4 lg:sticky lg:top-6">
-      <header className="flex items-center justify-between gap-3 lg:contents">
+    <div className="px-3 pt-[calc(8px+var(--safe-top))] md:px-6 lg:grid lg:grid-cols-[420px_minmax(0,1fr)] lg:items-start lg:gap-4 lg:px-8 lg:pt-6">
+      <div className="flex flex-col gap-2 lg:sticky lg:top-6">
+      <header className="flex items-center justify-between gap-3 px-1 lg:contents">
         <div className="min-w-0 lg:hidden">
-          {rel && (
-            <div className="text-[12px] font-semibold uppercase tracking-[0.14em] text-faint">{rel}</div>
-          )}
-          <h1 className="truncate text-[30px] font-bold leading-tight tracking-tight">
-            {formatDayTitle(selected)}
-          </h1>
+          <h1 className="truncate text-[20px] font-bold leading-tight tracking-tight">{formatDayTitle(selected)}</h1>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-faint">{rel}</div>
         </div>
         <div className="relative flex shrink-0 items-center gap-2 lg:fixed lg:right-6 lg:top-5 lg:z-30">
           {selected !== today && (
             <button
               onClick={() => onSelect(today)}
-              className="animate-fade h-10 rounded-xl bg-ink/[0.07] px-4 text-[15px] font-semibold text-muted transition-colors hover:bg-ink/[0.12] hover:text-ink active:scale-95"
+              className="animate-fade h-10 rounded-xl bg-ink/[0.07] px-4 text-[13.5px] font-semibold text-muted transition-colors hover:bg-ink/[0.12] hover:text-ink active:scale-95"
             >
               Today
             </button>
@@ -376,7 +367,7 @@ export function DayView({
                       setMainMenu(false);
                       onOpenPage(page);
                     }}
-                    className={`flex w-full items-center gap-3 px-4 py-4 text-left text-[16px] font-medium hover:bg-ink/5 ${
+                    className={`flex w-full items-center gap-3 px-4 py-3 text-left text-[13px] font-medium hover:bg-ink/5 ${
                       i > 0 ? "border-t border-line" : ""
                     }`}
                   >
@@ -397,33 +388,14 @@ export function DayView({
         </div>
       </header>
 
-      <CalendarStrip selected={selected} onSelect={onSelect} mode={mode} onModeChange={changeMode} />
-
-      <CalorieBar date={selected} />
-
-      <section aria-label="Today" className="module">
-        <div className="module-head !mb-1">
-          <h2 className="module-title">{rel ?? "Selected day"}</h2>
-        </div>
-        <div className="hidden items-baseline gap-3 lg:flex">
-          <div className="text-[28px] font-bold leading-none tracking-tight">
-            {fromISODate(selected).toLocaleDateString("en-GB", { weekday: "long" })}
-          </div>
-          <div className="text-[18px] font-semibold leading-tight text-muted">
-            {fromISODate(selected).toLocaleDateString("en-GB", { day: "numeric", month: "long" })}
-          </div>
-        </div>
-        <div className="mt-2 text-[16px] font-medium text-muted lg:mt-3">
-          {dayTasks.length - open} of {dayTasks.length} done · {dayKcal(data.calories, selected).toLocaleString("en-US")} kcal
-        </div>
-      </section>
+      <Calendar selected={selected} onSelect={onSelect} mode={mode} onModeChange={setMode} />
       </div>
 
-      <div className="mt-4 min-w-0 lg:mt-0">
+      <div className="mt-2 min-w-0 lg:mt-0">
 
-      <div className="relative mb-3 flex items-center justify-between px-1">
+      <div className="relative mb-1.5 flex items-center justify-between px-1">
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
-          <div className="text-[15px] font-medium text-muted">
+          <div className="text-[11.5px] font-medium text-muted">
             {dayTasks.length === 0
               ? "Nothing planned"
               : open === 0
@@ -433,7 +405,7 @@ export function DayView({
           {canMoveAllToToday && (
             <button
               onClick={moveAllToToday}
-              className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-accent px-3.5 py-2 text-[14px] font-semibold text-accent-ink transition-transform active:scale-95 focus-visible:ring-2 focus-visible:ring-accent"
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-accent px-3.5 py-2 text-[13px] font-semibold text-accent-ink transition-transform active:scale-95 focus-visible:ring-2 focus-visible:ring-accent"
             >
               <CalendarArrowRight size={16} />
               <span className="hidden sm:inline">Move all to today</span>
@@ -469,7 +441,7 @@ export function DayView({
                     <button
                       key={key}
                       onClick={() => setPrefs((p) => ({ ...p, [key]: !p[key] }))}
-                      className="flex w-full items-center justify-between px-4 py-4 text-left text-[16px] hover:bg-ink/5"
+                      className="flex w-full items-center justify-between px-4 py-3 text-left text-[13px] hover:bg-ink/5"
                     >
                       {label}
                       {prefs[key] && <Check size={18} />}
@@ -485,7 +457,7 @@ export function DayView({
                           n ? "success" : "info",
                         );
                       }}
-                      className="flex w-full items-center gap-3 px-4 py-4 text-left text-[16px] hover:bg-ink/5"
+                      className="flex w-full items-center gap-3 px-4 py-3 text-left text-[13px] hover:bg-ink/5"
                     >
                       <CalendarArrowRight size={16} className="text-muted" /> Move unfinished to tomorrow
                     </button>
@@ -495,7 +467,7 @@ export function DayView({
                       setListMenu(false);
                       onManageCategories();
                     }}
-                    className="w-full border-t border-line px-4 py-4 text-left text-[16px] hover:bg-ink/5"
+                    className="w-full border-t border-line px-4 py-3 text-left text-[13px] hover:bg-ink/5"
                   >
                     Reorder categories
                   </button>
@@ -509,10 +481,10 @@ export function DayView({
       {!hasCategories && sections.length === 0 ? (
         <div className="animate-fade module !border !border-dashed !border-ink/15 px-5 py-10 text-center">
           <div className="mx-auto mb-4 flex w-fit">
-            <Flower size={56} filled color={CATEGORY_COLORS[8]} />
+            <TaskMark size={52} done color={CATEGORY_COLORS[8]} />
           </div>
-          <h2 className="text-[20px] font-semibold">Start with a few categories</h2>
-          <p className="mx-auto mt-1.5 max-w-[19rem] text-[15px] leading-relaxed text-muted">
+          <h2 className="text-[16px] font-semibold">Start with a few categories</h2>
+          <p className="mx-auto mt-1.5 max-w-[19rem] text-[13.5px] leading-relaxed text-muted">
             Categories group your tasks each day, each with its own colour. Pick some to begin, change them any time.
           </p>
           <div className="mt-5 flex flex-wrap justify-center gap-2">
@@ -520,7 +492,7 @@ export function DayView({
               <button
                 key={name}
                 onClick={() => actions.addCategory(name, CATEGORY_COLORS[[8, 4, 0, 6][i]])}
-                className="flex items-center gap-1.5 rounded-xl bg-ink/[0.07] px-4 py-2.5 text-[15px] font-semibold transition-colors hover:bg-ink/[0.12] active:scale-95"
+                className="flex items-center gap-1.5 rounded-xl bg-ink/[0.07] px-4 py-2.5 text-[13.5px] font-semibold transition-colors hover:bg-ink/[0.12] active:scale-95"
               >
                 <Plus size={15} /> {name}
               </button>
@@ -528,13 +500,13 @@ export function DayView({
           </div>
           <button
             onClick={onManageCategories}
-            className="mt-4 text-[14px] font-medium text-muted underline underline-offset-4 hover:text-ink"
+            className="mt-4 text-[13px] font-medium text-muted underline underline-offset-4 hover:text-ink"
           >
             Or create your own
           </button>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-2">
           {sections.map(({ section, ghosts }) => {
             const key = section.category?.id ?? "__inbox";
             return (
@@ -553,7 +525,7 @@ export function DayView({
             );
           })}
           {sections.length === 0 && (
-            <div className="rounded-2xl border border-dashed border-ink/12 px-4 py-8 text-center text-[15px] text-muted">
+            <div className="rounded-2xl border border-dashed border-ink/12 px-4 py-8 text-center text-[13.5px] text-muted">
               <Sparkles size={20} className="mx-auto mb-2 text-faint" />
               Nothing to show. Turn off &quot;Hide empty categories&quot; in the list menu to add tasks.
             </div>
@@ -563,12 +535,15 @@ export function DayView({
 
       <DeadlinesCard date={selected} />
 
-      {(showDaySummary || showWeekSummary) && (
-        <div className="mt-4 space-y-4">
-          {showDaySummary && <DaySummaryCard date={selected} />}
-          {showWeekSummary && <WeekSummaryCard start={startOfWeek(selected)} />}
+      {showWeekSummary && (
+        <div className="mt-3">
+          <WeekSummaryCard start={startOfWeek(selected)} />
         </div>
       )}
+
+      <div className="mt-3">
+        <CalorieBar date={selected} />
+      </div>
 
       </div>
 

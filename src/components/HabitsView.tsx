@@ -32,23 +32,23 @@ export function HabitsView({ date }: { date: ISODate }) {
 
   return (
     <div className="px-4 pb-8 pt-2 md:px-6">
-      <p className="mb-4 px-1 text-[14px] leading-relaxed text-muted">
+      <p className="mb-4 px-1 text-[13px] leading-relaxed text-muted">
         Habits are daily suggestions. Set their schedule and category here — they appear as faded rows on your day.
       </p>
 
       <div className="mb-5 flex">
         <button
           onClick={() => setCreating(true)}
-          className="h-11 w-full rounded-xl bg-accent px-5 text-[15px] font-semibold text-accent-ink transition-transform active:scale-95 focus-visible:ring-2 focus-visible:ring-accent sm:w-auto"
+          className="h-11 w-full rounded-xl bg-accent px-5 text-[13.5px] font-semibold text-accent-ink transition-transform active:scale-95 focus-visible:ring-2 focus-visible:ring-accent sm:w-auto"
         >
           New habit
         </button>
       </div>
 
       {active.length === 0 ? (
-        <div className="glass-panel border border-dashed border-ink/15 px-4 py-10 text-center text-[14px] text-muted">
+        <div className="glass-panel border border-dashed border-ink/15 px-4 py-10 text-center text-[13px] text-muted">
           No habits yet.
-          <p className="mt-1.5 text-[12px] leading-relaxed text-faint">
+          <p className="mt-1.5 text-[11.5px] leading-relaxed text-faint">
             Habits show up as faded rows under their category. Tap a ghost to add it as a task.
           </p>
         </div>
@@ -63,7 +63,7 @@ export function HabitsView({ date }: { date: ISODate }) {
                 />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[16px] font-semibold">{habit.title}</span>
-                  <span className="block truncate text-[12px] text-faint">{detail(habit)}</span>
+                  <span className="block truncate text-[11.5px] text-faint">{detail(habit)}</span>
                 </span>
                 <button
                   onClick={() => setEditing(habit)}
@@ -87,7 +87,7 @@ export function HabitsView({ date }: { date: ISODate }) {
 
       {archived.length > 0 && (
         <section className="mt-8">
-          <h2 className="mb-2 px-1 text-[12px] font-semibold uppercase tracking-wider text-faint">
+          <h2 className="mb-2 px-1 text-[11.5px] font-semibold uppercase tracking-wider text-faint">
             Archived
           </h2>
           <div className="space-y-2">
@@ -100,11 +100,11 @@ export function HabitsView({ date }: { date: ISODate }) {
                   />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[16px] font-semibold">{habit.title}</span>
-                    <span className="block truncate text-[12px] text-faint">{detail(habit)}</span>
+                    <span className="block truncate text-[11.5px] text-faint">{detail(habit)}</span>
                   </span>
                   <button
                     onClick={() => actions.archiveHabit(habit.id, false)}
-                    className="flex items-center gap-1.5 rounded-full bg-surface-2 px-3.5 py-2 text-[13px] font-semibold hover:bg-surface-3 focus-visible:ring-2 focus-visible:ring-accent"
+                    className="flex items-center gap-1.5 rounded-full bg-surface-2 px-3.5 py-2 text-[12px] font-semibold hover:bg-surface-3 focus-visible:ring-2 focus-visible:ring-accent"
                   >
                     <ArchiveRestore size={15} /> Restore
                   </button>

@@ -7,7 +7,7 @@ import { activeCategories, subtaskProgress, subtasksOf } from "../domain/tasks";
 import { useStore } from "../state/store";
 import { catColor } from "../theme/store";
 import { useToast } from "../state/toast";
-import { FlowerCheck } from "./Flower";
+import { TaskCheck } from "./TaskMark";
 import { NoteEditor } from "./NotesEditor";
 import { taskHref } from "./task-page/route";
 
@@ -17,7 +17,7 @@ const DURATIONS = [15, 30, 45, 60, 90, 120, 180];
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex min-h-[52px] items-center justify-between gap-4 px-4 py-2">
-      <div className="shrink-0 text-[15px] text-muted">{label}</div>
+      <div className="shrink-0 text-[13.5px] text-muted">{label}</div>
       <div className="flex min-w-0 items-center justify-end gap-2">{children}</div>
     </div>
   );
@@ -96,13 +96,13 @@ function SheetBody({
           {isSub && parent ? (
             <button
               onClick={() => onOpen(parent.id)}
-              className="flex min-w-0 items-center gap-1 rounded-full py-1 pr-3 text-[14px] font-medium text-muted hover:text-ink"
+              className="flex min-w-0 items-center gap-1 rounded-full py-1 pr-3 text-[13px] font-medium text-muted hover:text-ink"
             >
               <ChevronLeft size={18} />
               <span className="truncate">{parent.title}</span>
             </button>
           ) : (
-            <span className="text-[13px] font-semibold uppercase tracking-[0.14em] text-faint">Task</span>
+            <span className="text-[12px] font-semibold uppercase tracking-[0.14em] text-faint">Task</span>
           )}
           <div className="flex items-center gap-2">
           <a
@@ -127,11 +127,11 @@ function SheetBody({
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-4 pb-6">
         <div className="flex items-start gap-3">
           <div className="pt-1.5">
-            <FlowerCheck
+            <TaskCheck
               checked={task.done}
               color={color}
               onToggle={() => actions.toggleTask(task.id)}
-              size={34}
+              size={28}
             />
           </div>
           <textarea
@@ -141,7 +141,7 @@ function SheetBody({
             onBlur={commitTitle}
             onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), e.currentTarget.blur())}
             aria-label="Task title"
-            className={`min-w-0 flex-1 resize-none bg-transparent py-1 text-[24px] font-bold leading-tight tracking-tight outline-none [field-sizing:content] ${
+            className={`min-w-0 flex-1 resize-none bg-transparent py-1 text-[18px] font-bold leading-tight tracking-tight outline-none [field-sizing:content] ${
               task.done ? "text-faint line-through decoration-ink/30" : ""
             }`}
           />
@@ -157,7 +157,7 @@ function SheetBody({
                     <button
                       key={c.id}
                       onClick={() => actions.updateTask(task.id, { categoryId: c.id })}
-                      className="flex shrink-0 items-center gap-2 rounded-full px-3.5 py-2 text-[14px] font-semibold transition-all active:scale-95"
+                      className="flex shrink-0 items-center gap-2 rounded-full px-3.5 py-2 text-[13px] font-semibold transition-all active:scale-95"
                       style={{
                         color: catColor(c.color),
                         background: on ? `${catColor(c.color)}26` : "var(--surface-raised)",
@@ -170,7 +170,7 @@ function SheetBody({
                   );
                 })}
                 {cats.length === 0 && (
-                  <span className="py-2 text-[14px] text-faint">No categories yet. Add some from the menu.</span>
+                  <span className="py-2 text-[13px] text-faint">No categories yet. Add some from the menu.</span>
                 )}
               </div>
             </div>
@@ -188,7 +188,7 @@ function SheetBody({
                 {task.time && (
                   <button
                     onClick={() => actions.updateTask(task.id, { time: undefined, durationMin: undefined })}
-                    className="text-[13px] text-faint hover:text-ink"
+                    className="text-[12px] text-faint hover:text-ink"
                   >
                     Clear
                   </button>
@@ -222,7 +222,7 @@ function SheetBody({
               )}
               <Field label="Repeat">
                 {task.seriesId ? (
-                  <span className="text-[14px] text-faint">Part of a repeating series</span>
+                  <span className="text-[13px] text-faint">Part of a repeating series</span>
                 ) : (
                   <select
                     value={repeatValue}
@@ -247,7 +247,7 @@ function SheetBody({
                         key={day}
                         onClick={() => toggleDay(day)}
                         aria-pressed={on}
-                        className={`h-9 w-9 rounded-full text-[13px] font-semibold transition-colors ${
+                        className={`h-9 w-9 rounded-full text-[12px] font-semibold transition-colors ${
                           on ? "bg-accent text-accent-ink" : "bg-surface-2 text-muted hover:bg-surface-3"
                         }`}
                       >
@@ -282,9 +282,9 @@ function SheetBody({
             <section>
               <div className="mb-2 flex items-center gap-2 px-1">
                 <ListChecks size={15} className="text-faint" />
-                <h3 className="text-[13px] font-semibold uppercase tracking-[0.12em] text-faint">Subtasks</h3>
+                <h3 className="text-[12px] font-semibold uppercase tracking-[0.12em] text-faint">Subtasks</h3>
                 {progress.total > 0 && (
-                  <span className="text-[13px] font-medium tabular-nums text-faint">
+                  <span className="text-[12px] font-medium tabular-nums text-faint">
                     {progress.done}/{progress.total}
                   </span>
                 )}
@@ -295,10 +295,10 @@ function SheetBody({
                     key={sub.id}
                     className="animate-row flex min-h-[48px] items-center gap-3 border-b border-line px-3 py-1.5"
                   >
-                    <FlowerCheck
+                    <TaskCheck
                       checked={sub.done}
                       color={color}
-                      size={24}
+                      size={20}
                       onToggle={() => actions.toggleTask(sub.id)}
                       label={`Toggle ${sub.title}`}
                     />
@@ -351,7 +351,7 @@ function SheetBody({
             onClose();
           }}
           aria-label="Delete"
-          className="flex items-center gap-1.5 rounded-full bg-rose/10 px-4 py-2.5 text-[14px] font-semibold text-rose transition-colors hover:bg-rose/20 active:scale-95"
+          className="flex items-center gap-1.5 rounded-full bg-rose/10 px-4 py-2.5 text-[13px] font-semibold text-rose transition-colors hover:bg-rose/20 active:scale-95"
         >
           <Trash2 size={16} /> <span className="hidden min-[420px]:inline">Delete</span>
         </button>
@@ -364,7 +364,7 @@ function SheetBody({
                 notify("Moved to the next day", "info");
                 onClose();
               }}
-              className="flex items-center gap-1.5 rounded-full bg-surface-2 px-4 py-2.5 text-[14px] font-semibold transition-colors hover:bg-surface-3 active:scale-95"
+              className="flex items-center gap-1.5 rounded-full bg-surface-2 px-4 py-2.5 text-[13px] font-semibold transition-colors hover:bg-surface-3 active:scale-95"
             >
               <SunMoon size={16} /> Tomorrow
             </button>
@@ -373,7 +373,7 @@ function SheetBody({
                 actions.duplicateTask(task.id);
                 notify("Task duplicated", "info");
               }}
-              className="flex items-center gap-1.5 rounded-full bg-surface-2 px-4 py-2.5 text-[14px] font-semibold transition-colors hover:bg-surface-3 active:scale-95"
+              className="flex items-center gap-1.5 rounded-full bg-surface-2 px-4 py-2.5 text-[13px] font-semibold transition-colors hover:bg-surface-3 active:scale-95"
             >
               <Copy size={16} /> Duplicate
             </button>

@@ -17,7 +17,7 @@ const DAYS: [string, number][] = [
 ];
 const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
-const LABEL = "mb-1.5 block text-[12px] font-semibold uppercase tracking-wider text-faint";
+const LABEL = "mb-1.5 block text-[11.5px] font-semibold uppercase tracking-wider text-faint";
 const FIELD =
   "h-11 rounded-xl bg-canvas px-3 text-[16px] text-ink outline-none focus:ring-1 focus:ring-ink/30";
 
@@ -81,7 +81,7 @@ export function HabitEditor({
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-canvas">
             <Flame size={17} className="text-amber" />
           </span>
-          <h2 className="text-[19px] font-bold tracking-tight">{habit ? "Edit habit" : "New habit"}</h2>
+          <h2 className="text-[15.5px] font-bold tracking-tight">{habit ? "Edit habit" : "New habit"}</h2>
         </div>
 
         <label className={LABEL}>Habit</label>
@@ -115,7 +115,7 @@ export function HabitEditor({
                 aria-pressed={on}
                 aria-label={DAY_NAMES[i]}
                 onClick={() => setDays((d) => (on ? d.filter((x) => x !== value) : [...d, value]))}
-                className={`flex h-10 flex-1 items-center justify-center rounded-full text-[14px] font-semibold transition-all active:scale-90 ${
+                className={`flex h-10 flex-1 items-center justify-center rounded-full text-[13px] font-semibold transition-all active:scale-90 ${
                   on ? "bg-accent text-accent-ink" : "bg-canvas text-muted hover:text-ink"
                 }`}
               >
@@ -124,7 +124,7 @@ export function HabitEditor({
             );
           })}
         </div>
-        <p className="mb-4 text-[12px] text-faint">
+        <p className="mb-4 text-[11.5px] text-faint">
           {days.length === 0 || days.length === 7 ? "Every day" : "Only on the days selected"}
         </p>
 
@@ -146,7 +146,7 @@ export function HabitEditor({
                   key={String(f)}
                   type="button"
                   onClick={() => setForever(f)}
-                  className={`flex-1 rounded-[10px] text-[13px] font-semibold transition-colors ${
+                  className={`flex-1 rounded-[10px] text-[12px] font-semibold transition-colors ${
                     forever === f ? "bg-accent text-accent-ink" : "text-muted"
                   }`}
                 >
@@ -181,14 +181,14 @@ export function HabitEditor({
           )}
           <button
             onClick={onClose}
-            className="h-12 flex-1 rounded-full bg-canvas text-[15px] font-semibold text-muted transition-transform active:scale-95"
+            className="h-12 flex-1 rounded-full bg-canvas text-[13.5px] font-semibold text-muted transition-transform active:scale-95"
           >
             Cancel
           </button>
           <button
             onClick={save}
             disabled={!valid}
-            className="h-12 flex-[1.4] rounded-full bg-accent text-[15px] font-semibold text-accent-ink transition-all active:scale-95 disabled:opacity-30"
+            className="h-12 flex-[1.4] rounded-full bg-accent text-[13.5px] font-semibold text-accent-ink transition-all active:scale-95 disabled:opacity-30"
           >
             {habit ? "Save" : "Add habit"}
           </button>

@@ -23,7 +23,7 @@ import { resolveSwipe, type SwipeState } from "../domain/swipe";
 import { subtaskProgress } from "../domain/tasks";
 import { useStore } from "../state/store";
 import { useToast } from "../state/toast";
-import { FlowerCheck } from "./Flower";
+import { TaskCheck } from "./TaskMark";
 import { CalendarArrowRight } from "./icons";
 
 const REST: SwipeState = { axis: null, dx: 0, action: null, settled: false };
@@ -206,7 +206,7 @@ export function TaskRow({
       onPointerUp={endSwipe}
       onPointerCancel={cancelSwipe}
       onClickCapture={onClickCapture}
-      className={`group relative flex min-h-[52px] touch-pan-y items-center gap-3.5 overflow-hidden rounded-xl px-2 py-1 transition-colors ${
+      className={`group relative flex min-h-11 touch-pan-y items-center gap-1.5 overflow-hidden rounded-xl px-0 transition-colors ${
         active ? "bg-ink/[0.07]" : "hover:bg-ink/[0.04]"
       }`}
     >
@@ -216,7 +216,7 @@ export function TaskRow({
         className="pointer-events-none absolute inset-y-0 left-0 z-0 flex items-center justify-start overflow-hidden rounded-xl bg-accent text-accent-ink"
         style={{ width: swipe.dx > 0 ? underlayWidth : 0, opacity: swipe.dx > 0 ? underlayOpacity : 0 }}
       >
-        <span className="flex shrink-0 items-center gap-1.5 px-3 text-[13px] font-semibold">
+        <span className="flex shrink-0 items-center gap-1.5 px-3 text-[12px] font-semibold">
           <Archive size={18} /> Archive
         </span>
       </div>
@@ -227,46 +227,41 @@ export function TaskRow({
         className="pointer-events-none absolute inset-y-0 right-0 z-0 flex items-center justify-end overflow-hidden rounded-xl bg-rose text-canvas"
         style={{ width: swipe.dx < 0 ? underlayWidth : 0, opacity: swipe.dx < 0 ? underlayOpacity : 0 }}
       >
-        <span className="flex shrink-0 items-center gap-1.5 px-3 text-[13px] font-semibold">
+        <span className="flex shrink-0 items-center gap-1.5 px-3 text-[12px] font-semibold">
           <Trash2 size={18} /> Delete
         </span>
       </div>
       <div
-        className="relative z-10 flex w-full min-w-0 flex-1 items-center gap-3.5"
+        className="relative z-10 flex w-full min-w-0 flex-1 items-center gap-1.5"
         style={{
           transform: `translateX(${swipe.dx}px)`,
           transition: dragging ? "none" : "transform 180ms ease-out",
         }}
       >
-        <FlowerCheck
+        <TaskCheck
           checked={task.done}
           color={color}
           onToggle={() => actions.toggleTask(task.id)}
           label={`Mark "${task.title}" ${task.done ? "not done" : "done"}`}
-          size={32}
         />
         <button
           onClick={() => onOpen(task.id)}
           className="flex min-w-0 flex-1 items-center gap-2 py-1.5 text-left focus-visible:ring-2 focus-visible:ring-accent"
         >
-          <span
-            className={`min-w-0 flex-1 truncate text-[17px] leading-snug transition-colors ${
-              task.done ? "text-faint line-through decoration-ink/25" : "text-ink"
-            }`}
-          >
-            {task.title}
+          <span className="min-w-0 flex-1 truncate text-[14.5px] leading-snug">
+            <span className={`task-title ${task.done ? "done" : ""}`}>{task.title}</span>
           </span>
           <span className="flex shrink-0 items-center gap-2 text-faint">
             {task.seriesId || task.rrule ? <Repeat size={16} aria-label="Repeats" /> : null}
             {hasNote && <StickyNote size={16} aria-label="Has a note" />}
             {task.time && (
-              <span className="flex items-center gap-1 text-[13px] font-medium tabular-nums">
+              <span className="flex items-center gap-1 text-[12px] font-medium tabular-nums">
                 <Clock size={14} /> {task.time}
               </span>
             )}
             {task.deadline && <Flag size={14} className="text-rose" aria-label="Deadline" />}
             {progress.total > 0 && (
-              <span className="flex items-center gap-1 text-[13px] font-medium tabular-nums">
+              <span className="flex items-center gap-1 text-[12px] font-medium tabular-nums">
                 <ListChecks size={15} /> {progress.done}/{progress.total}
               </span>
             )}
@@ -307,7 +302,7 @@ export function TaskRow({
                     actions.moveTaskToDay(task.id, addDays(task.date, 1));
                     setMenu(false);
                   }}
-                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[15px] font-medium hover:bg-ink/5 focus-visible:ring-2 focus-visible:ring-accent"
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[13.5px] font-medium hover:bg-ink/5 focus-visible:ring-2 focus-visible:ring-accent"
                 >
                   <CalendarArrowRight size={16} className="text-muted" /> Move to tomorrow
                 </button>
@@ -318,7 +313,7 @@ export function TaskRow({
                     undo("Task archived");
                     setMenu(false);
                   }}
-                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[15px] font-medium hover:bg-ink/5 focus-visible:ring-2 focus-visible:ring-accent"
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[13.5px] font-medium hover:bg-ink/5 focus-visible:ring-2 focus-visible:ring-accent"
                 >
                   <Archive size={16} className="text-muted" /> Archive
                 </button>
@@ -329,7 +324,7 @@ export function TaskRow({
                     undo("Task deleted");
                     setMenu(false);
                   }}
-                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[15px] font-medium text-rose hover:bg-ink/5 focus-visible:ring-2 focus-visible:ring-accent"
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[13.5px] font-medium text-rose hover:bg-ink/5 focus-visible:ring-2 focus-visible:ring-accent"
                 >
                   <Trash2 size={16} /> Delete
                 </button>

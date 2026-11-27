@@ -43,7 +43,7 @@ export function DeadlinesCard({ date }: { date: ISODate }) {
       <div className="space-y-3">
         {groups.map((group) => (
           <div key={group.key}>
-            <div className="mb-1 flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.12em] text-faint">
+            <div className="mb-1 flex items-center gap-2 text-[11.5px] font-semibold uppercase tracking-[0.12em] text-faint">
               {group.color && (
                 <span
                   className="h-2 w-2 rounded-full"
@@ -53,9 +53,9 @@ export function DeadlinesCard({ date }: { date: ISODate }) {
               {group.label}
             </div>
             {group.rows.map((d) => (
-              <div key={d.id} className="flex min-h-[44px] items-center gap-3 px-1 text-[15px]">
+              <div key={d.id} className="flex min-h-[44px] items-center gap-3 px-1 text-[13.5px]">
                 <span className="flex-1 truncate">{d.title}</span>
-                <span className="text-[12px] text-muted">
+                <span className="text-[11.5px] text-muted">
                   {[subjectName(d.subjectId), d.due.slice(5, 10)].filter(Boolean).join(" · ")}
                 </span>
               </div>

@@ -61,12 +61,12 @@ export function HealthSettings() {
         </Button>
       </div>
       {!isIOS() && (
-        <p className="mt-2 text-[12px] leading-relaxed text-faint">
+        <p className="mt-2 text-[11.5px] leading-relaxed text-faint">
           Health reading is available in the iPhone app.
         </p>
       )}
 
-      <p className="mt-4 text-[12px] text-muted" role="status">
+      <p className="mt-4 text-[11.5px] text-muted" role="status">
         {health.connected ? "Connected · " : ""}
         Last updated: {health.lastUpdatedAt ? new Date(health.lastUpdatedAt).toLocaleString() : "never"}
       </p>
@@ -74,9 +74,9 @@ export function HealthSettings() {
       <div className="mt-3 rounded-xl border border-line bg-ink/[0.02] px-3 py-2">
         <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-faint">Today</div>
         {values.length === 0 ? (
-          <p className="py-1 text-[13px] text-muted">No Health data for today yet.</p>
+          <p className="py-1 text-[12px] text-muted">No Health data for today yet.</p>
         ) : (
-          <dl className="grid grid-cols-1 gap-x-4 text-[13px] sm:grid-cols-2">
+          <dl className="grid grid-cols-1 gap-x-4 text-[12px] sm:grid-cols-2">
             {values.map(([label, value]) => (
               <div key={label} className="flex min-w-0 items-baseline justify-between gap-2 py-0.5">
                 <dt className="text-muted">{label}</dt>
@@ -89,14 +89,14 @@ export function HealthSettings() {
 
       {health.error && (
         <div className="mt-4 space-y-2" role="alert">
-          <p className="break-words text-[12px] leading-relaxed text-rose">{health.error}</p>
-          <p className="text-[12px] leading-relaxed text-muted">
+          <p className="break-words text-[11.5px] leading-relaxed text-rose">{health.error}</p>
+          <p className="text-[11.5px] leading-relaxed text-muted">
             A sideloaded app may not be allowed to read Health. You can use an Apple Shortcut instead: find today&apos;s
             Active Energy, Steps, Exercise Minutes, Sleep and Resting Heart Rate, then use the &quot;Open URL&quot;
             action with this URL (replace the dots with your values):
           </p>
           <div className="flex min-w-0 gap-2">
-            <code className="min-w-0 flex-1 break-all rounded-lg bg-ink/[0.06] px-2.5 py-2 text-[12px] leading-relaxed text-ink">
+            <code className="min-w-0 flex-1 break-all rounded-lg bg-ink/[0.06] px-2.5 py-2 text-[11.5px] leading-relaxed text-ink">
               {SHORTCUT_URL}
             </code>
             <Button onClick={() => void copyTemplate()} className="shrink-0">

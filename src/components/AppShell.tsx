@@ -8,7 +8,7 @@ import { ArchiveView } from "./ArchiveView";
 import { CategoriesView } from "./CategoriesView";
 import { ChatView } from "./ChatView";
 import { DayView, type MenuPage } from "./DayView";
-import { Flower } from "./Flower";
+import { TaskMark } from "./TaskMark";
 import { HabitsView } from "./HabitsView";
 import { LibraryView } from "./LibraryView";
 import { SettingsView } from "./SettingsView";
@@ -67,7 +67,7 @@ function MenuPageView({ page, onBack }: { page: MenuPage; onBack: () => void }) 
           >
             <ChevronLeft size={20} />
           </button>
-          <h1 className="min-w-0 truncate text-[24px] font-bold tracking-tight">{title ?? TITLES[page]}</h1>
+          <h1 className="min-w-0 truncate text-[18px] font-bold tracking-tight">{title ?? TITLES[page]}</h1>
         </header>
         {page === "categories" ? (
           <CategoriesView />
@@ -133,7 +133,7 @@ export function AppShell() {
     return (
       <div className="flex h-dvh flex-col items-center justify-center gap-3">
         <div className="animate-pulse">
-          <Flower size={44} filled color="var(--accent)" />
+          <TaskMark size={40} done />
         </div>
       </div>
     );

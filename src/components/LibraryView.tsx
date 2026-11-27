@@ -23,8 +23,8 @@ function MaterialRowButton({ material, onOpen }: { material: HMaterialRow; onOpe
       >
         <FileText size={18} className="shrink-0 text-muted" />
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[15px] font-medium">{material.title || material.fileName}</span>
-          <span className="block truncate text-[12px] text-muted">{meta || material.fileName}</span>
+          <span className="block truncate text-[13.5px] font-medium">{material.title || material.fileName}</span>
+          <span className="block truncate text-[11.5px] text-muted">{meta || material.fileName}</span>
         </span>
         <ChevronRight size={16} className="text-faint" />
       </button>
@@ -61,18 +61,18 @@ function MaterialReader({ material }: { material: HMaterialRow }) {
 
   if (error)
     return (
-      <p className="px-1 text-[14px] text-rose" role="status">
+      <p className="px-1 text-[13px] text-rose" role="status">
         {error}
       </p>
     );
   if (material.kind === "text") {
     return text === null ? (
-      <p className="px-1 text-[14px] text-muted">Loading…</p>
+      <p className="px-1 text-[13px] text-muted">Loading…</p>
     ) : (
-      <pre className="glass-panel whitespace-pre-wrap p-4 text-[14px]">{text}</pre>
+      <pre className="glass-panel whitespace-pre-wrap p-4 text-[13px]">{text}</pre>
     );
   }
-  if (!blob) return <p className="px-1 text-[14px] text-muted">Downloading…</p>;
+  if (!blob) return <p className="px-1 text-[13px] text-muted">Downloading…</p>;
   return <PdfViewer blob={blob} fileName={material.fileName} />;
 }
 
@@ -98,7 +98,7 @@ export function LibraryView({ onTitle }: { onTitle?: (title: string | null) => v
 
   if (!configured) {
     return (
-      <p className="px-4 text-[14px] leading-relaxed text-muted">
+      <p className="px-4 text-[13px] leading-relaxed text-muted">
         Connect the hub in Settings, under Cloud sync, to browse your LearnHarness files here.
       </p>
     );
@@ -107,7 +107,7 @@ export function LibraryView({ onTitle }: { onTitle?: (title: string | null) => v
   const back = (
     <button
       onClick={() => (material ? setMaterial(null) : setSubjectId(null))}
-      className="mb-3 flex items-center gap-1 text-[14px] font-medium text-muted hover:text-ink"
+      className="mb-3 flex items-center gap-1 text-[13px] font-medium text-muted hover:text-ink"
     >
       <ChevronLeft size={16} /> {material ? (subject?.name ?? "Back") : "All subjects"}
     </button>
@@ -127,7 +127,7 @@ export function LibraryView({ onTitle }: { onTitle?: (title: string | null) => v
       <div className="px-4 pb-8 md:px-6">
         {back}
         {files.length === 0 ? (
-          <p className="text-[14px] text-muted">No files for this subject yet.</p>
+          <p className="text-[13px] text-muted">No files for this subject yet.</p>
         ) : (
           <div className="space-y-2">
             {files.map((m) => (
@@ -142,7 +142,7 @@ export function LibraryView({ onTitle }: { onTitle?: (title: string | null) => v
   return (
     <div className="px-4 pb-8 md:px-6">
       {subjects.length === 0 ? (
-        <p className="text-[14px] text-muted">
+        <p className="text-[13px] text-muted">
           No subjects yet. They appear after the laptop agent has mirrored LearnHarness to the hub.
         </p>
       ) : (
@@ -160,7 +160,7 @@ export function LibraryView({ onTitle }: { onTitle?: (title: string | null) => v
                     style={{ background: nearestCategoryColor(s.color) }}
                   />
                   <span className="flex-1 text-[16px] font-medium">{s.name}</span>
-                  <span className="text-[13px] text-muted">
+                  <span className="text-[12px] text-muted">
                     {count} {count === 1 ? "file" : "files"}
                   </span>
                   <ChevronRight size={16} className="text-faint" />

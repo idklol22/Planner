@@ -55,8 +55,8 @@ function Toggle({
   return (
     <label className={`flex items-center gap-3 py-2 ${disabled ? "opacity-50" : "cursor-pointer"}`}>
       <span className="min-w-0 flex-1">
-        <span className="block text-[14px] font-semibold text-ink">{label}</span>
-        <span className="block text-[12px] text-muted">{hint}</span>
+        <span className="block text-[13px] font-semibold text-ink">{label}</span>
+        <span className="block text-[11.5px] text-muted">{hint}</span>
       </span>
       <input
         type="checkbox"
@@ -87,7 +87,7 @@ export function ThemePicker() {
             onClick={() => setTheme(t.id)}
           >
             <Preview t={t} />
-            <span className="px-0.5 text-[13px] font-semibold text-ink">{t.name}</span>
+            <span className="px-0.5 text-[12px] font-semibold text-ink">{t.name}</span>
           </button>
         ))}
       </div>

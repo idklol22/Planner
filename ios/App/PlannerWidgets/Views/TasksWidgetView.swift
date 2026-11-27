@@ -184,18 +184,22 @@ struct TasksWidgetView: View {
     private func taskRow(_ row: TaskRowModel) -> some View {
         let tint = row.color.flatMap { Color(css: $0) } ?? accent
         return HStack(spacing: 8) {
+            // The same tile as in the app: outlined while open, filled with a tick once done.
             ZStack {
+                let tile = RoundedRectangle(cornerRadius: 5, style: .continuous)
                 if row.done {
-                    Circle().fill(tint)
+                    tile.fill(tint)
                     Image(systemName: "checkmark")
-                        .font(.system(size: 9, weight: .black))
-                        .foregroundColor(palette.bg)
+                        .font(.system(size: 11, weight: .heavy))
+                        .foregroundColor(palette.text)
+                        .shadow(color: palette.bg, radius: 0.5)
+                        .offset(x: 2, y: -2)
                 } else {
-                    Circle().fill(tint.opacity(0.12))
-                    Circle().strokeBorder(tint, lineWidth: 1.6)
+                    tile.fill(tint.opacity(0.12))
+                    tile.strokeBorder(tint, lineWidth: 1.6)
                 }
             }
-            .frame(width: 17, height: 17)
+            .frame(width: 16, height: 16)
             Text(row.title)
                 .font(.system(size: 13, weight: .medium))
                 .strikethrough(row.done)
