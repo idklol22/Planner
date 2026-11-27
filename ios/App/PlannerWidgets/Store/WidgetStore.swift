@@ -149,9 +149,18 @@ actor WidgetStore {
         defaults.integer(forKey: "planner.widget.page.\(key)")
     }
 
-    func nextPage(_ key: String) {
-        defaults.set(page(key) + 1, forKey: "planner.widget.page.\(key)")
+    /// Page numbers may go negative; WidgetLogic wraps them when the rows are split.
+    func stepPage(_ key: String, by step: Int) {
+        defaults.set(page(key) + step, forKey: "planner.widget.page.\(key)")
         // Paging needs no new data.
         defaults.set(Date().timeIntervalSince1970 + 15, forKey: Key.freshUntil)
+    }
+
+    func nextPage(_ key: String) {
+        stepPage(key, by: 1)
+    }
+
+    func previousPage(_ key: String) {
+        stepPage(key, by: -1)
     }
 }

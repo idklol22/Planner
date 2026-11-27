@@ -56,11 +56,11 @@ struct CaloriesEntryView: View {
     private var content: some View {
         switch entry.load {
         case .needsCode:
-            WidgetMessageView(icon: "link", title: "Connect to Planner",
+            WidgetMessageView(title: "Connect to Planner",
                               detail: "Touch and hold, Edit Widget, then paste the code from Planner › Settings.",
                               palette: palette)
         case .failed(let title, let detail):
-            WidgetMessageView(icon: "exclamationmark.icloud", title: title, detail: detail, palette: palette)
+            WidgetMessageView(title: title, detail: detail, palette: palette)
         case .data(let data, let offline):
             CaloriesWidgetView(calories: data.calories, amounts: entry.amounts, wide: family != .systemSmall,
                                offline: offline, palette: palette, interact: widgetButtons(pageKey: "calories"))

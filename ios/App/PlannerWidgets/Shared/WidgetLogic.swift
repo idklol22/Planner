@@ -191,14 +191,27 @@ enum WidgetLogic {
         return TasksModel(title: title, color: subject?.color, openCount: open.count, goals: orderedGoals, rows: rows)
     }
 
-    /// Split rows into pages. With `reservePager` one line is kept for the page button when not everything fits.
+    /// Wrap any page request, including a negative one, into `0..<count`.
+    static func normalizedPage(_ requested: Int, count: Int) -> Int {
+        guard count > 0 else { return 0 }
+        return ((requested % count) + count) % count
+    }
+
+    /// Move a (possibly already wrapped) page request by `step`, negative for "previous".
+    /// Both ends wrap: 0 stepping back is the last page, the last stepping forward is 0.
+    static func stepPage(_ requested: Int, by step: Int, count: Int) -> Int {
+        guard count > 0 else { return 0 }
+        return normalizedPage(normalizedPage(requested, count: count) + step, count: count)
+    }
+
+    /// Split rows into pages. With `reservePager` one line is kept for the page buttons when not everything fits.
     static func page<Element>(_ items: [Element], capacity: Int, requested: Int,
                               reservePager: Bool = true) -> Page<Element> {
         let room = max(capacity, 1)
         if items.count <= room { return Page(items: items, index: 0, count: 1, hidden: 0) }
         let size = reservePager ? max(room - 1, 1) : room
         let count = (items.count + size - 1) / size
-        let index = ((requested % count) + count) % count
+        let index = normalizedPage(requested, count: count)
         let start = index * size
         let slice = Array(items[start..<min(start + size, items.count)])
         return Page(items: slice, index: index, count: count, hidden: items.count - slice.count)

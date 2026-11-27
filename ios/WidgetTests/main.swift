@@ -84,6 +84,28 @@ check(WidgetLogic.page(numbers, capacity: 4, requested: 4).items == [1, 2, 3], "
 check(WidgetLogic.page(numbers, capacity: 20, requested: 5).count == 1, "everything fits")
 let full = WidgetLogic.page(numbers, capacity: 4, requested: 2, reservePager: false)
 check(full.items == [9, 10] && full.count == 3, "header paging uses every line")
+check(WidgetLogic.page(numbers, capacity: 4, requested: -1).items == [10], "negative page wraps to the last one")
+check(WidgetLogic.page(numbers, capacity: 4, requested: -4).items == [1, 2, 3], "negative page wraps again")
+check(WidgetLogic.normalizedPage(-1, count: 3) == 2, "negative request normalises")
+check(WidgetLogic.normalizedPage(7, count: 3) == 1, "large request normalises")
+check(WidgetLogic.normalizedPage(2, count: 0) == 0, "no pages normalises to zero")
+check(WidgetLogic.stepPage(-1, by: 1, count: 3) == 0, "next from a wrapped last page")
+check(WidgetLogic.stepPage(0, by: -1, count: 3) == 2, "previous from the first page wraps")
+check(WidgetLogic.stepPage(-3, by: -1, count: 3) == 2, "previous from a wrapped first page")
+check(WidgetLogic.stepPage(5, by: 2, count: 1) == 0, "stepping with one page stays put")
+
+/// Every widget tap must be handled by the button factory (and by previews).
+func tapName(_ tap: WidgetTap) -> String {
+    switch tap {
+    case .toggle(_, _): return "toggle"
+    case .addCalories(_): return "add"
+    case .undoCalories(_): return "undo"
+    case .nextPage: return "next"
+    case .previousPage: return "previous"
+    case .open(_): return "open"
+    }
+}
+check(tapName(.previousPage) == "previous", "previous page tap exists")
 
 // The hub's JSON decodes.
 let wire = """
@@ -172,20 +194,22 @@ MainActor.assumeIsolated {
     let columns: [AnyView] = [
         AnyView(VStack(alignment: .leading, spacing: 14) {
             tasksTile("Large · subject", .large, math)
+            tasksTile("Large · subject, page 2", .large, math, page: 1)
             tasksTile("Medium · subject", .medium, math)
-            tasksTile("Medium · today, one just ticked", .medium, kept)
         }),
         AnyView(VStack(alignment: .leading, spacing: 14) {
             tasksTile("Large · all tasks, light theme", .large, model(sample, .all), palette: light)
+            tasksTile("Medium · today, page 2", .medium, kept, page: 1)
             caloriesTile("Calories · medium", wide: true, sample.calories)
             caloriesTile("Calories · medium, over goal, light", wide: true, overGoal, palette: light)
         }),
         AnyView(VStack(alignment: .leading, spacing: 14) {
             tasksTile("Small · today", .small, todayModel)
+            tasksTile("Small · today, page 2", .small, todayModel, page: 1)
             tasksTile("Small · all clear", .small, cleared)
             caloriesTile("Calories · small", wide: false, sample.calories)
             Tile(label: "Setup", size: smallSize, palette: dark, content: AnyView(WidgetMessageView(
-                icon: "link", title: "Connect to Planner",
+                title: "Connect to Planner",
                 detail: "Touch and hold, Edit Widget, then paste the code from Planner › Settings.", palette: dark)))
         })
     ]

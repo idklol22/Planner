@@ -63,29 +63,26 @@ enum WidgetTap {
     case addCalories(Int)
     case undoCalories(entryId: String)
     case nextPage
+    case previousPage
     case open(URL)
 }
 
 typealias WidgetInteraction = (WidgetTap, AnyView) -> AnyView
 
-/// A centred explanation: setup steps, errors, empty states.
+/// A centred explanation: setup steps, errors, empty states. Words, no decorative icon.
 struct WidgetMessageView: View {
-    var icon: String
     var title: String
     var detail: String
     var palette: WidgetPalette
 
     var body: some View {
         VStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundColor(palette.accent)
             Text(title)
-                .font(.system(size: 14, weight: .bold))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundColor(palette.text)
                 .multilineTextAlignment(.center)
             Text(detail)
-                .font(.system(size: 11))
+                .font(.system(size: 12))
                 .foregroundColor(palette.muted)
                 .multilineTextAlignment(.center)
                 .minimumScaleFactor(0.8)
