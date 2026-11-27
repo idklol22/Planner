@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "sb:deploy": "supabase db push && supabase functions deploy hub --no-verify-jwt",
+    "sb:deploy": "supabase db push --remote && supabase functions deploy hub --no-verify-jwt",
     "sb:new-device": "node scripts/supabase-new-device.mjs",
     "test:sb": "vitest run --config supabase/vitest.config.ts",
     "tauri": "tauri"
