@@ -4,6 +4,7 @@ import type { Category, Note, Settings, Task } from "../domain/model";
 import { useStore } from "../state/store";
 import { useToast } from "../state/toast";
 import { itemsFromDeadlines, taskCountMessage } from "./absorb";
+import { expandFileRefs, scheduleUploads, setFileHubClient } from "./note-files";
 import { useSync } from "../state/sync";
 import type { HarnessNote } from "./harness-types";
 
@@ -194,6 +195,23 @@ export function useHandoff(): void {
   const sendingRef = useRef(new Set<string>());
   const attemptRef = useRef(new Map<string, number>());
 
+  // Note photos upload independently of this engine: retry pending bytes after
+  // every successful sync and when connectivity returns, even with no note open.
+  const clientRef = useRef(hub.client);
+  clientRef.current = hub.client;
+  useEffect(() => {
+    setFileHubClient(hub.client);
+    if (hub.client) scheduleUploads(hub.client);
+  }, [hub.client]);
+  useEffect(() => {
+    if (hub.client && hub.status.lastSyncedAt) scheduleUploads(hub.client);
+  }, [hub.client, hub.status.lastSyncedAt]);
+  useEffect(() => {
+    const onOnline = () => scheduleUploads(clientRef.current);
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, []);
+
   const run = useCallback(async () => {
     if (!ready || !hubMode || busyRef.current) {
       if (busyRef.current) pendingRef.current = true;
@@ -216,7 +234,15 @@ export function useHandoff(): void {
         try {
           // Queue a harness.note command; the laptop agent runs it and
           // trackCommands delivers the result (including any parsed note items).
-          const commandId = await hub.sendNote(note);
+          // LearnHarness cannot read planner-file refs: expand them only on the
+          // way out, after the hash and the scheduling decision were made.
+          let markdown = note.markdown;
+          try {
+            markdown = await expandFileRefs(markdown);
+          } catch {
+            // No photo storage on this device: send the note with its refs.
+          }
+          const commandId = await hub.sendNote({ ...note, markdown });
           actions.recordHandoff(note.externalId, {
             status: "ready",
             sentAt: new Date().toISOString(),

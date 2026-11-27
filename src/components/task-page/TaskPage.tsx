@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, CalendarDays, Clock, Repeat, Shapes } from "lucide-react";
+import { ArrowLeft, CalendarDays, Camera, Clock, Images, Loader2, Repeat, Shapes, Trash2, X } from "lucide-react";
 import { filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from "@blocknote/core/extensions";
 import { getDefaultReactSlashMenuItems, SuggestionMenuController, useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
@@ -10,7 +10,10 @@ import "./task-page.css";
 import { TASK_KINDS, type Task } from "../../domain/model";
 import { parseDays, REPEAT_OPTIONS } from "../../domain/recurrence";
 import { activeCategories } from "../../domain/tasks";
+import { saveImage, resolveFileUrl, scheduleUploads, setFileHubClient } from "../../lib/note-files";
 import { useStore } from "../../state/store";
+import { useSync } from "../../state/sync";
+import { useToast } from "../../state/toast";
 import { catColor } from "../../theme/store";
 import { FlowerCheck } from "../Flower";
 import { blocksToMarkdown } from "./markdown";
@@ -31,13 +34,25 @@ function plainText(content: unknown): string {
   return content.map((n: { type: string; text?: string }) => (n.type === "text" ? (n.text ?? "") : "")).join("");
 }
 
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
+/** Height of the on-screen keyboard, so the photo bar can sit just above it. */
+function useKeyboardInset(): number {
+  const [inset, setInset] = useState(0);
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    const measure = () => {
+      const hidden = window.innerHeight - viewport.height - viewport.offsetTop;
+      setInset(hidden > 80 ? Math.round(hidden) : 0);
+    };
+    measure();
+    viewport.addEventListener("resize", measure);
+    viewport.addEventListener("scroll", measure);
+    return () => {
+      viewport.removeEventListener("resize", measure);
+      viewport.removeEventListener("scroll", measure);
+    };
+  }, []);
+  return inset;
 }
 
 export function TaskPage({ taskId }: { taskId: string }) {
@@ -59,7 +74,7 @@ export function TaskPage({ taskId }: { taskId: string }) {
 
   return (
     <div
-      className="task-page fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-canvas"
+      className="task-page fixed inset-0 z-50 overflow-x-hidden overflow-y-auto overscroll-contain bg-canvas"
       // Keep the day page's single-key shortcuts (n, t, arrows) from firing underneath.
       onKeyDown={(e) => e.key !== "Escape" && e.nativeEvent.stopPropagation()}
     >
@@ -116,9 +131,47 @@ function TaskDocument({ task }: { task: Task }) {
   const optimistic = useRef(new Map<string, SubtaskState>());
   const saveTimer = useRef<number | undefined>(undefined);
 
+  const notify = useToast();
+  const sync = useSync();
+  const clientRef = useRef(sync.client);
+  clientRef.current = sync.client;
+  const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
+  const [viewer, setViewer] = useState<{ url: string; blockId: string } | null>(null);
+  const cameraInput = useRef<HTMLInputElement>(null);
+  const photosInput = useRef<HTMLInputElement>(null);
+  /** True once the notes have had focus, so a cursor position means something. */
+  const wrote = useRef(false);
+  const keyboard = useKeyboardInset();
+
   useEffect(() => {
     actionsRef.current.ensureNote(task.id);
   }, [task.id]);
+
+  // Photos upload in the background: never awaited by typing or insertion.
+  useEffect(() => {
+    setFileHubClient(sync.client);
+    if (sync.client) scheduleUploads(sync.client);
+  }, [sync.client]);
+  useEffect(() => {
+    if (sync.client && sync.status.lastSyncedAt) scheduleUploads(sync.client);
+  }, [sync.client, sync.status.lastSyncedAt]);
+  useEffect(() => {
+    const onOnline = () => scheduleUploads(clientRef.current);
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, []);
+  useEffect(() => {
+    if (!viewer) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      setViewer(null);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [viewer]);
 
   const persist = useCallback(
     (editor: PlannerEditor) => {
@@ -182,7 +235,8 @@ function TaskDocument({ task }: { task: Task }) {
     {
       schema,
       initialContent: Array.isArray(task.note?.blocks) && task.note.blocks.length ? (task.note.blocks as never) : undefined,
-      uploadFile: fileToDataUrl,
+      uploadFile: (file) => saveImage(file),
+      resolveFileUrl: (url) => resolveFileUrl(url, clientRef.current),
       placeholders: { default: "Write something, or type '/' for commands" },
     },
     [task.id],
@@ -232,6 +286,64 @@ function TaskDocument({ task }: { task: Task }) {
     persist(editor);
   }
 
+  /** Insert the photos after the block holding the cursor (at the end if the notes
+   *  were never touched), then leave an empty line so writing can continue. */
+  function insertImages(images: { ref: string; name: string }[]) {
+    if (!images.length) return;
+    const blocks = [
+      ...images.map(({ ref, name }) => ({ type: "image", props: { url: ref, name } })),
+      { type: "paragraph" },
+    ];
+    const document = editor.document as unknown as AnyBlock[];
+    const atCursor = wrote.current
+      ? (editor.getTextCursorPosition().block as unknown as AnyBlock | undefined)
+      : undefined;
+    // The editor always ends with an empty line: append before it, not after it.
+    const last = document[document.length - 1];
+    const trailing = document.length > 1 && last?.type === "paragraph" && !plainText(last.content);
+    const reference = atCursor?.id ?? document[document.length - (trailing ? 2 : 1)]?.id;
+    if (reference) editor.insertBlocks(blocks as never, reference, "after");
+    else editor.replaceBlocks(editor.document, blocks as never);
+    persist(editor);
+  }
+
+  async function addFiles(files: FileList | null) {
+    const chosen = Array.from(files ?? []);
+    if (!chosen.length || busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
+    try {
+      const inserted: { ref: string; name: string }[] = [];
+      for (const file of chosen) {
+        try {
+          inserted.push({ ref: await saveImage(file), name: file.name });
+        } catch (error) {
+          notify(error instanceof Error ? error.message : "Could not add that photo.", "error");
+        }
+      }
+      insertImages(inserted);
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+  }
+
+  function openViewer(target: EventTarget | null) {
+    if (!(target instanceof Element)) return;
+    const image = target.closest("img");
+    const block = image?.closest('[data-content-type="image"]');
+    const blockId = block?.closest("[data-id]")?.getAttribute("data-id");
+    if (!image || !blockId) return;
+    setViewer({ url: image.currentSrc || image.src, blockId });
+  }
+
+  function removeImage() {
+    if (!viewer) return;
+    editor.removeBlocks([viewer.blockId]);
+    setViewer(null);
+    persist(editor);
+  }
+
   function commitTitle() {
     const clean = title.trim();
     if (!clean) setTitle(task.title);
@@ -244,7 +356,8 @@ function TaskDocument({ task }: { task: Task }) {
   const repeatValue = task.rrule?.startsWith("days:") ? "custom" : (task.rrule ?? "");
 
   return (
-    <article className="mx-auto w-full max-w-[720px] px-4 pb-[max(16px,var(--safe-bottom))] pt-6 md:px-0 md:pt-10">
+    <>
+    <article className="mx-auto w-full max-w-[720px] px-4 pb-[calc(96px+var(--safe-bottom))] pt-6 md:px-0 md:pt-10">
       <div className="flex items-start gap-3">
         <div className="pt-[0.55rem]">
           <FlowerCheck checked={task.done} color={color} onToggle={() => actions.toggleTask(task.id)} size={34} />
@@ -349,38 +462,142 @@ function TaskDocument({ task }: { task: Task }) {
       </div>
 
       <div className="mt-8 border-t border-line pt-6">
-        <BlockNoteView
-          editor={editor}
-          theme="dark"
-          slashMenu={false}
-          className="planner-editor"
-          onChange={handleChange}
-        >
-          <SuggestionMenuController
-            triggerCharacter="/"
-            getItems={async (query) =>
-              filterSuggestionItems(
-                withAfterBasic(getDefaultReactSlashMenuItems(editor), 
-                  {
-                    title: TASK_SLASH_TITLE,
-                    aliases: taskSlashAliases,
-                    group: "Basic blocks",
-                    subtext: "A real subtask you can tick off",
-                    icon: <span className="text-[14px]">&#9744;</span>,
-                    onItemClick: () => {
-                      const id = actionsRef.current.addSubtask(task.id, PLACEHOLDER_TITLE);
-                      if (!id) return;
-                      optimistic.current.set(id, { id, title: PLACEHOLDER_TITLE, done: false });
-                      lastRef.current.set(id, { title: PLACEHOLDER_TITLE, done: false });
-                      insertOrUpdateBlockForSlashMenu(editor, taskBlockProps(id) as never);
-                    },
-                  }),
-                query,
-              )
+        <div
+          className="note-editor"
+          onFocusCapture={() => (wrote.current = true)}
+          onPointerDownCapture={(event) => {
+            // Tapping a photo previews it; BlockNote keeps its own UI elsewhere.
+            if ((event.target as Element).closest?.('[data-content-type="image"] img')) event.preventDefault();
+          }}
+          onClickCapture={(event) => {
+            if ((event.target as Element).closest?.('[data-content-type="image"] img')) {
+              event.preventDefault();
+              event.stopPropagation();
+              openViewer(event.target);
             }
-          />
-        </BlockNoteView>
+          }}
+        >
+          <BlockNoteView
+            editor={editor}
+            theme="dark"
+            slashMenu={false}
+            className="planner-editor"
+            onChange={handleChange}
+          >
+            <SuggestionMenuController
+              triggerCharacter="/"
+              getItems={async (query) =>
+                filterSuggestionItems(
+                  withAfterBasic(getDefaultReactSlashMenuItems(editor),
+                    {
+                      title: TASK_SLASH_TITLE,
+                      aliases: taskSlashAliases,
+                      group: "Basic blocks",
+                      subtext: "A real subtask you can tick off",
+                      icon: <span className="text-[14px]">&#9744;</span>,
+                      onItemClick: () => {
+                        const id = actionsRef.current.addSubtask(task.id, PLACEHOLDER_TITLE);
+                        if (!id) return;
+                        optimistic.current.set(id, { id, title: PLACEHOLDER_TITLE, done: false });
+                        lastRef.current.set(id, { title: PLACEHOLDER_TITLE, done: false });
+                        insertOrUpdateBlockForSlashMenu(editor, taskBlockProps(id) as never);
+                      },
+                    }),
+                  query,
+                )
+              }
+            />
+          </BlockNoteView>
+        </div>
       </div>
     </article>
+
+    <div
+      className={`pointer-events-none fixed inset-x-0 z-40 flex justify-center px-4 ${
+        keyboard ? "pb-2" : "pb-[calc(10px+var(--safe-bottom))]"
+      }`}
+      style={{ bottom: keyboard }}
+    >
+      <div className="pointer-events-auto flex w-full max-w-[720px] items-center gap-2 rounded-2xl border border-line bg-surface-2/95 p-2 shadow-2xl shadow-black/50 backdrop-blur-xl">
+        <button
+          type="button"
+          aria-label="Camera"
+          disabled={busy}
+          onClick={() => cameraInput.current?.click()}
+          className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl border border-line bg-raised px-4 text-[13.5px] font-medium text-ink transition-colors hover:bg-surface-3 active:scale-[0.98] disabled:opacity-50"
+        >
+          {busy ? <Loader2 size={18} className="animate-spin text-muted" /> : <Camera size={18} className="text-muted" />}
+          Camera
+        </button>
+        <input
+          ref={cameraInput}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          aria-label="Take a photo"
+          className="hidden"
+          onChange={(event) => {
+            void addFiles(event.target.files);
+            event.target.value = "";
+          }}
+        />
+        <button
+          type="button"
+          aria-label="Photos"
+          disabled={busy}
+          onClick={() => photosInput.current?.click()}
+          className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl border border-line bg-raised px-4 text-[13.5px] font-medium text-ink transition-colors hover:bg-surface-3 active:scale-[0.98] disabled:opacity-50"
+        >
+          {busy ? <Loader2 size={18} className="animate-spin text-muted" /> : <Images size={18} className="text-muted" />}
+          Photos
+        </button>
+        <input
+          ref={photosInput}
+          type="file"
+          accept="image/*"
+          multiple
+          aria-label="Choose photos"
+          className="hidden"
+          onChange={(event) => {
+            void addFiles(event.target.files);
+            event.target.value = "";
+          }}
+        />
+      </div>
+    </div>
+
+    {viewer && (
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Photo viewer"
+        className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4 backdrop-blur-xl"
+        onClick={() => setViewer(null)}
+      >
+        <button
+          type="button"
+          aria-label="Close photo"
+          onClick={() => setViewer(null)}
+          className="absolute right-4 top-[calc(10px+var(--safe-top))] flex h-11 w-11 items-center justify-center rounded-full border border-line-2 bg-surface-2 text-ink transition-colors hover:bg-surface-3 active:scale-95"
+        >
+          <X size={22} />
+        </button>
+        <img
+          src={viewer.url}
+          alt="Note photo"
+          className="max-h-[78vh] max-w-full rounded-xl object-contain"
+          onClick={(event) => event.stopPropagation()}
+        />
+        <button
+          type="button"
+          onClick={removeImage}
+          className="absolute bottom-[calc(16px+var(--safe-bottom))] flex min-h-[44px] items-center gap-2 rounded-xl border border-line bg-surface-2 px-5 text-[13.5px] font-medium text-rose transition-colors hover:bg-surface-3 active:scale-[0.98]"
+        >
+          <Trash2 size={18} />
+          Remove
+        </button>
+      </div>
+    )}
+    </>
   );
 }

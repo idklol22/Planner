@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { type Category, type Note, type Settings, type Task } from "../domain/model";
-import { buildApiMarkdown, buildHandoffMarkdown, dueHandoffs, slugify } from "./handoff";
+import { buildApiMarkdown, buildHandoffMarkdown, dueHandoffs, noteHash, slugify } from "./handoff";
 
 const task: Task = {
   id: "task_1",
@@ -198,5 +198,18 @@ describe("dueHandoffs: send on edit", () => {
 
   it("skips notes with no content", () => {
     expect(dueHandoffs([open({ content: "  ", images: [], updatedAt: "2026-11-20T10:00:00.000Z" })], [category], now)).toEqual([]);
+  });
+
+  it("schedules file refs untouched and hashes the unexpanded text", () => {
+    const fileHash = "a".repeat(64);
+    const content = `Photo ![snapshot](planner-file:${fileHash})`;
+    const noteWithPhoto = open({ content, updatedAt: "2026-11-20T10:00:00.000Z" });
+    const due = dueHandoffs([noteWithPhoto], [category], now);
+
+    expect(due).toHaveLength(1);
+    expect(due[0].markdown).toContain(`planner-file:${fileHash}`);
+    expect(due[0].hash).toBe(
+      noteHash(noteWithPhoto.title, noteWithPhoto.date, `${content}\n\n![syllabus.png](data:image/png;base64,AAA)`),
+    );
   });
 });
