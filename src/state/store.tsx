@@ -164,7 +164,8 @@ export interface Actions {
   unachieveGoal(id: string): void;
   deleteGoal(id: string): void;
 
-  addCalorie(date: ISODate, kcal: number): void;
+  /** Log calories, protein or both in one entry (existing kcal-only callers stay valid). */
+  addCalorie(date: ISODate, kcal: number, protein?: number): void;
   deleteCalorie(id: string): void;
 
   updateSettings(patch: Partial<Settings>): void;
@@ -700,9 +701,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         });
       },
 
-      addCalorie(date, kcal) {
-        if (!Number.isFinite(kcal) || kcal <= 0) return;
-        const entry = makeCalorieEntry(date, Math.round(kcal));
+      addCalorie(date, kcal, protein) {
+        const hasKcal = Number.isFinite(kcal) && kcal > 0;
+        const hasProtein = protein !== undefined && Number.isFinite(protein) && protein > 0;
+        if (!hasKcal && !hasProtein) return;
+        const entry = makeCalorieEntry(
+          date,
+          hasKcal ? Math.round(kcal) : 0,
+          undefined,
+          hasProtein ? protein : undefined,
+        );
         update((d) => ({ ...d, calories: [...d.calories, entry] }));
       },
       deleteCalorie(id) {

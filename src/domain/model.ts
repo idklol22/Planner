@@ -107,6 +107,8 @@ export const CalorieEntrySchema = z.object({
   id: z.string(),
   date: z.string(),
   kcal: z.number(),
+  /** Grams of protein logged with this entry (a protein-only entry has kcal 0). */
+  protein: z.number().min(0).optional(),
   label: z.string().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -132,6 +134,8 @@ export const SettingsSchema = z.object({
   /** User-managed list of LearnHarness subjects a task can be linked to. */
   learnharnessSubjects: z.array(z.string()),
   dailyCalorieGoal: z.number(),
+  /** Grams of protein per day; absent means no protein goal. */
+  dailyProteinGoal: z.number().min(0).optional(),
   /** Category that receives tasks created from LetCode `practice.solved` events. */
   letcodeCategoryId: z.string().optional(),
 });
@@ -245,12 +249,18 @@ export function makeGoal(categoryId: string, title: string, order: number): Cate
   return { id: uid("goal"), categoryId, title, order, createdAt: now, updatedAt: now };
 }
 
-export function makeCalorieEntry(date: string, kcal: number, label?: string): CalorieEntry {
+export function makeCalorieEntry(
+  date: string,
+  kcal: number,
+  label?: string,
+  protein?: number,
+): CalorieEntry {
   const now = new Date().toISOString();
   return {
     id: uid("cal"),
     date,
     kcal,
+    ...(protein !== undefined && Number.isFinite(protein) && protein >= 0 ? { protein } : {}),
     label: label?.trim() || undefined,
     createdAt: now,
     updatedAt: now,

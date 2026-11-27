@@ -4,7 +4,10 @@
  *  model (the daily calorie goal lives in settings without a timestamp), and
  *  habits are not in the hub contract, so both stay local-only.
  *  Fields the hub row does not carry (task.habitId, category.linkedTopicId,
- *  meal slot) are preserved from the local copy when a remote row is applied. */
+ *  meal slot) are preserved from the local copy when a remote row is applied.
+ *  Meal protein is also preserved when a row comes back from a hub that predates
+ *  the column: a missing `protein` key means "keep", an explicit null means
+ *  "clear". */
 
 import type { AppData, CalorieEntry, Category, Task } from "../domain/model";
 import type {
@@ -71,6 +74,7 @@ export function calorieToRow(c: CalorieEntry): MealRow {
     slot: "",
     label: c.label ?? "",
     kcal: c.kcal,
+    protein: c.protein ?? null,
     createdAt: c.createdAt,
     updatedAt: c.updatedAt,
     deletedAt: c.deletedAt ?? null,
@@ -187,16 +191,24 @@ export function applyRemoteRow(data: AppData, table: SyncTable, row: SyncRow): A
     }
     case "meal": {
       const r = row as MealRow;
+      const old = data.calories.find((x) => x.id === r.id);
+      // A hub that has not been upgraded drops the field entirely on push/pull.
+      // Treat that as "no news" instead of wiping the protein logged on this phone.
+      const protein = "protein" in r
+        ? typeof r.protein === "number" && Number.isFinite(r.protein)
+          ? r.protein
+          : undefined
+        : old?.protein;
       const next: CalorieEntry = {
         id: r.id,
         date: r.date,
         kcal: r.kcal,
+        ...(protein !== undefined && protein >= 0 ? { protein } : {}),
         label: r.label || undefined,
         createdAt: r.createdAt ?? r.updatedAt,
         updatedAt: r.updatedAt,
         deletedAt: r.deletedAt ?? undefined,
       };
-      const old = data.calories.find((x) => x.id === r.id);
       if (old) next.createdAt = old.createdAt;
       return { ...data, calories: upsert(data.calories, next) };
     }

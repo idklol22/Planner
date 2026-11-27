@@ -347,6 +347,7 @@ async function applyWidgetAction(store: HubStore, raw: unknown): Promise<Respons
         slot: "",
         label: "",
         kcal: action.kcal,
+        protein: null,
         createdAt: action.at,
         updatedAt: action.at,
         deletedAt: null,

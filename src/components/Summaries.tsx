@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { dayProtein, hasEntries, weekDays } from "../domain/calories";
 import { addDays, formatDayTitle, type ISODate } from "../domain/dates";
 import { weekSummary, type CategoryCount } from "../domain/summaries";
 import { catColor } from "../theme/store";
@@ -43,6 +44,13 @@ export function WeekSummaryCard({ start }: { start: ISODate }) {
     () => weekSummary(start, data.tasks, data.categories, data.calories, goal),
     [start, data.tasks, data.categories, data.calories, goal],
   );
+  // One protein figure: the average across the week's logged days, like Avg kcal.
+  const proteinAverage = useMemo(() => {
+    const logged = weekDays(start).filter((day) => hasEntries(data.calories, day));
+    if (logged.length === 0) return 0;
+    const sum = logged.reduce((acc, day) => acc + dayProtein(data.calories, day), 0);
+    return Math.round(sum / logged.length);
+  }, [start, data.calories]);
   return (
     <section aria-label="Week summary" className="animate-rise">
       <h3 className="text-[14px] font-semibold">Week summary</h3>
@@ -52,6 +60,7 @@ export function WeekSummaryCard({ start }: { start: ISODate }) {
       <div className="flex gap-4">
         <Stat value={`${s.done}/${s.total}`} label="Tasks done" />
         <Stat value={s.daysLogged ? fmt(s.kcalAverage) : "-"} label="Avg kcal" />
+        <Stat value={s.daysLogged ? `${fmt(proteinAverage)} g` : "-"} label="Avg protein" />
         <Stat value={`${s.daysOnGoal}/${s.daysLogged}`} label="On goal" />
       </div>
       <Chips rows={s.perCategory} />

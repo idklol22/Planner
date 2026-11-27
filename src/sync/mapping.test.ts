@@ -166,3 +166,46 @@ describe("meal createdAt mapping", () => {
     expect(applyRemoteRow(defaultData(), "meal", remote).calories[0].label).toBe("Dinner");
   });
 });
+
+describe("meal protein mapping", () => {
+  const local = (): CalorieEntry => ({
+    ...makeCalorieEntry(DAY, 0, undefined, 35.5),
+    id: "meal-protein",
+    createdAt: "2026-11-21T13:42:00.000Z",
+  });
+
+  it("calorieToRow carries protein, or null when none was logged", () => {
+    expect(calorieToRow(local()).protein).toBe(35.5);
+    expect(calorieToRow(makeCalorieEntry(DAY, 200)).protein).toBeNull();
+  });
+
+  it("a remote protein value replaces the local one", () => {
+    const row: MealRow = { ...calorieToRow(local()), protein: 42 };
+    const next = applyRemoteRow(defaultData(), "meal", row);
+    expect(next.calories[0].protein).toBe(42);
+  });
+
+  it("an explicit null on a pulled row clears the local protein", () => {
+    const row: MealRow = { ...calorieToRow(local()), protein: null };
+    const data = { ...defaultData(), calories: [local()] };
+    expect(applyRemoteRow(data, "meal", row).calories[0].protein).toBeUndefined();
+  });
+
+  it("a missing protein key keeps the local protein (old deployed hub)", () => {
+    const row = { ...calorieToRow(local()) } as Partial<MealRow>;
+    delete row.protein;
+    const data = { ...defaultData(), calories: [local()] };
+    const next = applyRemoteRow(data, "meal", row as MealRow);
+    expect(next.calories[0].protein).toBe(35.5);
+  });
+
+  it("the echo of a pushed entry does not wipe its protein", () => {
+    const mine = local();
+    const pushed = calorieToRow(mine);
+    // The deployed hub stores no protein column, so its echo has no key at all.
+    const echo = { ...pushed, updatedAt: "2026-11-22T09:15:00.000Z" } as Partial<MealRow>;
+    delete echo.protein;
+    const next = applyRemoteRow({ ...defaultData(), calories: [mine] }, "meal", echo as MealRow);
+    expect(next.calories[0]).toMatchObject({ kcal: 0, protein: 35.5 });
+  });
+});

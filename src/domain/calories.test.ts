@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dayKcal, entriesForDay, entryTimeLabel, onGoal } from "./calories";
+import { dayKcal, dayProtein, entriesForDay, entryTimeLabel, onGoal } from "./calories";
 import { makeCalorieEntry, type CalorieEntry } from "./model";
 
 const DAY = "2026-11-27";
@@ -44,5 +44,23 @@ describe("dayKcal with legacy labelled entries", () => {
     const total = dayKcal([labelled, makeCalorieEntry(DAY, 450)], DAY);
     expect(total).toBe(1000);
     expect(onGoal(total, 1000)).toBe(true);
+  });
+});
+
+describe("dayProtein", () => {
+  it("sums protein from entries with calories, protein or both", () => {
+    const both = makeCalorieEntry(DAY, 420, "lunch", 35.5);
+    const proteinOnly = makeCalorieEntry(DAY, 0, undefined, 12);
+    const kcalOnly = makeCalorieEntry(DAY, 200);
+    expect(dayProtein([both, proteinOnly, kcalOnly], DAY)).toBe(47.5);
+    expect(dayKcal([both, proteinOnly, kcalOnly], DAY)).toBe(620);
+  });
+
+  it("ignores tombstones and other days, and returns 0 without protein", () => {
+    const live = makeCalorieEntry(DAY, 300, undefined, 30);
+    const gone = { ...makeCalorieEntry(DAY, 10, undefined, 99), deletedAt: ISO };
+    const other = makeCalorieEntry("2026-11-28", 10, undefined, 50);
+    expect(dayProtein([live, gone, other], DAY)).toBe(30);
+    expect(dayProtein([makeCalorieEntry(DAY, 500)], DAY)).toBe(0);
   });
 });

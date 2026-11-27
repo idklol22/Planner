@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   AppDataSchema,
+  CalorieEntrySchema,
+  SettingsSchema,
+  makeCalorieEntry,
   makeCategory,
   makeTask,
   migrateV1,
@@ -54,6 +57,52 @@ describe("migration v1 -> v2", () => {
   it("parseAppData migrates v1 and falls back on garbage", () => {
     expect(parseAppData(v1).version).toBe(4);
     expect(parseAppData({ nope: 1 }).tasks).toEqual([]);
+  });
+});
+
+describe("optional protein fields", () => {
+  const OLD = {
+    version: 4,
+    tasks: [],
+    categories: [],
+    habits: [],
+    goals: [],
+    calories: [
+      makeCalorieEntry("2026-11-27", 420, "lunch"),
+      { ...makeCalorieEntry("2026-11-27", 180), id: "cal-old-2", label: "snack" },
+      { ...makeCalorieEntry("2026-11-28", 310), id: "cal-old-3" },
+    ],
+    settings: { handoffFolder: "", learnharnessSubjects: [], dailyCalorieGoal: 2000 },
+  };
+
+  it("parses stored data with no protein fields and keeps every entry", () => {
+    // JSON round-trip = exactly what a phone has already persisted.
+    const stored = JSON.parse(JSON.stringify(OLD)) as unknown;
+    const parsed = parseAppData(stored);
+    expect(parsed.calories).toHaveLength(3);
+    expect(parsed.calories.map((c) => c.id)).toEqual(OLD.calories.map((c) => c.id));
+    expect(parsed.calories.every((c) => c.protein === undefined)).toBe(true);
+    expect(parsed.settings.dailyProteinGoal).toBeUndefined();
+    expect(AppDataSchema.safeParse(parsed).success).toBe(true);
+  });
+
+  it("keeps protein and the protein goal when they are present", () => {
+    const stored = JSON.parse(JSON.stringify(OLD)) as Record<string, unknown>;
+    const parsed = parseAppData({
+      ...stored,
+      calories: [{ ...makeCalorieEntry("2026-11-27", 0, undefined, 35.5), id: "protein-only" }],
+      settings: { ...OLD.settings, dailyProteinGoal: 120 },
+    });
+    expect(parsed.calories[0].kcal).toBe(0);
+    expect(parsed.calories[0].protein).toBe(35.5);
+    expect(parsed.settings.dailyProteinGoal).toBe(120);
+    expect(AppDataSchema.safeParse(parsed).success).toBe(true);
+  });
+
+  it("rejects negative protein or a negative protein goal", () => {
+    const entry = makeCalorieEntry("2026-11-27", 100);
+    expect(CalorieEntrySchema.safeParse({ ...entry, protein: -1 }).success).toBe(false);
+    expect(SettingsSchema.safeParse({ ...OLD.settings, dailyProteinGoal: -1 }).success).toBe(false);
   });
 });
 
