@@ -179,7 +179,7 @@ export function CalorieBar({ date }: { date: ISODate }) {
             inputMode="numeric"
             placeholder="kcal"
             aria-label="kcal"
-            className="h-11 min-w-0 flex-1 bg-transparent text-[16px] font-semibold tabular-nums outline-none placeholder:font-normal placeholder:text-faint"
+            className="h-11 min-w-0 flex-1 border-b border-line-2 bg-transparent text-[16px] font-semibold tabular-nums !outline-none placeholder:font-normal placeholder:text-faint focus:border-ink"
           />
           <input
             ref={proteinRef}
@@ -195,7 +195,7 @@ export function CalorieBar({ date }: { date: ISODate }) {
             inputMode="decimal"
             placeholder="protein g"
             aria-label="protein g"
-            className="h-11 min-w-0 flex-1 bg-transparent text-[16px] font-semibold tabular-nums outline-none placeholder:font-normal placeholder:text-faint"
+            className="h-11 min-w-0 flex-1 border-b border-line-2 bg-transparent text-[16px] font-semibold tabular-nums !outline-none placeholder:font-normal placeholder:text-faint focus:border-ink"
           />
           <button
             type="button"
@@ -208,8 +208,9 @@ export function CalorieBar({ date }: { date: ISODate }) {
         </div>
       )}
 
-      {entries.length > 0 && (
-        <ul className="animate-row">
+      {mode === "add" && entries.length > 0 && (
+        // Tapping "Remove" must not blur the form first, which would close this list.
+        <ul className="animate-row" onPointerDown={(e) => e.preventDefault()} onMouseDown={(e) => e.preventDefault()}>
           {entries.map((e) => (
             <li key={e.id} className="flex min-h-11 items-center gap-3 border-b border-line">
               <span className="min-w-0 flex-1 truncate text-[12.5px] tabular-nums text-muted">

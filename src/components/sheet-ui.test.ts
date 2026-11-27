@@ -13,9 +13,9 @@ describe("the one content sheet", () => {
   it("defines one opaque, blurred surface with 24px top corners and a hairline", async () => {
     const styles = await css();
     const sheet = /\.sheet\s*\{([^}]*)\}/.exec(styles)?.[1] ?? "";
-    expect(sheet).toContain("border-top: 1px solid var(--border)");
+    expect(sheet).toContain("border-top: 1px solid var(--border-strong)");
     expect(sheet).toContain("border-radius: 24px 24px 0 0");
-    expect(sheet).toContain("color-mix(in srgb, var(--surface) 96%, transparent)");
+    expect(sheet).toContain("color-mix(in srgb, var(--surface-2) 94%, transparent)");
     expect(sheet).toContain("backdrop-filter: blur(");
     // Light and high-contrast themes get a fully solid surface.
     expect(styles).toContain('html[data-theme="contrast"] .sheet');

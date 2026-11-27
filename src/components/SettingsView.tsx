@@ -319,19 +319,17 @@ export function SettingsView() {
             aria-label="Daily calorie goal"
             value={goalDraft}
             onChange={(event) => setGoalDraft(event.target.value)}
-          />
-          <Button
-            variant="primary"
-            onClick={() => {
-              const value = Number(goalDraft);
-              if (Number.isFinite(value) && value > 0) {
-                actions.updateSettings({ dailyCalorieGoal: Math.round(value) });
+            onKeyDown={(event) => event.key === "Enter" && event.currentTarget.blur()}
+            onBlur={() => {
+              const value = Math.round(Number(goalDraft));
+              if (!(Number.isFinite(value) && value > 0)) {
+                setGoalDraft(String(data.settings.dailyCalorieGoal));
+              } else if (value !== data.settings.dailyCalorieGoal) {
+                actions.updateSettings({ dailyCalorieGoal: value });
                 notify("Daily goal updated");
               }
             }}
-          >
-            <Check size={15} /> Save
-          </Button>
+          />
         </div>
         <label htmlFor="protein-goal" className="mb-2 mt-4 block text-[11px] font-medium text-muted">
           Daily protein goal (g)
@@ -345,25 +343,16 @@ export function SettingsView() {
             value={proteinGoalDraft}
             placeholder="No goal"
             onChange={(event) => setProteinGoalDraft(event.target.value)}
-          />
-          <Button
-            variant="primary"
-            onClick={() => {
+            onKeyDown={(event) => event.key === "Enter" && event.currentTarget.blur()}
+            onBlur={() => {
               const raw = proteinGoalDraft.trim();
-              if (raw === "") {
-                actions.updateSettings({ dailyProteinGoal: undefined });
-                notify("Protein goal cleared");
-                return;
-              }
-              const value = Number(raw);
-              if (Number.isFinite(value) && value >= 0) {
-                actions.updateSettings({ dailyProteinGoal: Math.round(value) });
-                notify("Protein goal updated");
-              }
+              const value = raw === "" ? undefined : Math.round(Number(raw));
+              if (value !== undefined && !(Number.isFinite(value) && value >= 0)) return;
+              if (value === data.settings.dailyProteinGoal) return;
+              actions.updateSettings({ dailyProteinGoal: value });
+              notify(value === undefined ? "Protein goal cleared" : "Protein goal updated");
             }}
-          >
-            <Check size={15} /> Save
-          </Button>
+          />
         </div>
         <p className="mt-2 text-[11px] leading-relaxed text-faint">Leave empty for no protein goal.</p>
       </Panel>

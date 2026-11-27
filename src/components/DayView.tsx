@@ -445,7 +445,7 @@ export function DayView({
   }
 
   return (
-    <div className="flex min-h-full flex-col">
+    <div className="flex flex-1 flex-col">
       <div className="px-3 pt-[calc(8px+var(--safe-top))] md:px-6 lg:px-8">
         <div className="flex flex-col gap-2 lg:sticky lg:top-6">
           <header className="flex items-center justify-between gap-3 px-1 lg:contents">
