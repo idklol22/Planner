@@ -140,42 +140,56 @@ var cleared = model(sample, .today)
 cleared.rows = []
 cleared.openCount = 0
 
+/// GitHub shows only small notices, so each column is its own picture of at most `limit` bytes.
+@MainActor
+func writePicture(_ column: AnyView, to path: String, limit: Int) {
+    let framed = column
+        .padding(14)
+        .background(Color(.sRGB, red: 0.22, green: 0.24, blue: 0.3, opacity: 1))
+        .environment(\.colorScheme, .dark)
+    for (scale, quality) in [(1.5, 0.7), (1.5, 0.5), (1.25, 0.5), (1.0, 0.55), (1.0, 0.35), (0.85, 0.35)] {
+        let renderer = ImageRenderer(content: framed)
+        renderer.scale = CGFloat(scale)
+        let data = NSMutableData()
+        guard let image = renderer.cgImage,
+              let destination = CGImageDestinationCreateWithData(
+                  data as CFMutableData, UTType.jpeg.identifier as CFString, 1, nil)
+        else { break }
+        CGImageDestinationAddImage(destination, image,
+                                   [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary)
+        guard CGImageDestinationFinalize(destination) else { break }
+        if data.length <= limit || scale < 0.9 {
+            check(data.write(toFile: path, atomically: true), "preview written")
+            return
+        }
+    }
+    check(false, "preview rendered")
+}
+
 MainActor.assumeIsolated {
-    let sheet = HStack(alignment: .top, spacing: 18) {
-        VStack(alignment: .leading, spacing: 18) {
+    let columns: [AnyView] = [
+        AnyView(VStack(alignment: .leading, spacing: 14) {
             tasksTile("Large · subject", .large, math)
             tasksTile("Medium · subject", .medium, math)
             tasksTile("Medium · today, one just ticked", .medium, kept)
-        }
-        VStack(alignment: .leading, spacing: 18) {
+        }),
+        AnyView(VStack(alignment: .leading, spacing: 14) {
             tasksTile("Large · all tasks, light theme", .large, model(sample, .all), palette: light)
             caloriesTile("Calories · medium", wide: true, sample.calories)
             caloriesTile("Calories · medium, over goal, light", wide: true, overGoal, palette: light)
-        }
-        VStack(alignment: .leading, spacing: 18) {
+        }),
+        AnyView(VStack(alignment: .leading, spacing: 14) {
             tasksTile("Small · today", .small, todayModel)
             tasksTile("Small · all clear", .small, cleared)
             caloriesTile("Calories · small", wide: false, sample.calories)
             Tile(label: "Setup", size: smallSize, palette: dark, content: AnyView(WidgetMessageView(
                 icon: "link", title: "Connect to Planner",
                 detail: "Touch and hold, Edit Widget, then paste the code from Planner › Settings.", palette: dark)))
-        }
-    }
-    .padding(20)
-    .background(Color(.sRGB, red: 0.22, green: 0.24, blue: 0.3, opacity: 1))
-    .environment(\.colorScheme, .dark)
-
-    let output = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "widget-preview.jpg"
-    let renderer = ImageRenderer(content: sheet)
-    renderer.scale = 1.5
-    if let image = renderer.cgImage,
-       let destination = CGImageDestinationCreateWithURL(
-           URL(fileURLWithPath: output) as CFURL, UTType.jpeg.identifier as CFString, 1, nil) {
-        CGImageDestinationAddImage(destination, image,
-                                   [kCGImageDestinationLossyCompressionQuality: 0.72] as CFDictionary)
-        check(CGImageDestinationFinalize(destination), "preview written")
-    } else {
-        check(false, "preview rendered")
+        })
+    ]
+    let folder = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "."
+    for (index, column) in columns.enumerated() {
+        writePicture(column, to: "\(folder)/widgets-\(index + 1).jpg", limit: 29000)
     }
 }
 

@@ -48,22 +48,19 @@ jobs:
             grep -E "error:" build/widgettests.log | sed "s#$GITHUB_WORKSPACE/##" | sort -u | head -9 | sed 's/^/::error::/'
             exit 1
           fi
-          build/widgettests build/widget-preview/widgets.jpg
+          build/widgettests build/widget-preview
 
-      - name: Publish preview as annotations
+      - name: Publish widget preview 1
         if: always()
-        run: |
-          # Lets the rendered widgets be read from the public check-run API without signing in.
-          test -f build/widget-preview/widgets.jpg || exit 0
-          base64 -i build/widget-preview/widgets.jpg | tr -d '\n' > build/preview.b64
-          echo >> build/preview.b64
-          fold -w 50000 build/preview.b64 > build/preview.chunks
-          n=0
-          while IFS= read -r chunk; do
-            [ -n "$chunk" ] || continue
-            n=$((n+1))
-            if [ "$n" -le 9 ]; then echo "::notice title=widget-preview-$n::$chunk"; fi
-          done < build/preview.chunks
+        run: bash ios/scripts/publish_preview.sh 1
+
+      - name: Publish widget preview 2
+        if: always()
+        run: bash ios/scripts/publish_preview.sh 2
+
+      - name: Publish widget preview 3
+        if: always()
+        run: bash ios/scripts/publish_preview.sh 3
 
       - name: Upload widget preview
         if: always()
