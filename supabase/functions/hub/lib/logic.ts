@@ -9,13 +9,27 @@ import type {
   CommandRow,
   EventRow,
   FileStore,
+  HealthRow,
   HubConfig,
   HubOp,
   HubStore,
+  MealRow,
   SyncRow,
   SyncTable,
   TaskRow,
 } from "./db.ts";
+import {
+  buildWidgetView,
+  isWidgetDate,
+  newWidgetToken,
+  nextUpdatedAt,
+  compareIsoTimes,
+  MAX_WIDGET_TASKS,
+  validateHealthRow,
+  validateWidgetAction,
+  validateWidgetProfile,
+  type WidgetAction,
+} from "./widget.ts";
 
 const SYNC_TABLES: SyncTable[] = [
   "category",
@@ -23,6 +37,7 @@ const SYNC_TABLES: SyncTable[] = [
   "goal",
   "meal",
   "message",
+  "health",
   "h_subject",
   "h_topic",
   "h_material",
@@ -30,6 +45,17 @@ const SYNC_TABLES: SyncTable[] = [
 ];
 const PAGE_SIZE = 500;
 const LEASE_SEC = 5 * 60;
+const WIDGET_PROFILE_MAX_BYTES = 100 * 1024;
+const STALE_ACTION_MS = 5 * 60 * 1000;
+
+// Re-export the pure widget helpers for callers that import from the router.
+export {
+  buildWidgetView,
+  newWidgetToken,
+  validateHealthRow,
+  validateWidgetAction,
+  validateWidgetProfile,
+} from "./widget.ts";
 
 // ── Small helpers ───────────────────────────────────────────────────────────
 
@@ -64,6 +90,7 @@ export function normalize(row: Record<string, unknown>): Record<string, unknown>
   if (out.attachments === undefined && out.attachmentsJson !== undefined) {
     out.attachments = out.attachmentsJson;
   }
+  if (out.workouts === undefined && out.workoutsJson !== undefined) out.workouts = out.workoutsJson;
   return out;
 }
 
@@ -265,6 +292,84 @@ function toCommandRow(row: CommandRow): CommandRow {
   };
 }
 
+// ── Widget actions ──────────────────────────────────────────────────────────
+
+/** Apply one validated widget action through the same upsert path as /ops. */
+async function applyWidgetAction(store: HubStore, raw: unknown): Promise<Response> {
+  const validated = validateWidgetAction(raw);
+  if (!validated.ok) throw new HttpError("action: " + validated.error, 400);
+  const action: WidgetAction = validated.action;
+
+  if (action.type === "task.set_done") {
+    const found = await store.getSyncRow("task", action.taskId);
+    if (!found || (found as TaskRow).deletedAt) throw new HttpError("task not found", 404);
+    const task = found as TaskRow;
+    if (
+      compareIsoTimes(task.updatedAt, action.at) > 0 &&
+      Date.now() - Date.parse(action.at) > STALE_ACTION_MS
+    ) {
+      return json({ ok: true, ignored: true });
+    }
+    const completedAt = action.done ? action.at : null;
+    // Repeating an already-applied action is a no-op.
+    if (
+      Boolean(task.done) === action.done &&
+      (task.completedAt ?? null) === completedAt &&
+      compareIsoTimes(task.updatedAt, action.at) >= 0
+    ) {
+      return json({ ok: true });
+    }
+    const updatedAt = nextUpdatedAt(String(task.updatedAt), action.at);
+    await store.upsertRows([{
+      table: "task",
+      row: { ...task, done: action.done, completedAt, updatedAt } as unknown as SyncRow,
+    }]);
+    return json({ ok: true });
+  }
+
+  if (action.type === "calories.add") {
+    const found = await store.getSyncRow("meal", action.id);
+    if (found) {
+      const meal = found as MealRow;
+      if (
+        !meal.deletedAt &&
+        meal.kcal === action.kcal &&
+        compareIsoTimes(meal.updatedAt, action.at) >= 0
+      ) {
+        return json({ ok: true });
+      }
+    }
+    await store.upsertRows([{
+      table: "meal",
+      row: {
+        id: action.id,
+        date: action.date,
+        slot: "",
+        label: "",
+        kcal: action.kcal,
+        createdAt: action.at,
+        updatedAt: action.at,
+        deletedAt: null,
+      } as unknown as SyncRow,
+    }]);
+    return json({ ok: true });
+  }
+
+  const found = await store.getSyncRow("meal", action.id);
+  if (!found) throw new HttpError("meal not found", 404);
+  const meal = found as MealRow;
+  if (meal.deletedAt === action.at) return json({ ok: true });
+  await store.upsertRows([{
+    table: "meal",
+    row: {
+      ...meal,
+      deletedAt: action.at,
+      updatedAt: nextUpdatedAt(String(meal.updatedAt), action.at, true),
+    } as unknown as SyncRow,
+  }]);
+  return json({ ok: true });
+}
+
 // ── Calendar ────────────────────────────────────────────────────────────────
 
 function escapeIcs(value: string): string {
@@ -438,8 +543,15 @@ export async function handle(
           response = error("unauthorized", 401);
         } else {
           const role = device.role ?? "user";
+          const isWidgetView = request.method === "GET" && path === "/widget";
+          const isWidgetAction = request.method === "POST" && path === "/widget/action";
 
-          if (request.method === "POST" && path === "/ops") {
+          // A widget token can only read the widget and submit widget actions.
+          const widgetLocked = role === "widget" && !isWidgetView && !isWidgetAction;
+
+          if (widgetLocked) {
+            response = error("widget role cannot access this route", 403);
+          } else if (request.method === "POST" && path === "/ops") {
             const body = await readJson(request);
             if (!isRecord(body) || !Array.isArray(body.ops)) {
               throw new HttpError("expected { ops: [...] }", 400);
@@ -470,6 +582,10 @@ export async function handle(
                 const validated = validateMessageRow(row);
                 if (!validated.ok) throw new HttpError("message: " + validated.error, 400);
                 pushed = validated.row;
+              } else if (op.table === "health") {
+                const validated = validateHealthRow(row);
+                if (!validated.ok) throw new HttpError("health: " + validated.error, 400);
+                pushed = validated.row as unknown as Record<string, unknown>;
               }
               ops.push({ table: op.table, row: pushed as unknown as SyncRow });
             }
@@ -589,6 +705,58 @@ export async function handle(
                 }
               }
             }
+          } else if (isWidgetView) {
+            if (role !== "widget" && role !== "user") {
+              throw new HttpError("widget or user role required", 403);
+            }
+            const date = url.searchParams.get("date");
+            if (!isWidgetDate(date)) throw new HttpError("valid date required", 400);
+
+            const tasks = await store.listWidgetTasks(date as string);
+            const [profile, categories, meals, health] = await Promise.all([
+              store.getWidgetProfile(),
+              store.listWidgetCategories(),
+              store.listWidgetMeals(date as string),
+              store.getSyncRow("health", `health_${date}`),
+            ]);
+            response = json(
+              buildWidgetView({
+                date: date as string,
+                generatedAt: new Date().toISOString(),
+                profile: profile ? profile.data : null,
+                categories,
+                meals,
+                tasks: tasks.slice(0, MAX_WIDGET_TASKS),
+                health: health ? (health as unknown as HealthRow) : null,
+              }),
+            );
+          } else if (isWidgetAction) {
+            if (role !== "widget" && role !== "user") {
+              throw new HttpError("widget or user role required", 403);
+            }
+            const body = await readJson(request);
+            response = await applyWidgetAction(store, body);
+          } else if (request.method === "POST" && path === "/widget/token") {
+            if (role !== "user") throw new HttpError("user role required", 403);
+            const token = newWidgetToken();
+            await store.replaceWidgetDevice(await sha256Hex(token));
+            response = json({ token }, 201);
+          } else if (request.method === "PUT" && path === "/widget/profile") {
+            if (role !== "user") throw new HttpError("user role required", 403);
+            const bytes = await request.arrayBuffer();
+            if (bytes.byteLength > WIDGET_PROFILE_MAX_BYTES) {
+              throw new HttpError("profile body exceeds 100 KB", 400);
+            }
+            let body: unknown;
+            try {
+              body = JSON.parse(new TextDecoder().decode(bytes));
+            } catch {
+              throw new HttpError("invalid JSON body", 400);
+            }
+            const validated = validateWidgetProfile(body);
+            if (!validated.ok) throw new HttpError("profile: " + validated.error, 400);
+            await store.putWidgetProfile(validated.data);
+            response = json({ ok: true });
           } else {
             response = error("not found", 404);
           }

@@ -11,6 +11,7 @@ export type SyncTable =
   | "goal"
   | "meal"
   | "message"
+  | "health"
   | "h_subject"
   | "h_topic"
   | "h_material"
@@ -104,6 +105,35 @@ export interface MealRow {
   createdAt?: string | null;
 }
 
+export interface HealthWorkout {
+  type: string;
+  minutes: number;
+  kcal: number | null;
+}
+
+/** One local day of Health data (sync table `health`). */
+export interface HealthRow {
+  id: string;
+  date: string;
+  activeKcal: number | null;
+  steps: number | null;
+  exerciseMin: number | null;
+  distanceKm: number | null;
+  sleepHours: number | null;
+  restingHr: number | null;
+  workouts: HealthWorkout[];
+  source: "healthkit" | "shortcut" | null;
+  updatedAt: string;
+  deletedAt: string | null;
+}
+
+/** The single `default` row of `widget_profile`. */
+export interface WidgetProfile {
+  id: string;
+  data: Record<string, unknown>;
+  updatedAt: string;
+}
+
 export interface HSubjectRow {
   id: string;
   name: string;
@@ -156,6 +186,7 @@ export type SyncRow =
   | GoalRow
   | MealRow
   | MessageRow
+  | HealthRow
   | HSubjectRow
   | HTopicRow
   | HMaterialRow
@@ -253,6 +284,18 @@ export interface HubStore {
   claimCommand(device: string, leaseSec: number): Promise<CommandRow | null>;
   completeCommand(id: string, status: CommandStatus, result: unknown): Promise<CommandRow | null>;
   timedTasks(): Promise<TaskRow[]>;
+
+  /** Read a single sync row (used by widget actions and the health view). */
+  getSyncRow(table: SyncTable, id: string): Promise<SyncRow | null>;
+  /** Considered task rows for a widget day (not deleted/archived, open or future).
+   * Implementations page through the database; the caller caps the result. */
+  listWidgetTasks(date: string): Promise<TaskRow[]>;
+  listWidgetCategories(): Promise<CategoryRow[]>;
+  listWidgetMeals(date: string): Promise<MealRow[]>;
+  getWidgetProfile(): Promise<WidgetProfile | null>;
+  putWidgetProfile(data: Record<string, unknown>): Promise<void>;
+  /** Revoke all earlier widget devices and register one holding `tokenHash`. */
+  replaceWidgetDevice(tokenHash: string): Promise<void>;
 }
 
 export interface FileMeta {

@@ -2,6 +2,7 @@
 
 import type {
   ByteRange,
+  CategoryRow,
   CommandInput,
   CommandRow,
   CommandStatus,
@@ -15,11 +16,14 @@ import type {
   FileStore,
   HubOp,
   HubStore,
+  MealRow,
   SyncChange,
   SyncResult,
+  SyncRow,
   SyncTable,
   TaskRow,
   UpsertResult,
+  WidgetProfile,
 } from "./db.ts";
 import { compareUpdatedAt, normalize, sha256Hex } from "./logic.ts";
 
@@ -62,6 +66,7 @@ export class MemoryStore implements HubStore {
   private commands = new Map<string, CommandRow>();
   private commandOrder = new Map<string, number>();
   private commandSeq = 0;
+  private widgetProfile: WidgetProfile | null = null;
 
   async findDeviceByTokenHash(hash: string): Promise<Device | null> {
     const device = this.devices.get(hash);
@@ -215,6 +220,81 @@ export class MemoryStore implements HubStore {
         );
       })
       .map((row) => row as unknown as TaskRow);
+  }
+
+  async getSyncRow(table: SyncTable, id: string): Promise<SyncRow | null> {
+    const row = this.rows.get(table)?.get(id);
+    return row ? (row as unknown as SyncRow) : null;
+  }
+
+  async listWidgetTasks(date: string): Promise<TaskRow[]> {
+    const tasks = this.rows.get("task");
+    if (!tasks) return [];
+    return [...tasks.values()]
+      .filter(
+        (row) =>
+          (row.deletedAt === null || row.deletedAt === undefined) &&
+          (row.archivedAt === null || row.archivedAt === undefined) &&
+          (!row.done || String(row.date) >= date),
+      )
+      .sort((a, b) => {
+        const byDate = String(a.date).localeCompare(String(b.date));
+        return (
+          byDate ||
+          Number(a.order) - Number(b.order) ||
+          String(a.id).localeCompare(String(b.id))
+        );
+      })
+      .map((row) => row as unknown as TaskRow);
+  }
+
+  async listWidgetCategories(): Promise<CategoryRow[]> {
+    const categories = this.rows.get("category");
+    if (!categories) return [];
+    return [...categories.values()]
+      .filter(
+        (row) =>
+          (row.deletedAt === null || row.deletedAt === undefined) && !row.archived,
+      )
+      .sort((a, b) => Number(a.order) - Number(b.order) || String(a.id).localeCompare(String(b.id)))
+      .map((row) => row as unknown as CategoryRow);
+  }
+
+  async listWidgetMeals(date: string): Promise<MealRow[]> {
+    const meals = this.rows.get("meal");
+    if (!meals) return [];
+    return [...meals.values()]
+      .filter(
+        (row) =>
+          row.date === date && (row.deletedAt === null || row.deletedAt === undefined),
+      )
+      .map((row) => row as unknown as MealRow);
+  }
+
+  async getWidgetProfile(): Promise<WidgetProfile | null> {
+    return this.widgetProfile ? { ...this.widgetProfile, data: { ...this.widgetProfile.data } } : null;
+  }
+
+  async putWidgetProfile(data: Record<string, unknown>): Promise<void> {
+    this.widgetProfile = { id: "default", data, updatedAt: new Date().toISOString() };
+  }
+
+  async replaceWidgetDevice(tokenHash: string): Promise<void> {
+    const now = new Date().toISOString();
+    for (const device of this.devices.values()) {
+      if (device.role === "widget") device.revokedAt = now;
+    }
+    this.devices.set(tokenHash, {
+      id: `dev_${crypto.randomUUID()}`,
+      role: "widget",
+      tokenHash,
+      revokedAt: null,
+    });
+  }
+
+  /** Test introspection into registered devices. */
+  listDevices(): Array<{ id: string; role: string; tokenHash: string; revokedAt: string | null }> {
+    return [...this.devices.values()].map((device) => ({ ...device }));
   }
 
   // ── Test helpers (not part of the HubStore contract) ──────────────────────

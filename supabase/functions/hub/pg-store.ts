@@ -2,9 +2,9 @@
 // Thin by design: routing/validation live in ./lib/logic.ts.
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type {
-  ByteRange, CommandInput, CommandRow, CommandStatus, Device, EventInput, EventResult,
-  EventsResult, FileMeta, FileObject, FileStore, HubOp, HubStore, SyncChange, SyncResult,
-  SyncTable, TaskRow, UpsertResult,
+  ByteRange, CategoryRow, CommandInput, CommandRow, CommandStatus, Device, EventInput, EventResult,
+  EventsResult, FileMeta, FileObject, FileStore, HubOp, HubStore, MealRow, SyncChange,
+  SyncResult, SyncRow, SyncTable, TaskRow, UpsertResult, WidgetProfile,
 } from "./lib/db.ts";
 import { compareUpdatedAt, normalize } from "./lib/logic.ts";
 
@@ -20,6 +20,7 @@ const COLUMNS: Record<SyncTable, Array<[string, string, Kind]>> = {
   goal: [["id","id","s"],["period","period","s"],["metric","metric","s"],["target","target","n"],["scopeCategoryId","scope_category_id","s"],["updatedAt","updated_at","s"],["deletedAt","deleted_at","s"]],
   message: [["id","id","s"],["subjectId","subject_id","s"],["topicId","topic_id","s"],["sender","sender","s"],["text","text","s"],["attachments","attachments_json","j"],["createdAt","created_at","s"],["updatedAt","updated_at","s"],["deliveredAt","delivered_at","s"],["deletedAt","deleted_at","s"]],
   meal: [["id","id","s"],["date","date","s"],["slot","slot","s"],["label","label","s"],["kcal","kcal","n"],["updatedAt","updated_at","s"],["deletedAt","deleted_at","s"],["createdAt","created_at","s"]],
+  health: [["id","id","s"],["date","date","s"],["activeKcal","active_kcal","n"],["steps","steps","n"],["exerciseMin","exercise_min","n"],["distanceKm","distance_km","n"],["sleepHours","sleep_hours","n"],["restingHr","resting_hr","n"],["workouts","workouts_json","j"],["source","source","s"],["updatedAt","updated_at","s"],["deletedAt","deleted_at","s"]],
   h_subject: [["id","id","s"],["name","name","s"],["color","color","s"],["order","order","n"],["updatedAt","updated_at","s"],["deletedAt","deleted_at","s"]],
   h_topic: [["id","id","s"],["subjectId","subject_id","s"],["name","name","s"],["order","order","n"],["updatedAt","updated_at","s"],["deletedAt","deleted_at","s"]],
   h_material: [["id","id","s"],["subjectId","subject_id","s"],["topicId","topic_id","s"],["fileName","file_name","s"],["title","title","s"],["kind","kind","s"],["sha256","sha256","s"],["pageCount","page_count","n"],["lecture","lecture","s"],["date","date","s"],["addedAt","added_at","s"],["updatedAt","updated_at","s"],["deletedAt","deleted_at","s"]],
@@ -205,6 +206,88 @@ export class PgStore implements HubStore {
       .order("date").order("order").order("id");
     fail(error, "timed tasks");
     return (data ?? []).map((r) => fromDb("task", r) as unknown as TaskRow);
+  }
+
+  // ── Widget support ────────────────────────────────────────────────────────
+
+  async getSyncRow(table: SyncTable, id: string): Promise<SyncRow | null> {
+    const { data, error } = await this.db.from(table).select("*").eq("id", id).maybeSingle();
+    fail(error, `get ${table}`);
+    return data ? fromDb(table, data) : null;
+  }
+
+  async listWidgetTasks(date: string): Promise<TaskRow[]> {
+    const out: TaskRow[] = [];
+    const pageSize = 500;
+    // PostgREST caps a single response at 1000 rows; page by range instead.
+    while (out.length < 1000) {
+      const { data, error } = await this.db.from("task").select("*")
+        .is("deleted_at", null).is("archived_at", null)
+        .or(`done.eq.0,date.gte.${date}`)
+        .order("date").order("order").order("id")
+        .range(out.length, out.length + pageSize - 1);
+      fail(error, "widget tasks");
+      const rows = data ?? [];
+      out.push(...rows.map((r) => fromDb("task", r) as unknown as TaskRow));
+      if (rows.length < pageSize) break;
+    }
+    return out.slice(0, 1000);
+  }
+
+  async listWidgetCategories(): Promise<CategoryRow[]> {
+    const { data, error } = await this.db.from("category").select("*")
+      .is("deleted_at", null).eq("archived", 0)
+      .order("order").order("id");
+    fail(error, "widget categories");
+    return (data ?? []).map((r) => fromDb("category", r) as unknown as CategoryRow);
+  }
+
+  async listWidgetMeals(date: string): Promise<MealRow[]> {
+    const { data, error } = await this.db.from("meal").select("*")
+      .eq("date", date).is("deleted_at", null);
+    fail(error, "widget meals");
+    return (data ?? []).map((r) => fromDb("meal", r) as unknown as MealRow);
+  }
+
+  async getWidgetProfile(): Promise<WidgetProfile | null> {
+    const { data, error } = await this.db.from("widget_profile")
+      .select("id, data_json, updated_at").eq("id", "default").maybeSingle();
+    fail(error, "widget profile");
+    return data
+      ? {
+          id: String(data.id),
+          data: (data.data_json ?? {}) as Record<string, unknown>,
+          updatedAt: String(data.updated_at),
+        }
+      : null;
+  }
+
+  async putWidgetProfile(data: Record<string, unknown>): Promise<void> {
+    const { error } = await this.db.from("widget_profile").upsert({
+      id: "default",
+      data_json: data,
+      updated_at: new Date().toISOString(),
+    });
+    fail(error, "widget profile write");
+  }
+
+  async replaceWidgetDevice(tokenHash: string): Promise<void> {
+    const now = new Date().toISOString();
+    const { error: revoked } = await this.db.from("device")
+      .update({ revoked_at: now }).eq("role", "widget").is("revoked_at", null);
+    fail(revoked, "revoke widget devices");
+    // A token hash is unique; clear a prior row before inserting the new device.
+    const { error: cleared } = await this.db.from("device").delete().eq("token_hash", tokenHash);
+    fail(cleared, "clear widget token");
+    const { error: created } = await this.db.from("device").insert({
+      id: `widget_${crypto.randomUUID()}`,
+      name: "widget",
+      token_hash: tokenHash,
+      role: "widget",
+      created_at: now,
+      revoked_at: null,
+    });
+    fail(created, "create widget device");
   }
 }
 
