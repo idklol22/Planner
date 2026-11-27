@@ -6,7 +6,6 @@ import { useStore } from "../state/store";
 import { useThemeState } from "../theme/store";
 import { ArchiveView } from "./ArchiveView";
 import { CategoriesView } from "./CategoriesView";
-import { ChatView } from "./ChatView";
 import { DayView, type MenuPage } from "./DayView";
 import { TaskMark } from "./TaskMark";
 import { HabitsView } from "./HabitsView";
@@ -17,7 +16,6 @@ const TITLES: Record<MenuPage, string> = {
   categories: "Categories",
   habits: "Habits",
   library: "Library",
-  chat: "LearnHarness",
   archive: "Archive",
   settings: "Settings",
 };
@@ -47,18 +45,9 @@ function useOnTaskRoute(): boolean {
 /** Full-screen page opened from the menu, with a back arrow. */
 function MenuPageView({ page, onBack }: { page: MenuPage; onBack: () => void }) {
   const [title, setTitle] = useState<string | null>(null);
-  const chat = page === "chat";
   return (
-    <div
-      className={`animate-slide fixed inset-0 z-50 bg-[var(--bg)]/40 ${
-        chat ? "flex flex-col overflow-hidden" : "overflow-y-auto overflow-x-hidden overscroll-contain"
-      }`}
-    >
-      <div
-        className={`mx-auto w-full max-w-[720px] px-4 md:px-6 ${
-          chat ? "flex h-full min-h-0 flex-1 flex-col" : "overscroll-contain pb-[max(16px,var(--safe-bottom))]"
-        }`}
-      >
+    <div className="animate-slide fixed inset-0 z-50 overflow-y-auto overflow-x-hidden overscroll-contain bg-[var(--bg)]/40">
+      <div className="mx-auto w-full max-w-[720px] px-4 pb-[max(16px,var(--safe-bottom))] md:px-6 overscroll-contain">
         <header className="sticky top-0 z-10 -mx-4 mb-2 flex shrink-0 items-center gap-2 bg-[var(--bg)]/90 px-3 pb-3 pt-[calc(16px+var(--safe-top))] backdrop-blur-xl md:-mx-6 md:px-5">
           <button
             onClick={onBack}
@@ -75,8 +64,6 @@ function MenuPageView({ page, onBack }: { page: MenuPage; onBack: () => void }) 
           <HabitsView date={todayISO()} />
         ) : page === "library" ? (
           <LibraryView onTitle={setTitle} />
-        ) : page === "chat" ? (
-          <ChatView />
         ) : page === "archive" ? (
           <ArchiveView />
         ) : (

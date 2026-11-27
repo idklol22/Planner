@@ -33,12 +33,6 @@
 			</array>
 		</dict>
 	</array>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Record voice notes to send to LearnHarness on your laptop.</string>
-	<key>NSCameraUsageDescription</key>
-	<string>Attach a photo to a message.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Attach a picture from your library to a message.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

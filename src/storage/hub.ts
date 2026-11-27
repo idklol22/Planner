@@ -4,7 +4,7 @@
 /** Keepalive requests must stay well below the browser's per-request cap. */
 const KEEPALIVE_MAX_BYTES = 60_000;
 
-export type SyncTable = "category" | "task" | "goal" | "meal" | "message" | "health";
+export type SyncTable = "category" | "task" | "goal" | "meal" | "health";
 
 export interface Note {
   id?: string;
@@ -74,29 +74,6 @@ export interface MealRow {
   deletedAt: string | null;
 }
 
-export type MessageSender = "planner" | "harness";
-
-export interface MessageAttachment {
-  sha256: string;
-  name: string;
-  mime: string;
-  bytes: number;
-  durationSec?: number;
-}
-
-export interface MessageRow {
-  id: string;
-  subjectId: string | null;
-  topicId: string | null;
-  sender: MessageSender;
-  text: string;
-  attachments: MessageAttachment[];
-  createdAt: string;
-  updatedAt: string;
-  deliveredAt: string | null;
-  deletedAt: string | null;
-}
-
 /** One workout inside a health row (Apple Shortcut / HealthKit). */
 export interface HealthWorkout {
   type: string;
@@ -142,7 +119,7 @@ export interface WidgetProfile {
   }>;
 }
 
-export type SyncRow = CategoryRow | TaskRow | GoalRow | MealRow | MessageRow | HealthRow;
+export type SyncRow = CategoryRow | TaskRow | GoalRow | MealRow | HealthRow;
 
 /** Read-only tables mirrored from LearnHarness; pulled but never pushed. */
 export type MirrorTable = "h_subject" | "h_topic" | "h_material" | "h_deadline";

@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { HSubjectRow } from "../storage/hub";
-import { harnessStatus } from "./harness-link";
-import { harnessLink } from "./messages";
+import { harnessLink, harnessStatus } from "./harness-link";
 
 afterEach(() => {
   vi.useRealTimers();
