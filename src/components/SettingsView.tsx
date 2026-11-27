@@ -9,8 +9,7 @@ import {
   loadAutostart,
   setAutostart,
 } from "../lib/autostart";
-import { harnessStatus } from "../lib/harness-link";
-import { harnessLink } from "../lib/messages";
+import { harnessLink, harnessStatus } from "../lib/harness-link";
 import { useStore } from "../state/store";
 import { useSync } from "../state/sync";
 import { useToast } from "../state/toast";

@@ -5,7 +5,6 @@ import { taskIdFromHash } from "./components/task-page/route";
 import { useHandoff } from "./lib/handoff";
 import { DeeplinkProvider } from "./state/deeplink";
 import { HealthProvider } from "./state/health";
-import { MessagesProvider } from "./state/messages";
 import { StoreProvider, useStore } from "./state/store";
 import { SyncProvider } from "./state/sync";
 import { ToastProvider } from "./state/toast";
@@ -48,9 +47,7 @@ export function App() {
               <Scene />
               <HandoffRunner />
               <WidgetRunner />
-              <MessagesProvider>
-                <Routes />
-              </MessagesProvider>
+              <Routes />
             </DeeplinkProvider>
           </HealthProvider>
         </ToastProvider>
