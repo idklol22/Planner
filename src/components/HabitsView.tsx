@@ -6,6 +6,7 @@ import type { Habit } from "../domain/model";
 import { useStore } from "../state/store";
 import { catColor } from "../theme/store";
 import { HabitEditor } from "./HabitEditor";
+import { Panel } from "./ui";
 
 const ICON_BTN =
   "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-faint transition-colors hover:bg-ink/10 hover:text-ink focus-visible:ring-2 focus-visible:ring-accent";
@@ -45,7 +46,7 @@ export function HabitsView({ date }: { date: ISODate }) {
       </div>
 
       {active.length === 0 ? (
-        <div className="border border-dashed border-ink/15 rounded-2xl px-4 py-10 text-center text-[14px] text-muted">
+        <div className="glass-panel border border-dashed border-ink/15 px-4 py-10 text-center text-[14px] text-muted">
           No habits yet.
           <p className="mt-1.5 text-[12px] leading-relaxed text-faint">
             Habits show up as faded rows under their category. Tap a ghost to add it as a task.
@@ -54,33 +55,32 @@ export function HabitsView({ date }: { date: ISODate }) {
       ) : (
         <div className="space-y-2">
           {active.map((habit) => (
-            <div
-              key={habit.id}
-              className="flex min-h-[56px] items-center gap-3 rounded-2xl bg-surface px-3 transition-colors hover:bg-surface-2"
-            >
-              <span
-                className="h-2.5 w-2.5 shrink-0 rounded-full"
-                style={{ backgroundColor: dotColor(habit) }}
-              />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[16px] font-semibold">{habit.title}</span>
-                <span className="block truncate text-[12px] text-faint">{detail(habit)}</span>
-              </span>
-              <button
-                onClick={() => setEditing(habit)}
-                aria-label={`Edit ${habit.title}`}
-                className={ICON_BTN}
-              >
-                <Settings2 size={18} />
-              </button>
-              <button
-                onClick={() => actions.archiveHabit(habit.id, true)}
-                aria-label={`Archive ${habit.title}`}
-                className={ICON_BTN}
-              >
-                <Archive size={18} />
-              </button>
-            </div>
+            <Panel key={habit.id} className="!p-0">
+              <div className="flex min-h-[56px] items-center gap-3 px-3 transition-colors hover:bg-ink/[0.05]">
+                <span
+                  className="h-2.5 w-2.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: dotColor(habit) }}
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[16px] font-semibold">{habit.title}</span>
+                  <span className="block truncate text-[12px] text-faint">{detail(habit)}</span>
+                </span>
+                <button
+                  onClick={() => setEditing(habit)}
+                  aria-label={`Edit ${habit.title}`}
+                  className={ICON_BTN}
+                >
+                  <Settings2 size={18} />
+                </button>
+                <button
+                  onClick={() => actions.archiveHabit(habit.id, true)}
+                  aria-label={`Archive ${habit.title}`}
+                  className={ICON_BTN}
+                >
+                  <Archive size={18} />
+                </button>
+              </div>
+            </Panel>
           ))}
         </div>
       )}
@@ -92,25 +92,24 @@ export function HabitsView({ date }: { date: ISODate }) {
           </h2>
           <div className="space-y-2">
             {archived.map((habit) => (
-              <div
-                key={habit.id}
-                className="flex min-h-[56px] items-center gap-3 rounded-2xl bg-surface px-3 opacity-60 transition-colors hover:bg-surface-2"
-              >
-                <span
-                  className="h-2.5 w-2.5 shrink-0 rounded-full"
-                  style={{ backgroundColor: dotColor(habit) }}
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[16px] font-semibold">{habit.title}</span>
-                  <span className="block truncate text-[12px] text-faint">{detail(habit)}</span>
-                </span>
-                <button
-                  onClick={() => actions.archiveHabit(habit.id, false)}
-                  className="flex items-center gap-1.5 rounded-full bg-surface-2 px-3.5 py-2 text-[13px] font-semibold hover:bg-surface-3 focus-visible:ring-2 focus-visible:ring-accent"
-                >
-                  <ArchiveRestore size={15} /> Restore
-                </button>
-              </div>
+              <Panel key={habit.id} className="!p-0">
+                <div className="flex min-h-[56px] items-center gap-3 px-3 opacity-60 transition-colors hover:bg-ink/[0.05]">
+                  <span
+                    className="h-2.5 w-2.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: dotColor(habit) }}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[16px] font-semibold">{habit.title}</span>
+                    <span className="block truncate text-[12px] text-faint">{detail(habit)}</span>
+                  </span>
+                  <button
+                    onClick={() => actions.archiveHabit(habit.id, false)}
+                    className="flex items-center gap-1.5 rounded-full bg-surface-2 px-3.5 py-2 text-[13px] font-semibold hover:bg-surface-3 focus-visible:ring-2 focus-visible:ring-accent"
+                  >
+                    <ArchiveRestore size={15} /> Restore
+                  </button>
+                </div>
+              </Panel>
             ))}
           </div>
         </section>

@@ -68,7 +68,6 @@ export function CalendarStrip({
   }
 
   const touch = useRef<{ x: number; y: number } | null>(null);
-  const sizes = mode === "week" ? { flower: 38, num: "h-8 w-8 text-[15px]" } : { flower: 30, num: "h-7 w-7 text-[15px]" };
 
   return (
     <section aria-label="Calendar" className="module select-none">
@@ -147,20 +146,12 @@ export function CalendarStrip({
                 aria-pressed={isSel}
                 data-level={mode === "month" ? calendarHeatLevel(tasksForDay(data.tasks, date).length) : undefined}
                 data-out={dim ? "true" : undefined}
-                className={`day-cell group flex flex-col items-center gap-0.5 rounded-xl py-1 transition-opacity active:scale-95 ${
+                className={`day-cell group relative flex h-[42px] w-full items-center justify-center rounded-xl transition-opacity active:scale-95 ${
                   dim ? "opacity-35" : ""
                 }`}
               >
-                <Flower
-                  size={sizes.flower}
-                  filled={summary.allDone}
-                  checked={summary.allDone}
-                  color={summary.color ? catColor(summary.color) : "var(--accent)"}
-                  count={summary.open}
-                  className="transition-transform duration-200 group-hover:scale-110"
-                />
                 <span
-                  className={`flex items-center justify-center rounded-full font-semibold tabular-nums transition-colors ${sizes.num} ${
+                  className={`flex h-[26px] w-[26px] items-center justify-center rounded-full text-[14px] font-semibold tabular-nums transition-colors ${
                     isSel
                       ? "bg-[var(--accent)] text-[var(--accent-ink)]"
                       : isToday
@@ -170,10 +161,20 @@ export function CalendarStrip({
                 >
                   {Number(date.slice(-2))}
                 </span>
+                {/* LH-style marks: the flower and kcal dot sit over the cell in
+                    opposite corners instead of stacking, keeping it 42px tall. */}
+                <Flower
+                  size={14}
+                  filled={summary.allDone}
+                  checked={summary.allDone}
+                  color={summary.color ? catColor(summary.color) : "var(--accent)"}
+                  count={summary.open}
+                  className="pointer-events-none absolute right-[2px] top-[2px] transition-transform duration-200 group-hover:scale-110"
+                />
                 {mode === "month" && (
                   <span
                     aria-hidden
-                    className={`-mt-0.5 h-1 w-1 rounded-full transition-colors ${
+                    className={`pointer-events-none absolute bottom-[4px] right-[5px] h-1 w-1 rounded-full transition-colors ${
                       logged ? (goodDay ? "bg-mint" : "bg-ink/35") : "bg-transparent"
                     }`}
                   />

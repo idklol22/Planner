@@ -74,7 +74,7 @@ export function HabitEditor({
       <div
         role="dialog"
         aria-label={habit ? "Edit habit" : "New habit"}
-        className="animate-sheet-up relative max-h-[92dvh] w-full max-w-[460px] overflow-y-auto overscroll-contain rounded-t-[28px] bg-surface-2 px-5 pb-[calc(20px+var(--safe-bottom))] pt-[calc(12px+var(--safe-top))] md:rounded-[28px] md:pb-5"
+        className="animate-sheet-up glass-panel relative max-h-[92dvh] w-full max-w-[460px] overflow-y-auto overscroll-contain px-5 pb-[calc(20px+var(--safe-bottom))] pt-[calc(12px+var(--safe-top))] md:pb-5"
       >
         <div className="mx-auto mb-3 h-1 w-9 rounded-full bg-ink/20 md:hidden" />
         <div className="mb-4 flex items-center gap-2.5">

@@ -49,7 +49,7 @@ function MenuPageView({ page, onBack }: { page: MenuPage; onBack: () => void }) 
   const chat = page === "chat";
   return (
     <div
-      className={`animate-slide fixed inset-0 z-50 bg-[var(--bg)] ${
+      className={`animate-slide fixed inset-0 z-50 bg-[var(--bg)]/40 ${
         chat ? "flex flex-col overflow-hidden" : "overflow-y-auto overflow-x-hidden overscroll-contain"
       }`}
     >
@@ -129,7 +129,10 @@ export function AppShell() {
 
   return (
     <div className="h-dvh overflow-hidden" hidden={onTask}>
-      <main className="h-full overflow-y-auto overflow-x-hidden overscroll-contain pb-[max(16px,var(--safe-bottom))]">
+      <main
+        hidden={!!page}
+        className="h-full overflow-y-auto overflow-x-hidden overscroll-contain pb-[max(16px,var(--safe-bottom))]"
+      >
         <div className="animate-fade mx-auto w-full max-w-[560px] lg:max-w-[1200px]">
           <DayView
             selected={selected}

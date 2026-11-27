@@ -175,7 +175,7 @@ function SheetBody({
               </div>
             </div>
 
-            <div className="divide-y divide-line overflow-hidden rounded-2xl bg-surface">
+            <div className="glass-panel divide-y divide-line overflow-hidden">
               <Field label="Date">
                 <input
                   type="date"
@@ -289,7 +289,7 @@ function SheetBody({
                   </span>
                 )}
               </div>
-              <div className="overflow-hidden rounded-2xl bg-surface">
+              <div className="glass-panel overflow-hidden">
                 {subs.map((sub) => (
                   <div
                     key={sub.id}
@@ -343,7 +343,7 @@ function SheetBody({
         <NoteEditor task={task} />
       </div>
 
-      <footer className="flex shrink-0 items-center gap-2 border-t border-line bg-canvas px-4 py-3 pb-[max(0.75rem,var(--safe-bottom))]">
+      <footer className="flex shrink-0 items-center gap-2 border-t border-line px-4 py-3 pb-[max(0.75rem,var(--safe-bottom))]">
         <button
           onClick={() => {
             actions.deleteTask(task.id);
@@ -406,7 +406,7 @@ export function TaskSheet({
       <aside
         role="dialog"
         aria-label="Task"
-        className="sheet-panel fixed inset-x-0 bottom-0 z-50 flex h-[92dvh] flex-col overflow-hidden rounded-t-[28px] border-t border-line-2 bg-canvas md:static md:z-auto md:h-full md:w-[380px] md:shrink-0 md:rounded-none md:border-l md:border-t-0 lg:w-[460px]"
+        className="sheet-panel glass-panel fixed inset-x-0 bottom-0 z-50 flex h-[92dvh] flex-col overflow-hidden border-t border-line-2 md:static md:z-auto md:h-full md:w-[380px] md:shrink-0 md:border-l md:border-t-0 lg:w-[460px]"
       >
         <SheetBody key={task.id} task={task} onClose={close} onOpen={onOpen} />
       </aside>

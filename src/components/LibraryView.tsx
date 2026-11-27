@@ -5,6 +5,7 @@ import { useSync } from "../state/sync";
 import { sortMaterials } from "../sync/mirror-view";
 import { nearestCategoryColor } from "../domain/palette";
 import { PdfViewer } from "./PdfViewer";
+import { Panel } from "./ui";
 
 function MaterialRowButton({ material, onOpen }: { material: HMaterialRow; onOpen: () => void }) {
   const meta = [
@@ -15,17 +16,19 @@ function MaterialRowButton({ material, onOpen }: { material: HMaterialRow; onOpe
     .filter(Boolean)
     .join(" · ");
   return (
-    <button
-      onClick={onOpen}
-      className="flex min-h-[56px] w-full items-center gap-3 rounded-2xl bg-surface px-4 py-2 text-left transition-colors hover:bg-surface-2"
-    >
-      <FileText size={18} className="shrink-0 text-muted" />
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-[15px] font-medium">{material.title || material.fileName}</span>
-        <span className="block truncate text-[12px] text-muted">{meta || material.fileName}</span>
-      </span>
-      <ChevronRight size={16} className="text-faint" />
-    </button>
+    <Panel className="!p-0">
+      <button
+        onClick={onOpen}
+        className="flex min-h-[56px] w-full items-center gap-3 px-4 py-2 text-left transition-colors hover:bg-ink/[0.05]"
+      >
+        <FileText size={18} className="shrink-0 text-muted" />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[15px] font-medium">{material.title || material.fileName}</span>
+          <span className="block truncate text-[12px] text-muted">{meta || material.fileName}</span>
+        </span>
+        <ChevronRight size={16} className="text-faint" />
+      </button>
+    </Panel>
   );
 }
 
@@ -66,7 +69,7 @@ function MaterialReader({ material }: { material: HMaterialRow }) {
     return text === null ? (
       <p className="px-1 text-[14px] text-muted">Loading…</p>
     ) : (
-      <pre className="whitespace-pre-wrap rounded-2xl bg-surface p-4 text-[14px]">{text}</pre>
+      <pre className="glass-panel whitespace-pre-wrap p-4 text-[14px]">{text}</pre>
     );
   }
   if (!blob) return <p className="px-1 text-[14px] text-muted">Downloading…</p>;
@@ -147,21 +150,22 @@ export function LibraryView({ onTitle }: { onTitle?: (title: string | null) => v
           {subjects.map((s) => {
             const count = mirror.materials.filter((m) => m.subjectId === s.id).length;
             return (
-              <button
-                key={s.id}
-                onClick={() => setSubjectId(s.id)}
-                className="flex min-h-[56px] w-full items-center gap-3 rounded-2xl bg-surface px-4 py-2 text-left transition-colors hover:bg-surface-2"
-              >
-                <span
-                  className="h-3 w-3 shrink-0 rounded-full"
-                  style={{ background: nearestCategoryColor(s.color) }}
-                />
-                <span className="flex-1 text-[16px] font-medium">{s.name}</span>
-                <span className="text-[13px] text-muted">
-                  {count} {count === 1 ? "file" : "files"}
-                </span>
-                <ChevronRight size={16} className="text-faint" />
-              </button>
+              <Panel key={s.id} className="!p-0">
+                <button
+                  onClick={() => setSubjectId(s.id)}
+                  className="flex min-h-[56px] w-full items-center gap-3 px-4 py-2 text-left transition-colors hover:bg-ink/[0.05]"
+                >
+                  <span
+                    className="h-3 w-3 shrink-0 rounded-full"
+                    style={{ background: nearestCategoryColor(s.color) }}
+                  />
+                  <span className="flex-1 text-[16px] font-medium">{s.name}</span>
+                  <span className="text-[13px] text-muted">
+                    {count} {count === 1 ? "file" : "files"}
+                  </span>
+                  <ChevronRight size={16} className="text-faint" />
+                </button>
+              </Panel>
             );
           })}
         </div>

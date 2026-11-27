@@ -41,7 +41,7 @@ function CategoryRow({
   return (
     <div
       {...dragProps}
-      className={`overflow-hidden rounded-2xl bg-surface transition-opacity ${dragging ? "opacity-40" : ""}`}
+      className={`glass-panel overflow-hidden transition-opacity ${dragging ? "opacity-40" : ""}`}
     >
       <div className="flex min-h-[56px] items-center gap-2 pl-2 pr-2">
         <span className="cursor-grab touch-none p-2 text-faint active:cursor-grabbing" aria-hidden>
@@ -237,7 +237,7 @@ function DeleteCategoryDialog({
         role="dialog"
         aria-modal="true"
         aria-label={heading}
-        className="relative w-full max-w-[420px] rounded-[24px] bg-surface-2 p-5 shadow-2xl"
+        className="glass-panel relative w-full max-w-[420px] p-5 shadow-2xl"
       >
         <h2 className="text-[19px] font-bold">{heading}</h2>
         <p className="mt-2 text-[14px] text-muted">
@@ -335,7 +335,7 @@ export function CategoriesView() {
       </div>
 
       {active.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-ink/15 px-4 py-10 text-center text-[14px] text-muted">
+        <div className="glass-panel border border-dashed border-ink/15 px-4 py-10 text-center text-[14px] text-muted">
           No categories yet. Add one above to start sorting your days.
         </div>
       ) : (
@@ -376,7 +376,7 @@ export function CategoriesView() {
           <h3 className="mb-2 px-1 text-[12px] font-semibold uppercase tracking-[0.12em] text-faint">Archived</h3>
           <div className="space-y-2">
             {archived.map((cat) => (
-              <div key={cat.id} className="flex min-h-[52px] items-center gap-3 rounded-2xl bg-surface px-4">
+              <div key={cat.id} className="glass-panel flex min-h-[52px] items-center gap-3 px-4">
                 <span className="h-3 w-3 rounded-full opacity-60" style={{ background: catColor(cat.color) }} />
                 <span className="min-w-0 flex-1 truncate text-[16px] text-muted">{cat.name}</span>
                 <button
