@@ -82,6 +82,8 @@ check(first.items == [1, 2, 3] && first.count == 4 && first.hidden == 7, "first 
 check(WidgetLogic.page(numbers, capacity: 4, requested: 3).items == [10], "last page")
 check(WidgetLogic.page(numbers, capacity: 4, requested: 4).items == [1, 2, 3], "pages wrap around")
 check(WidgetLogic.page(numbers, capacity: 20, requested: 5).count == 1, "everything fits")
+let full = WidgetLogic.page(numbers, capacity: 4, requested: 2, reservePager: false)
+check(full.items == [9, 10] && full.count == 3, "header paging uses every line")
 
 // The hub's JSON decodes.
 let wire = """

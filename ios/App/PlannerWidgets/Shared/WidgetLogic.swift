@@ -191,11 +191,12 @@ enum WidgetLogic {
         return TasksModel(title: title, color: subject?.color, openCount: open.count, goals: orderedGoals, rows: rows)
     }
 
-    /// Split rows into pages; one line is given to the pager when everything does not fit.
-    static func page<Element>(_ items: [Element], capacity: Int, requested: Int) -> Page<Element> {
+    /// Split rows into pages. With `reservePager` one line is kept for the page button when not everything fits.
+    static func page<Element>(_ items: [Element], capacity: Int, requested: Int,
+                              reservePager: Bool = true) -> Page<Element> {
         let room = max(capacity, 1)
         if items.count <= room { return Page(items: items, index: 0, count: 1, hidden: 0) }
-        let size = max(room - 1, 1)
+        let size = reservePager ? max(room - 1, 1) : room
         let count = (items.count + size - 1) / size
         let index = ((requested % count) + count) % count
         let start = index * size

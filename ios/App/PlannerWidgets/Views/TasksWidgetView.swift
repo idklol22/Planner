@@ -14,11 +14,13 @@ struct TasksWidgetView: View {
     var palette: WidgetPalette
     var interact: WidgetInteraction
 
-    private let rowHeight: CGFloat = 26
     private let goalHeight: CGFloat = 19
-    private let headerHeight: CGFloat = 24
     private let sectionHeight: CGFloat = 17
-    private let inset: CGFloat = 14
+    private var rowHeight: CGFloat { layout == .large ? 26 : 25 }
+    private var headerHeight: CGFloat { layout == .large ? 24 : 22 }
+    private var inset: CGFloat { layout == .large ? 14 : 12 }
+    /// Narrow rows give the whole width to the title.
+    private var narrowRows: Bool { layout == .small || (layout == .medium && !model.goals.isEmpty) }
 
     private var accent: Color {
         model.color.flatMap { Color(css: $0) } ?? palette.accent
@@ -26,10 +28,13 @@ struct TasksWidgetView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let inner = geometry.size.height - inset * 2
+            let height = geometry.size.height - inset * 2 - headerHeight - 4
+            // Small and medium widgets page from the header, so every line holds a task.
+            let paged = layout == .large ? nil : WidgetLogic.page(
+                model.rows, capacity: Int((height + 1) / rowHeight), requested: page, reservePager: false)
             VStack(alignment: .leading, spacing: 4) {
-                header
-                content(height: inner - headerHeight - 4)
+                header(paged)
+                content(height: height)
                 Spacer(minLength: 0)
             }
             .padding(inset)
@@ -37,7 +42,7 @@ struct TasksWidgetView: View {
         }
     }
 
-    private var header: some View {
+    private func header(_ paged: Page<TaskRowModel>?) -> some View {
         HStack(spacing: 6) {
             RoundedRectangle(cornerRadius: 2)
                 .fill(accent)
@@ -52,15 +57,38 @@ struct TasksWidgetView: View {
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(palette.warning)
             }
-            Text(model.openCount == 0 ? "Done" : (layout == .small ? "\(model.openCount)" : "\(model.openCount) left"))
-                .font(.system(size: 11, weight: .bold).monospacedDigit())
-                .foregroundColor(accent)
-                .padding(.horizontal, 7)
-                .padding(.vertical, 2)
-                .background(accent.opacity(0.16))
-                .clipShape(Capsule())
+            if let paged = paged, paged.count > 1 {
+                interact(.nextPage, AnyView(
+                    badge("\(countText) · \(paged.index + 1)/\(paged.count)", chevron: true)))
+            } else {
+                badge(countText, chevron: false)
+            }
         }
         .frame(height: headerHeight)
+    }
+
+    private var countText: String {
+        if model.openCount == 0 { return "Done" }
+        return layout == .small ? "\(model.openCount)" : "\(model.openCount) left"
+    }
+
+    private func badge(_ text: String, chevron: Bool) -> some View {
+        HStack(spacing: 3) {
+            Text(text)
+                .font(.system(size: 11, weight: .bold).monospacedDigit())
+                .lineLimit(1)
+            if chevron {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .heavy))
+            }
+        }
+        .foregroundColor(accent)
+        .padding(.horizontal, 8)
+        .frame(height: 20)
+        .background(accent.opacity(0.16))
+        .clipShape(Capsule())
+        .fixedSize()
+        .contentShape(Rectangle())
     }
 
     @ViewBuilder
@@ -69,7 +97,7 @@ struct TasksWidgetView: View {
             // Side by side: goals stay in view while the tasks page.
             HStack(alignment: .top, spacing: 10) {
                 goalList(limit: max(Int((height - sectionHeight) / goalHeight), 1))
-                    .frame(width: 106, alignment: .leading)
+                    .frame(width: 104, alignment: .leading)
                 Rectangle().fill(palette.faint.opacity(0.25)).frame(width: 1, height: height - 4)
                 taskList(height: height)
             }
@@ -140,12 +168,13 @@ struct TasksWidgetView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: max(height, 0))
         } else {
-            let result = WidgetLogic.page(model.rows, capacity: Int((height + 1) / rowHeight), requested: page)
+            let result = WidgetLogic.page(model.rows, capacity: Int((height + 1) / rowHeight), requested: page,
+                                          reservePager: layout == .large)
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(result.items) { row in
                     interact(.toggle(taskId: row.id, done: !row.done), AnyView(taskRow(row)))
                 }
-                if result.count > 1 {
+                if result.count > 1 && layout == .large {
                     interact(.nextPage, AnyView(pager(result.index, result.count, result.hidden)))
                 }
             }
@@ -178,9 +207,9 @@ struct TasksWidgetView: View {
                     .font(.system(size: 9))
                     .foregroundColor(palette.warning)
             }
-            // The small widget keeps its width for titles; a late task still shows a dot.
-            if layout == .small {
-                if row.overdue { Circle().fill(palette.warning).frame(width: 5, height: 5) }
+            // Narrow rows keep their width for titles; a late task still shows a mark.
+            if narrowRows {
+                if row.overdue && !row.deadline { Circle().fill(palette.warning).frame(width: 5, height: 5) }
             } else if !row.detail.isEmpty {
                 Text(row.detail)
                     .font(.system(size: 10.5, weight: .semibold).monospacedDigit())
@@ -196,7 +225,7 @@ struct TasksWidgetView: View {
     private func pager(_ index: Int, _ count: Int, _ hidden: Int) -> some View {
         HStack(spacing: 4) {
             Spacer(minLength: 0)
-            Text(layout == .small ? "\(index + 1)/\(count)" : "+\(hidden) more · \(index + 1)/\(count)")
+            Text("+\(hidden) more · \(index + 1)/\(count)")
                 .font(.system(size: 10.5, weight: .bold).monospacedDigit())
             Image(systemName: "chevron.right")
                 .font(.system(size: 9, weight: .heavy))
