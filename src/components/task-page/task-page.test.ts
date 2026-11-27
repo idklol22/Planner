@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { matchInlineMath } from "./math";
+import { matchInlineMath, mathifyParsedBlocks } from "./math";
 import { blocksToMarkdown } from "./markdown";
 import { planSync, type Snapshot } from "./sync";
 
@@ -51,6 +51,82 @@ describe("matchInlineMath", () => {
     expect(matchInlineMath("so $x^2$")).toEqual({ latex: "x^2", length: 5 });
     expect(matchInlineMath("costs $5 and")).toBeNull();
     expect(matchInlineMath("$ x $")).toBeNull();
+  });
+});
+
+describe("mathifyParsedBlocks", () => {
+  it("turns $...$ in parsed text into inline math nodes", () => {
+    expect(
+      mathifyParsedBlocks([
+        {
+          type: "paragraph",
+          content: [text("Energy "), text("$E=mc^2$"), text(" is key")],
+        },
+      ]),
+    ).toEqual([
+      {
+        type: "paragraph",
+        content: [
+          text("Energy "),
+          { type: "math", props: { latex: "E=mc^2" } },
+          text(" is key"),
+        ],
+      },
+    ]);
+  });
+
+  it("turns a whole $$...$$ block into display maths", () => {
+    expect(mathifyParsedBlocks([{ type: "paragraph", content: [text("$$\\frac{a}{b}$$")] }])).toEqual([
+      { type: "displayMath", props: { latex: "\\frac{a}{b}" } },
+    ]);
+  });
+
+  it("does not touch dollars in code blocks, inline code or escaped text", () => {
+    const code = { type: "codeBlock", props: { language: "ts" }, content: [text("const $x = 1;")] };
+    const inlineCode = { type: "paragraph", content: [text("$x$", { code: true })] };
+    expect(mathifyParsedBlocks([code, inlineCode])).toEqual([code, inlineCode]);
+  });
+
+  it("converts nested children and leaves non-math text alone", () => {
+    expect(
+      mathifyParsedBlocks([{ type: "bulletListItem", content: [text("plain")], children: [{ type: "paragraph", content: [text("$y$")] }] }]),
+    ).toEqual([
+      {
+        type: "bulletListItem",
+        content: [text("plain")],
+        children: [{ type: "paragraph", content: [{ type: "math", props: { latex: "y" } }] }],
+      },
+    ]);
+  });
+
+  it("keeps round-tripped markdown stable", () => {
+    // Stand-in for BlockNote's parser: our own exported Markdown split back into
+    // BlockNote-shaped blocks. Math must survive the trip unchanged.
+    const parseLike = (md: string) =>
+      md
+        .trim()
+        .split(/\n\s*\n/)
+        .map((chunk) => {
+          if (chunk.startsWith("```")) {
+            const [fence, ...lines] = chunk.split("\n");
+            return {
+              type: "codeBlock",
+              props: { language: fence.slice(3) || "text" },
+              content: lines.slice(0, -1).map((line) => text(line)),
+            };
+          }
+          return { type: "paragraph", content: [text(chunk)] };
+        });
+
+    const original = [
+      { type: "displayMath", props: { latex: "E=mc^2" } },
+      { type: "paragraph", content: [text("Use "), { type: "math", props: { latex: "x^2" } }, text(" here")] },
+      { type: "codeBlock", props: { language: "ts" }, content: [text("const $x = 1;")] },
+    ];
+    const markdown = blocksToMarkdown(original);
+    expect(markdown).toContain("$$E=mc^2$$");
+    expect(markdown).toContain("Use $x^2$ here");
+    expect(mathifyParsedBlocks(parseLike(markdown))).toEqual(original);
   });
 });
 

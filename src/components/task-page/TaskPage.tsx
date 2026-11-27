@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, CalendarDays, Camera, Clock, Images, Loader2, Repeat, Shapes, Trash2, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { ArrowLeft, X } from "lucide-react";
 import { filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from "@blocknote/core/extensions";
 import { getDefaultReactSlashMenuItems, SuggestionMenuController, useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
@@ -16,9 +16,11 @@ import { useSync } from "../../state/sync";
 import { useToast } from "../../state/toast";
 import { catColor } from "../../theme/store";
 import { TaskCheck } from "../TaskMark";
+import { formatTaskDate } from "./format";
+import { KeyboardBar } from "./KeyboardBar";
 import { blocksToMarkdown } from "./markdown";
+import { matchInlineMath, mathifyParsedBlocks } from "./math";
 import { goBack } from "./route";
-import { matchInlineMath } from "./math";
 import { schema, type PlannerEditor } from "./schema";
 import { TASK_SLASH_TITLE, taskBlockProps, taskSlashAliases } from "./slash";
 import { PLACEHOLDER_TITLE, planSync, type BlockState, type Snapshot, type SubtaskState } from "./sync";
@@ -34,7 +36,7 @@ function plainText(content: unknown): string {
   return content.map((n: { type: string; text?: string }) => (n.type === "text" ? (n.text ?? "") : "")).join("");
 }
 
-/** Height of the on-screen keyboard, so the photo bar can sit just above it. */
+/** Height of the on-screen keyboard, so the bar can sit just above it. */
 function useKeyboardInset(): number {
   const [inset, setInset] = useState(0);
   useEffect(() => {
@@ -55,15 +57,20 @@ function useKeyboardInset(): number {
   return inset;
 }
 
+/** 44px bar + a little breathing room; the bar adds the safe area itself. */
+const BAR_SPACE = 52;
+
 export function TaskPage({ taskId }: { taskId: string }) {
   const { data } = useStore();
   const task = data.tasks.find((t) => t.id === taskId && !t.deletedAt && !t.archivedAt);
+  const keyboard = useKeyboardInset();
+  const pageRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key !== "Escape") return;
       // Let BlockNote's own menus and the maths input consume Escape first.
-      if (document.querySelector(".bn-suggestion-menu, .bn-formatting-toolbar, .mantine-Menu-dropdown")) return;
+      if (document.querySelector(".bn-suggestion-menu, .mantine-Menu-dropdown")) return;
       if ((e.target as HTMLElement | null)?.classList?.contains("math-input")) return;
       e.preventDefault();
       goBack();
@@ -74,24 +81,26 @@ export function TaskPage({ taskId }: { taskId: string }) {
 
   return (
     <div
-      className="task-page fixed inset-0 z-50 overflow-x-hidden overflow-y-auto overscroll-contain bg-canvas"
+      ref={pageRef}
+      className="task-page fixed inset-0 z-50 max-w-[100vw] overflow-x-hidden overflow-y-auto overscroll-contain bg-canvas"
+      style={{ paddingBottom: keyboard ? BAR_SPACE + keyboard : `calc(${BAR_SPACE}px + var(--safe-bottom))` }}
       // Keep the day page's single-key shortcuts (n, t, arrows) from firing underneath.
       onKeyDown={(e) => e.key !== "Escape" && e.nativeEvent.stopPropagation()}
     >
-      <div className="sticky top-0 z-10 bg-scrim pt-[var(--safe-top)] backdrop-blur-xl">
+      <div className="sticky top-0 z-10 bg-canvas pt-[var(--safe-top)]">
         <div className="mx-auto flex h-14 w-full max-w-[720px] items-center px-4 md:px-0">
           <button
             onClick={goBack}
             aria-label="Back to day"
             title="Back (Esc)"
-            className="-ml-2 flex h-10 w-10 items-center justify-center rounded-full text-muted transition-colors hover:bg-ink/10 hover:text-ink active:scale-90"
+            className="-ml-2 flex h-11 w-11 items-center justify-center rounded-full text-muted transition-colors hover:text-ink active:scale-90"
           >
             <ArrowLeft size={20} />
           </button>
         </div>
       </div>
       {task ? (
-        <TaskDocument key={task.id} task={task} />
+        <TaskDocument key={task.id} task={task} keyboard={keyboard} pageRef={pageRef} />
       ) : (
         <div className="mx-auto max-w-[720px] px-4 pt-16 text-muted">This task no longer exists.</div>
       )}
@@ -107,10 +116,15 @@ function withAfterBasic<T extends { group?: string }>(items: T[], extra: T): T[]
   return out;
 }
 
-const chip =
-  "inline-flex h-8 items-center gap-1.5 rounded-lg bg-ink/[0.06] px-2.5 text-[12px] text-muted outline-none transition-colors hover:bg-ink/[0.1] hover:text-ink focus:bg-ink/[0.1] focus:text-ink";
-
-function TaskDocument({ task }: { task: Task }) {
+function TaskDocument({
+  task,
+  keyboard,
+  pageRef,
+}: {
+  task: Task;
+  keyboard: number;
+  pageRef: RefObject<HTMLDivElement | null>;
+}) {
   const { data, actions } = useStore();
   const [title, setTitle] = useState(task.title);
   const editorRef = useRef<PlannerEditor | null>(null);
@@ -140,9 +154,12 @@ function TaskDocument({ task }: { task: Task }) {
   const [viewer, setViewer] = useState<{ url: string; blockId: string } | null>(null);
   const cameraInput = useRef<HTMLInputElement>(null);
   const photosInput = useRef<HTMLInputElement>(null);
+  /** Block the cursor was in when a photo was chosen (the picker blurs the editor). */
+  const insertAfter = useRef<string | undefined>(undefined);
   /** True once the notes have had focus, so a cursor position means something. */
   const wrote = useRef(false);
-  const keyboard = useKeyboardInset();
+  const keyboardRef = useRef(keyboard);
+  keyboardRef.current = keyboard;
 
   useEffect(() => {
     actionsRef.current.ensureNote(task.id);
@@ -238,10 +255,34 @@ function TaskDocument({ task }: { task: Task }) {
       uploadFile: (file) => saveImage(file),
       resolveFileUrl: (url) => resolveFileUrl(url, clientRef.current),
       placeholders: { default: "Write something, or type '/' for commands" },
+      // Plain Markdown pastes become real blocks, even alongside HTML.
+      pasteHandler: ({ defaultPasteHandler }) =>
+        defaultPasteHandler({ prioritizeMarkdownOverHTML: true, plainTextAsMarkdown: true }),
     },
     [task.id],
   );
   editorRef.current = editor;
+
+  /** Keep the cursor above the bar when it moves, when typing, or when the keyboard opens. */
+  const revealCursor = useCallback(() => {
+    const page = pageRef.current;
+    if (!page) return;
+    let coords: { top: number; bottom: number };
+    try {
+      const view = editor.prosemirrorView;
+      coords = view.coordsAtPos(view.state.selection.from);
+    } catch {
+      return;
+    }
+    const bottom = window.innerHeight - keyboardRef.current - 44 - 8;
+    if (coords.bottom > bottom) page.scrollTop += coords.bottom - bottom + 12;
+    else if (coords.top < 64) page.scrollTop -= 64 - coords.top + 8;
+  }, [editor, pageRef]);
+
+  useEffect(() => editor.onSelectionChange(revealCursor), [editor, revealCursor]);
+  useEffect(() => {
+    if (keyboard) revealCursor();
+  }, [keyboard, revealCursor]);
 
   // Seed the sync snapshot from the document as loaded, then adopt store values.
   const seeded = useRef(false);
@@ -252,7 +293,7 @@ function TaskDocument({ task }: { task: Task }) {
       const note = task.note;
       if (note && !note.blocks?.length && note.content.trim()) {
         const parsed = await editor.tryParseMarkdownToBlocks(note.content);
-        editor.replaceBlocks(editor.document, parsed);
+        editor.replaceBlocks(editor.document, mathifyParsedBlocks(parsed as unknown[]) as never);
       }
       for (const b of flatten(editor.document as unknown as AnyBlock[])) {
         if (b.type !== "taskItem") continue;
@@ -284,26 +325,34 @@ function TaskDocument({ task }: { task: Task }) {
     }
     runSync(editor);
     persist(editor);
+    revealCursor();
   }
 
-  /** Insert the photos after the block holding the cursor (at the end if the notes
-   *  were never touched), then leave an empty line so writing can continue. */
+  /** Insert at the remembered cursor, then put a fresh empty line there and focus it. */
   function insertImages(images: { ref: string; name: string }[]) {
     if (!images.length) return;
     const blocks = [
       ...images.map(({ ref, name }) => ({ type: "image", props: { url: ref, name } })),
       { type: "paragraph" },
-    ];
+    ] as never[];
     const document = editor.document as unknown as AnyBlock[];
-    const atCursor = wrote.current
-      ? (editor.getTextCursorPosition().block as unknown as AnyBlock | undefined)
-      : undefined;
-    // The editor always ends with an empty line: append before it, not after it.
     const last = document[document.length - 1];
     const trailing = document.length > 1 && last?.type === "paragraph" && !plainText(last.content);
-    const reference = atCursor?.id ?? document[document.length - (trailing ? 2 : 1)]?.id;
-    if (reference) editor.insertBlocks(blocks as never, reference, "after");
-    else editor.replaceBlocks(editor.document, blocks as never);
+    const reference =
+      insertAfter.current ?? document[document.length - (trailing ? 2 : 1)]?.id;
+    let inserted: AnyBlock[];
+    if (reference) {
+      inserted = editor.insertBlocks(blocks, reference, "after") as unknown as AnyBlock[];
+    } else {
+      inserted = editor.replaceBlocks(editor.document, blocks).insertedBlocks as unknown as AnyBlock[];
+    }
+    insertAfter.current = undefined;
+    const empty = inserted[inserted.length - 1];
+    if (empty) {
+      editor.setTextCursorPosition(empty.id, "start");
+      editor.focus();
+    }
+    revealCursor();
     persist(editor);
   }
 
@@ -326,6 +375,19 @@ function TaskDocument({ task }: { task: Task }) {
       busyRef.current = false;
       setBusy(false);
     }
+  }
+
+  /** Remember the cursor before the native picker blurs the editor. */
+  function openPicker(input: RefObject<HTMLInputElement | null>) {
+    if (busyRef.current) return;
+    try {
+      insertAfter.current = wrote.current
+        ? (editor.getTextCursorPosition().block as unknown as AnyBlock | undefined)?.id
+        : undefined;
+    } catch {
+      insertAfter.current = undefined;
+    }
+    input.current?.click();
   }
 
   function openViewer(target: EventTarget | null) {
@@ -351,145 +413,158 @@ function TaskDocument({ task }: { task: Task }) {
   }
 
   const category = data.categories.find((c) => c.id === task.categoryId);
-  const color = category ? catColor(category.color) : "var(--accent)";
+  const color = category ? catColor(category.color) : "var(--color-accent)";
   const cats = activeCategories(data.categories);
   const repeatValue = task.rrule?.startsWith("days:") ? "custom" : (task.rrule ?? "");
+  const repeatLabel = !repeatValue
+    ? "Repeat"
+    : repeatValue === "custom"
+      ? `Days: ${parseDays(task.rrule ?? "").join(",")}`
+      : (REPEAT_OPTIONS.find((o) => o.value === repeatValue)?.label ?? repeatValue);
 
   return (
     <>
-    <article className="mx-auto w-full max-w-[720px] px-4 pb-[calc(96px+var(--safe-bottom))] pt-6 md:px-0 md:pt-10">
-      <div className="flex items-start gap-3">
-        <div className="-ml-2 -mt-[5px]">
-          <TaskCheck checked={task.done} color={color} onToggle={() => actions.toggleTask(task.id)} size={28} />
+      <article className="mx-auto w-full max-w-[720px] px-4 pt-6 md:px-0 md:pt-10">
+        <div className="flex items-start gap-3">
+          <div className="-ml-2 -mt-[5px]">
+            <TaskCheck
+              checked={task.done}
+              color="var(--color-ink)"
+              onToggle={() => actions.toggleTask(task.id)}
+              size={28}
+            />
+          </div>
+          <textarea
+            value={title}
+            rows={1}
+            placeholder="Untitled"
+            onChange={(e) => setTitle(e.target.value.replace(/\n/g, " "))}
+            onBlur={commitTitle}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                commitTitle();
+                editor.focus();
+              }
+            }}
+            aria-label="Task title"
+            style={{ fontSize: 23, lineHeight: 1.25, fontWeight: 700, letterSpacing: "-0.02em" }}
+            className={`min-w-0 flex-1 resize-none bg-transparent font-bold tracking-[-0.025em] outline-none [field-sizing:content] placeholder:text-ink/25 ${
+              task.done ? "text-ink/40 line-through decoration-ink/25" : ""
+            }`}
+          />
         </div>
-        <textarea
-          value={title}
-          rows={1}
-          placeholder="Untitled"
-          onChange={(e) => setTitle(e.target.value.replace(/\n/g, " "))}
-          onBlur={commitTitle}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              commitTitle();
-              editor.focus();
-            }
-          }}
-          aria-label="Task title"
-          style={{ fontSize: 23, lineHeight: 1.25, fontWeight: 700, letterSpacing: "-0.02em" }}
-          className={`min-w-0 flex-1 resize-none bg-transparent font-bold tracking-[-0.025em] outline-none [field-sizing:content] placeholder:text-ink/25 ${
-            task.done ? "text-ink/40 line-through decoration-ink/25" : ""
-          }`}
-        />
-      </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-1.5 pl-0 md:pl-[36px]">
-        <label className={chip} style={{ color: category ? color : undefined }}>
-          <span className="h-2 w-2 rounded-full" style={{ background: color }} />
-          <select
-            aria-label="Category"
-            value={task.categoryId ?? ""}
-            onChange={(e) => actions.updateTask(task.id, { categoryId: e.target.value || null })}
-            className="max-w-[160px] cursor-pointer bg-transparent outline-none"
-          >
-            <option value="" className="bg-raised text-ink">
-              No category
-            </option>
-            {cats.map((c) => (
-              <option key={c.id} value={c.id} className="bg-raised text-ink">
-                {c.name}
+        <div className="properties mt-3 flex flex-wrap items-center gap-x-5 gap-y-0 pl-0 md:pl-[36px]">
+          <label className="property-control">
+            <span className="property-dot" style={{ background: color }} />
+            <span className="max-w-[130px] truncate">{category?.name ?? "No category"}</span>
+            <select
+              aria-label="Category"
+              value={task.categoryId ?? ""}
+              onChange={(e) => actions.updateTask(task.id, { categoryId: e.target.value || null })}
+              className="property-input"
+            >
+              <option value="">No category</option>
+              {cats.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="property-control">
+            <span>{task.date ? formatTaskDate(task.date) : "Add date"}</span>
+            <input
+              type="date"
+              aria-label="Date"
+              value={task.date}
+              onChange={(e) => e.target.value && actions.updateTask(task.id, { date: e.target.value })}
+              className="property-input"
+            />
+          </label>
+          <label className="property-control">
+            <span>{task.time || "Add time"}</span>
+            <input
+              type="time"
+              aria-label="Time"
+              value={task.time ?? ""}
+              onChange={(e) => actions.updateTask(task.id, { time: e.target.value || undefined })}
+              className="property-input"
+            />
+          </label>
+          <label className="property-control">
+            <span>{repeatLabel}</span>
+            <select
+              aria-label="Repeat"
+              value={repeatValue}
+              onChange={(e) =>
+                actions.updateTask(task.id, {
+                  rrule: e.target.value === "custom" ? "days:1,3,5" : e.target.value || undefined,
+                })
+              }
+              className="property-input"
+            >
+              {REPEAT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+              <option value="custom">
+                {task.rrule?.startsWith("days:") ? `Days: ${parseDays(task.rrule).join(",")}` : "Custom days"}
               </option>
-            ))}
-          </select>
-        </label>
-        <label className={chip}>
-          <CalendarDays size={14} />
-          <input
-            type="date"
-            aria-label="Date"
-            value={task.date}
-            onChange={(e) => e.target.value && actions.updateTask(task.id, { date: e.target.value })}
-            className="bg-transparent outline-none"
-          />
-        </label>
-        <label className={chip}>
-          <Clock size={14} />
-          <input
-            type="time"
-            aria-label="Time"
-            value={task.time ?? ""}
-            onChange={(e) => actions.updateTask(task.id, { time: e.target.value || undefined })}
-            className="bg-transparent outline-none"
-          />
-        </label>
-        <label className={chip}>
-          <Repeat size={14} />
-          <select
-            aria-label="Repeat"
-            value={repeatValue}
-            onChange={(e) =>
-              actions.updateTask(task.id, {
-                rrule: e.target.value === "custom" ? "days:1,3,5" : e.target.value || undefined,
-              })
-            }
-            className="cursor-pointer bg-transparent outline-none"
-          >
-            {REPEAT_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value} className="bg-raised text-ink">
-                {o.label}
-              </option>
-            ))}
-            <option value="custom" className="bg-raised text-ink">
-              {task.rrule?.startsWith("days:") ? `Days: ${parseDays(task.rrule).join(",")}` : "Custom days"}
-            </option>
-          </select>
-        </label>
-        <label className={chip}>
-          <Shapes size={14} />
-          <select
-            aria-label="Kind"
-            value={task.kind}
-            onChange={(e) => actions.updateTask(task.id, { kind: e.target.value as Task["kind"] })}
-            className="cursor-pointer bg-transparent capitalize outline-none"
-          >
-            {TASK_KINDS.map((k) => (
-              <option key={k} value={k} className="bg-raised capitalize text-ink">
-                {k}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
+            </select>
+          </label>
+          <label className="property-control capitalize">
+            <span>{task.kind}</span>
+            <select
+              aria-label="Kind"
+              value={task.kind}
+              onChange={(e) => actions.updateTask(task.id, { kind: e.target.value as Task["kind"] })}
+              className="property-input"
+            >
+              {TASK_KINDS.map((k) => (
+                <option key={k} value={k}>
+                  {k}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
 
-      <div className="mt-5 border-t border-line pt-4">
-        <div
-          className="note-editor"
-          onFocusCapture={() => (wrote.current = true)}
-          onPointerDownCapture={(event) => {
-            // Tapping a photo previews it; BlockNote keeps its own UI elsewhere.
-            if ((event.target as Element).closest?.('[data-content-type="image"] img')) event.preventDefault();
-          }}
-          onClickCapture={(event) => {
-            if ((event.target as Element).closest?.('[data-content-type="image"] img')) {
-              event.preventDefault();
-              event.stopPropagation();
-              openViewer(event.target);
-            }
-          }}
-        >
-          <BlockNoteView
-            editor={editor}
-            theme="dark"
-            slashMenu={false}
-            className="planner-editor"
-            onChange={handleChange}
+        <div className="mt-5 border-t border-line pt-4">
+          <div
+            className="note-editor"
+            onFocusCapture={() => (wrote.current = true)}
+            onPointerDownCapture={(event) => {
+              // Tapping a photo previews it; BlockNote keeps its own UI elsewhere.
+              if ((event.target as Element).closest?.('[data-content-type="image"] img')) event.preventDefault();
+            }}
+            onClickCapture={(event) => {
+              if ((event.target as Element).closest?.('[data-content-type="image"] img')) {
+                event.preventDefault();
+                event.stopPropagation();
+                openViewer(event.target);
+              }
+            }}
           >
-            <SuggestionMenuController
-              triggerCharacter="/"
-              getItems={async (query) =>
-                filterSuggestionItems(
-                  withAfterBasic(getDefaultReactSlashMenuItems(editor),
-                    {
+            <BlockNoteView
+              editor={editor}
+              theme="dark"
+              slashMenu={false}
+              formattingToolbar={false}
+              sideMenu={false}
+              emojiPicker={false}
+              filePanel={false}
+              tableHandles={false}
+              className="planner-editor"
+              onChange={handleChange}
+            >
+              <SuggestionMenuController
+                triggerCharacter="/"
+                getItems={async (query) =>
+                  filterSuggestionItems(
+                    withAfterBasic(getDefaultReactSlashMenuItems(editor), {
                       title: TASK_SLASH_TITLE,
                       aliases: taskSlashAliases,
                       group: "Basic blocks",
@@ -503,101 +578,73 @@ function TaskDocument({ task }: { task: Task }) {
                         insertOrUpdateBlockForSlashMenu(editor, taskBlockProps(id) as never);
                       },
                     }),
-                  query,
-                )
-              }
-            />
-          </BlockNoteView>
+                    query,
+                  )
+                }
+              />
+            </BlockNoteView>
+          </div>
         </div>
-      </div>
-    </article>
+      </article>
 
-    <div
-      className={`pointer-events-none fixed inset-x-0 z-40 flex justify-center px-4 ${
-        keyboard ? "pb-2" : "pb-[calc(10px+var(--safe-bottom))]"
-      }`}
-      style={{ bottom: keyboard }}
-    >
-      <div className="pointer-events-auto flex w-full max-w-[720px] items-center gap-2 rounded-2xl border border-line bg-surface-2/95 p-2 shadow-2xl shadow-black/50 backdrop-blur-xl">
-        <button
-          type="button"
-          aria-label="Camera"
-          disabled={busy}
-          onClick={() => cameraInput.current?.click()}
-          className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl border border-line bg-raised px-4 text-[13.5px] font-medium text-ink transition-colors hover:bg-surface-3 active:scale-[0.98] disabled:opacity-50"
-        >
-          {busy ? <Loader2 size={18} className="animate-spin text-muted" /> : <Camera size={18} className="text-muted" />}
-          Camera
-        </button>
-        <input
-          ref={cameraInput}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          aria-label="Take a photo"
-          className="hidden"
-          onChange={(event) => {
-            void addFiles(event.target.files);
-            event.target.value = "";
-          }}
-        />
-        <button
-          type="button"
-          aria-label="Photos"
-          disabled={busy}
-          onClick={() => photosInput.current?.click()}
-          className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl border border-line bg-raised px-4 text-[13.5px] font-medium text-ink transition-colors hover:bg-surface-3 active:scale-[0.98] disabled:opacity-50"
-        >
-          {busy ? <Loader2 size={18} className="animate-spin text-muted" /> : <Images size={18} className="text-muted" />}
-          Photos
-        </button>
-        <input
-          ref={photosInput}
-          type="file"
-          accept="image/*"
-          multiple
-          aria-label="Choose photos"
-          className="hidden"
-          onChange={(event) => {
-            void addFiles(event.target.files);
-            event.target.value = "";
-          }}
-        />
-      </div>
-    </div>
+      <input
+        ref={cameraInput}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        aria-label="Take a photo"
+        className="hidden"
+        onChange={(event) => {
+          void addFiles(event.target.files);
+          event.target.value = "";
+        }}
+      />
+      <input
+        ref={photosInput}
+        type="file"
+        accept="image/*"
+        aria-label="Choose photos"
+        className="hidden"
+        onChange={(event) => {
+          void addFiles(event.target.files);
+          event.target.value = "";
+        }}
+      />
+      <KeyboardBar
+        editor={editor}
+        keyboard={keyboard}
+        busy={busy}
+        onCamera={() => openPicker(cameraInput)}
+        onPhotos={() => openPicker(photosInput)}
+      />
 
-    {viewer && (
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Photo viewer"
-        className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4 backdrop-blur-xl"
-        onClick={() => setViewer(null)}
-      >
-        <button
-          type="button"
-          aria-label="Close photo"
+      {viewer && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Photo viewer"
+          className="photo-viewer"
           onClick={() => setViewer(null)}
-          className="absolute right-4 top-[calc(10px+var(--safe-top))] flex h-11 w-11 items-center justify-center rounded-full border border-line-2 bg-surface-2 text-ink transition-colors hover:bg-surface-3 active:scale-95"
         >
-          <X size={22} />
-        </button>
-        <img
-          src={viewer.url}
-          alt="Note photo"
-          className="max-h-[78vh] max-w-full rounded-xl object-contain"
-          onClick={(event) => event.stopPropagation()}
-        />
-        <button
-          type="button"
-          onClick={removeImage}
-          className="absolute bottom-[calc(16px+var(--safe-bottom))] flex min-h-[44px] items-center gap-2 rounded-xl border border-line bg-surface-2 px-5 text-[13.5px] font-medium text-rose transition-colors hover:bg-surface-3 active:scale-[0.98]"
-        >
-          <Trash2 size={18} />
-          Remove
-        </button>
-      </div>
-    )}
+          <button
+            type="button"
+            aria-label="Close photo"
+            onClick={() => setViewer(null)}
+            className="photo-viewer-close"
+          >
+            <X size={22} />
+          </button>
+          <img
+            src={viewer.url}
+            alt="Note photo"
+            className="photo-viewer-image"
+            onClick={(event) => event.stopPropagation()}
+          />
+          <button type="button" onClick={removeImage} className="photo-viewer-remove">
+            Remove
+          </button>
+        </div>
+      )}
     </>
   );
 }
