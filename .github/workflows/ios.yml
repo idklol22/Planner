@@ -1,10 +1,11 @@
-name: iOS build (unsigned IPA for AltStore)
+name: iOS build (unsigned IPA for sideloading)
 
 on:
   workflow_dispatch:
   push:
     branches:
       - master
+      - ios-widgets
 
 jobs:
   build:
@@ -40,8 +41,45 @@ jobs:
       - name: Build web app
         run: npm run build || { echo "::error::Web build failed. Fix the TypeScript or Vite error above before building iOS."; exit 1; }
 
+      - name: Widget logic tests and previews
+        run: |
+          mkdir -p build/widget-preview
+          if ! swiftc ios/App/PlannerWidgets/Shared/*.swift ios/App/PlannerWidgets/Views/*.swift ios/WidgetTests/main.swift -o build/widgettests > build/widgettests.log 2>&1; then
+            grep -E "error:" build/widgettests.log | sed "s#$GITHUB_WORKSPACE/##" | sort -u | head -9 | sed 's/^/::error::/'
+            exit 1
+          fi
+          build/widgettests build/widget-preview/widgets.jpg
+
+      - name: Publish preview as annotations
+        if: always()
+        run: |
+          # Lets the rendered widgets be read from the public check-run API without signing in.
+          test -f build/widget-preview/widgets.jpg || exit 0
+          base64 -i build/widget-preview/widgets.jpg | tr -d '\n' > build/preview.b64
+          echo >> build/preview.b64
+          fold -w 50000 build/preview.b64 > build/preview.chunks
+          n=0
+          while IFS= read -r chunk; do
+            [ -n "$chunk" ] || continue
+            n=$((n+1))
+            if [ "$n" -le 9 ]; then echo "::notice title=widget-preview-$n::$chunk"; fi
+          done < build/preview.chunks
+
+      - name: Upload widget preview
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: widget-preview
+          path: build/widget-preview
+          if-no-files-found: ignore
+
       - name: Sync Capacitor iOS project
         run: npx cap sync ios || { echo "::error::Capacitor sync failed. Check capacitor.config.ts and the ios/ project."; exit 1; }
+
+      - name: Add the widget extension to the Xcode project
+        run: |
+          ruby -e "require 'xcodeproj'" 2>/dev/null || sudo gem install xcodeproj --no-document
+          ruby ios/scripts/add_widget_target.rb || { echo "::error::Adding the widget target failed."; exit 1; }
 
       - name: Install CocoaPods
         run: |
@@ -51,23 +89,36 @@ jobs:
       - name: Archive with Xcode (signing disabled)
         run: |
           cd ios/App || { echo "::error::ios/App directory is missing from the repository."; exit 1; }
-          xcodebuild -workspace App.xcworkspace -scheme App -configuration Release -sdk iphoneos \
-            -archivePath build/App.xcarchive archive \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-            || { echo "::error::xcodebuild archive failed. Read the Xcode errors above; this build is intentionally unsigned."; exit 1; }
-
-      - name: Package Payload/App.app into Planner.ipa
-        run: |
-          APP="$GITHUB_WORKSPACE/ios/App/build/App.xcarchive/Products/Applications/App.app"
-          if [ ! -d "$APP" ]; then
-            echo "::error::Archived App.app was not found at $APP."
+          if ! xcodebuild -workspace App.xcworkspace -scheme App -configuration Release -sdk iphoneos \
+              -destination 'generic/platform=iOS' -archivePath build/App.xcarchive archive \
+              CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" > build.log 2>&1; then
+            grep -E "(error:|error :)" build.log | sed "s#$GITHUB_WORKSPACE/##" | sort -u | head -8 | sed 's/^/::error::/'
+            echo "::error::xcodebuild archive failed. $(tail -n 6 build.log | tr '\n' ' ' | cut -c1-800)"
             exit 1
           fi
-          cd "$GITHUB_WORKSPACE/ios/App/build" || { echo "::error::Build directory is missing."; exit 1; }
-          rm -rf Payload
-          mkdir -p Payload || { echo "::error::Could not create the Payload directory."; exit 1; }
-          cp -R "$APP" Payload/App.app || { echo "::error::Could not copy App.app into Payload."; exit 1; }
-          zip -q -r "$GITHUB_WORKSPACE/Planner.ipa" Payload || { echo "::error::Could not zip Payload/App.app into Planner.ipa."; exit 1; }
+
+      - name: Package the IPAs
+        run: |
+          APP="$GITHUB_WORKSPACE/ios/App/build/App.xcarchive/Products/Applications/App.app"
+          [ -d "$APP" ] || { echo "::error::Archived App.app was not found at $APP."; exit 1; }
+          [ -d "$APP/PlugIns/PlannerWidgets.appex" ] || { echo "::error::The widget extension is missing from App.app."; exit 1; }
+          [ -d "$APP/PlugIns/PlannerWidgets.appex/Metadata.appintents" ] || { echo "::error::Widget settings metadata is missing."; exit 1; }
+          work="$RUNNER_TEMP/ipa"
+          # Planner.ipa: unsigned, asks for no special permissions.
+          mkdir -p "$work/plain/Payload"
+          cp -R "$APP" "$work/plain/Payload/App.app"
+          (cd "$work/plain" && zip -q -r "$GITHUB_WORKSPACE/Planner.ipa" Payload)
+          # Planner-health.ipa: ad-hoc signed so it asks the sideloader for Apple Health access.
+          mkdir -p "$work/health/Payload"
+          target="$work/health/Payload/App.app"
+          cp -R "$APP" "$target"
+          for nested in "$target"/Frameworks/*.framework "$target"/PlugIns/*.appex; do
+            codesign --force --sign - "$nested"
+          done
+          codesign --force --sign - --entitlements ios/App/App/App.entitlements "$target"
+          codesign -d --entitlements - "$target" 2>/dev/null | grep -q healthkit || { echo "::error::The Health entitlement was not applied."; exit 1; }
+          (cd "$work/health" && zip -q -r "$GITHUB_WORKSPACE/Planner-health.ipa" Payload)
+          ls -lh Planner.ipa Planner-health.ipa
 
       - name: Upload Planner.ipa
         id: upload
@@ -75,6 +126,13 @@ jobs:
         with:
           name: Planner.ipa
           path: Planner.ipa
+          if-no-files-found: error
+
+      - name: Upload Planner-health.ipa
+        uses: actions/upload-artifact@v4
+        with:
+          name: Planner-health.ipa
+          path: Planner-health.ipa
           if-no-files-found: error
 
       - name: Upload failed

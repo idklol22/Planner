@@ -20,6 +20,19 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Show your activity, sleep and workouts next to your plan and sync them to your cloud.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>dev.planner.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>planner</string>
+			</array>
+		</dict>
+	</array>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Record voice notes to send to LearnHarness on your laptop.</string>
 	<key>NSCameraUsageDescription</key>
