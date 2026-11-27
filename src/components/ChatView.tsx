@@ -114,6 +114,9 @@ export function ChatView() {
       url = URL.createObjectURL(blob);
       urlCache.current.set(sha256, url);
     }
+    // A cached hash must drive rendering too: a just-sent attachment is not
+    // re-downloaded, so its bubble needs the URL registered here.
+    setUrls((current) => (current[sha256] === url ? current : { ...current, [sha256]: url }));
     return {
       name,
       mime: blob.type || "application/octet-stream",
@@ -167,38 +170,56 @@ export function ChatView() {
     const client = sync.client;
     if (!client) return;
     let alive = true;
+    const added = new Set<string>();
     for (const attachment of messages.thread.flatMap((row) => row.attachments)) {
       const mime = attachment.mime;
       if (!mime.startsWith("image/") && !mime.startsWith("audio/")) continue;
-      if (urlCache.current.has(attachment.sha256) || pendingUrls.current.has(attachment.sha256)) continue;
-      pendingUrls.current.add(attachment.sha256);
+      const sha = attachment.sha256;
+      const cached = urlCache.current.get(sha);
+      if (cached) {
+        // A local upload (or an earlier pull) already made a URL for this hash.
+        setUrls((current) => (current[sha] === cached ? current : { ...current, [sha]: cached }));
+        continue;
+      }
+      if (pendingUrls.current.has(sha)) continue;
+      pendingUrls.current.add(sha);
+      added.add(sha);
       void client
-        .getFile(attachment.sha256)
+        .getFile(sha)
         .then((blob) => {
           if (!alive) return;
           const url = URL.createObjectURL(blob);
-          urlCache.current.set(attachment.sha256, url);
-          setUrls((current) => ({ ...current, [attachment.sha256]: url }));
+          urlCache.current.set(sha, url);
+          setUrls((current) => ({ ...current, [sha]: url }));
         })
         .catch(() => {
           // A missing attachment is shown as a placeholder, never breaks the thread.
         })
         .finally(() => {
-          pendingUrls.current.delete(attachment.sha256);
+          // A superseded run must not clear the pending flag of its replacement.
+          if (alive) pendingUrls.current.delete(sha);
         });
     }
     return () => {
       alive = false;
+      for (const sha of added) pendingUrls.current.delete(sha);
     };
   }, [messages.thread, sync.client]);
 
   // Cache is keyed by content hash and belongs to one hub only.
   useEffect(() => {
+    if (viewer) {
+      URL.revokeObjectURL(viewer);
+      setViewer(null);
+    }
+    pendingUrls.current.clear();
     for (const url of urlCache.current.values()) URL.revokeObjectURL(url);
     urlCache.current.clear();
     setUrls({});
     setFiles([]);
     setVoiceDraft(null);
+    // The viewer is read at hub-change time, not tracked as a trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sync.client]);
 
   useEffect(
@@ -206,24 +227,30 @@ export function ChatView() {
       if (timerRef.current !== null) window.clearInterval(timerRef.current);
       const recorder = recorderRef.current;
       if (recorder && recorder.state !== "inactive") recorder.stop();
+      pendingUrls.current.clear();
       for (const url of urlCache.current.values()) URL.revokeObjectURL(url);
       urlCache.current.clear();
     },
     [],
   );
 
-  function clearDraft() {
+  /** Reset only the voice state; typed text and staged files survive. */
+  function resetVoice() {
     recorderRef.current = null;
     setRecording(false);
     setElapsed(0);
-    setDraft("");
-    setFiles([]);
     setVoiceDraft(null);
     setInlineError(null);
     if (timerRef.current !== null) {
       window.clearInterval(timerRef.current);
       timerRef.current = null;
     }
+  }
+
+  function clearDraft() {
+    resetVoice();
+    setDraft("");
+    setFiles([]);
   }
 
   async function prepareImage(file: File): Promise<PreparedFile> {
@@ -303,9 +330,7 @@ export function ChatView() {
           ...(file.durationSec === undefined ? {} : { durationSec: file.durationSec }),
         })),
       });
-      setDraft("");
-      setFiles([]);
-      setVoiceDraft(null);
+      clearDraft();
     } catch (cause) {
       // Keep every draft byte so a retry can never send twice.
       setInlineError(`Could not send: ${failureText(cause)}`);
@@ -327,13 +352,13 @@ export function ChatView() {
       !navigator.mediaDevices?.getUserMedia ||
       typeof MediaRecorder === "undefined"
     ) {
-      clearDraft();
+      resetVoice();
       notify("Microphone is unavailable on this device", "error");
       return;
     }
     const mime = pickAudioMime((candidate) => MediaRecorder.isTypeSupported(candidate));
     if (!mime) {
-      clearDraft();
+      resetVoice();
       notify("Voice recording is not supported on this device", "error");
       return;
     }
@@ -352,7 +377,7 @@ export function ChatView() {
       timerRef.current = window.setInterval(() => setElapsed((value) => value + 1), 1000);
     } catch {
       for (const track of stream?.getTracks() ?? []) track.stop();
-      clearDraft();
+      resetVoice();
       notify("Microphone access was denied", "error");
     }
   }
@@ -398,13 +423,7 @@ export function ChatView() {
   const groups = groupByDay(messages.thread, dayLabel);
 
   return (
-    <div
-      className="flex flex-col overflow-hidden"
-      style={{
-        height:
-          "calc(100dvh - 72px - var(--safe-top) - max(16px, var(--safe-bottom)))",
-      }}
-    >
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <Panel className="!mb-3 !shrink-0 !p-3">
         <p className="text-[13px] text-muted">{linkText}</p>
       </Panel>
