@@ -44,15 +44,19 @@
   margin-top: 0.55em;
   margin-bottom: 0.1em;
 }
-.planner-editor [data-content-type="heading"][data-level="1"] {
-  font-size: 1.35em;
-  font-weight: 700;
+.planner-editor [data-content-type="heading"] {
+  /* BlockNote sizes headings through --level, and level 1 carries no data-level attribute. */
+  --level: 1.35em;
+  font-size: var(--level);
 }
 .planner-editor [data-content-type="heading"][data-level="2"] {
-  font-size: 1.18em;
+  --level: 1.18em;
 }
-.planner-editor [data-content-type="heading"][data-level="3"] {
-  font-size: 1.05em;
+.planner-editor [data-content-type="heading"][data-level="3"],
+.planner-editor [data-content-type="heading"][data-level="4"],
+.planner-editor [data-content-type="heading"][data-level="5"],
+.planner-editor [data-content-type="heading"][data-level="6"] {
+  --level: 1.05em;
 }
 
 /* Tight lists; all indentation stays inside the note column. */

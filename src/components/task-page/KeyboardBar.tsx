@@ -137,7 +137,7 @@ export function KeyboardBar({
           pressed={type === "checkListItem"}
           onAction={() => setList("checkListItem")}
         >
-          <span aria-hidden>&#9746;&#65038;</span>
+          <span aria-hidden>&#9744;&#65038;</span>
         </BarButton>
         <BarButton
           label="Bold"
