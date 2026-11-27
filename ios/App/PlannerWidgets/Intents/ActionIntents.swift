@@ -89,6 +89,25 @@ struct NextPageIntent: AppIntent {
     }
 }
 
+struct PreviousPageIntent: AppIntent {
+    static var title: LocalizedStringResource = "Previous page"
+    static var isDiscoverable = false
+
+    @Parameter(title: "Page key")
+    var key: String
+
+    init() {}
+
+    init(key: String) {
+        self.key = key
+    }
+
+    func perform() async throws -> some IntentResult {
+        await WidgetStore.shared.previousPage(key)
+        return .result()
+    }
+}
+
 /// Turns the views' taps into widget buttons and links.
 func widgetButtons(pageKey: String) -> WidgetInteraction {
     { tap, label in
@@ -101,6 +120,8 @@ func widgetButtons(pageKey: String) -> WidgetInteraction {
             return AnyView(Button(intent: UndoCaloriesIntent(entryId: entryId)) { label }.buttonStyle(.plain))
         case .nextPage:
             return AnyView(Button(intent: NextPageIntent(key: pageKey)) { label }.buttonStyle(.plain))
+        case .previousPage:
+            return AnyView(Button(intent: PreviousPageIntent(key: pageKey)) { label }.buttonStyle(.plain))
         case .open(let url):
             return AnyView(Link(destination: url) { label })
         }

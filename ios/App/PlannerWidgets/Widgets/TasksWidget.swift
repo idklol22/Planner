@@ -83,14 +83,14 @@ struct TasksEntryView: View {
     private var content: some View {
         switch entry.load {
         case .needsCode:
-            message("link", "Connect to Planner",
+            message("Connect to Planner",
                     "Touch and hold, Edit Widget, then paste the code from Planner › Settings.")
         case .failed(let title, let detail):
-            message("exclamationmark.icloud", title, detail)
+            message(title, detail)
         case .data(let data, let offline):
             if let scope = entry.scope.scope {
                 if scope == .subject && !data.categories.contains(where: { $0.id == entry.subjectId }) {
-                    message("books.vertical", "Choose a subject", "Touch and hold, then Edit Widget.")
+                    message("Choose a subject", "Touch and hold, then Edit Widget.")
                 } else {
                     TasksWidgetView(
                         model: WidgetLogic.tasksModel(
@@ -101,14 +101,14 @@ struct TasksEntryView: View {
                         interact: widgetButtons(pageKey: entry.pageKey))
                 }
             } else {
-                message("slider.horizontal.3", "What should I show?",
+                message("What should I show?",
                         "Touch and hold, Edit Widget: today, a subject, or everything.")
             }
         }
     }
 
-    private func message(_ icon: String, _ title: String, _ detail: String) -> some View {
-        WidgetMessageView(icon: icon, title: title, detail: detail, palette: palette)
+    private func message(_ title: String, _ detail: String) -> some View {
+        WidgetMessageView(title: title, detail: detail, palette: palette)
     }
 }
 

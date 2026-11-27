@@ -1,4 +1,5 @@
 // The Calories widget: today's total against the goal and one-tap logging.
+// Quiet and monochrome: no flame, no tinted pills, every button stays tappable.
 import SwiftUI
 
 struct CaloriesWidgetView: View {
@@ -11,9 +12,9 @@ struct CaloriesWidgetView: View {
     var interact: WidgetInteraction
 
     private var goal: Double { calories.goal ?? 0 }
-    private var progress: Double { goal > 0 ? min(calories.eaten / goal, 1) : 0 }
+    private var progress: Double { goal > 0 ? min(max(calories.eaten / goal, 0), 1) : 0 }
     private var over: Bool { goal > 0 && calories.eaten > goal * 1.1 }
-    private var tint: Color { over ? palette.warning : palette.accent }
+    private var fill: Color { palette.muted }
 
     private var remaining: String {
         guard goal > 0 else { return "kcal today" }
@@ -37,32 +38,25 @@ struct CaloriesWidgetView: View {
 
     private var title: some View {
         HStack(spacing: 4) {
-            Image(systemName: "flame.fill")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundColor(Color(css: "#f2a65a")!)
             Text("Calories")
-                .font(.system(size: 12, weight: .bold))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundColor(palette.muted)
                 .lineLimit(1)
             if offline {
-                Image(systemName: "wifi.slash")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(palette.warning)
+                Text("offline")
+                    .font(.system(size: 12))
+                    .foregroundColor(palette.muted)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
             Spacer(minLength: 2)
             if let last = calories.lastWidgetEntry {
                 interact(.undoCalories(entryId: last.id), AnyView(
-                    HStack(spacing: 2) {
-                        Image(systemName: "arrow.uturn.backward")
-                        Text(WidgetLogic.number(last.kcal))
-                    }
-                    .font(.system(size: 10, weight: .bold).monospacedDigit())
-                    .foregroundColor(palette.muted)
-                    .padding(.horizontal, 6)
-                    .frame(height: 20)
-                    .background(palette.text.opacity(0.09))
-                    .clipShape(Capsule())
-                    .contentShape(Rectangle())
+                    Text("Undo \(WidgetLogic.number(last.kcal))")
+                        .font(.system(size: 14, weight: .medium).monospacedDigit())
+                        .foregroundColor(palette.muted)
+                        .frame(height: 32)
+                        .contentShape(Rectangle())
                 ))
             }
         }
@@ -70,15 +64,15 @@ struct CaloriesWidgetView: View {
     }
 
     private var smallBody: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 2) {
             title
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text(WidgetLogic.number(calories.eaten))
-                    .font(.system(size: 31, weight: .heavy, design: .rounded).monospacedDigit())
+                    .font(.system(size: 34, weight: .bold, design: .rounded).monospacedDigit())
                     .foregroundColor(palette.text)
                 if goal > 0 {
                     Text("/ \(WidgetLogic.number(goal))")
-                        .font(.system(size: 11, weight: .semibold).monospacedDigit())
+                        .font(.system(size: 12).monospacedDigit())
                         .foregroundColor(palette.faint)
                 }
             }
@@ -86,63 +80,66 @@ struct CaloriesWidgetView: View {
             .minimumScaleFactor(0.6)
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
-                    Capsule().fill(palette.text.opacity(0.1))
-                    Capsule().fill(tint).frame(width: max(geometry.size.width * progress, progress > 0 ? 6 : 0))
+                    Capsule().fill(palette.faint.opacity(0.25))
+                    Capsule().fill(fill).frame(width: max(geometry.size.width * progress, progress > 0 ? 6 : 0))
                 }
             }
-            .frame(height: 6)
+            .frame(height: 5)
             Text(remaining)
-                .font(.system(size: 11, weight: .semibold).monospacedDigit())
+                .font(.system(size: 12, weight: .medium).monospacedDigit())
                 .foregroundColor(over ? palette.warning : palette.muted)
+                .lineLimit(1)
             Spacer(minLength: 0)
-            buttons(height: 32)
+            buttons(height: 34)
         }
     }
 
     private var wideBody: some View {
         HStack(spacing: 16) {
             ZStack {
-                Circle().stroke(palette.text.opacity(0.1), lineWidth: 10)
+                Circle().stroke(palette.faint.opacity(0.25), lineWidth: 8)
                 Circle()
                     .trim(from: 0, to: progress)
-                    .stroke(tint, style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                    .stroke(fill, style: StrokeStyle(lineWidth: 8, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                 VStack(spacing: 0) {
                     Text(WidgetLogic.number(calories.eaten))
-                        .font(.system(size: 25, weight: .heavy, design: .rounded).monospacedDigit())
+                        .font(.system(size: 30, weight: .bold, design: .rounded).monospacedDigit())
                         .foregroundColor(palette.text)
                     if goal > 0 {
                         Text("of \(WidgetLogic.number(goal))")
-                            .font(.system(size: 10.5, weight: .semibold).monospacedDigit())
+                            .font(.system(size: 12).monospacedDigit())
                             .foregroundColor(palette.faint)
                     }
                 }
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
-                .padding(.horizontal, 12)
+                .padding(.horizontal, 10)
             }
-            .frame(width: 112, height: 112)
-            VStack(alignment: .leading, spacing: 5) {
+            .frame(width: 108, height: 108)
+            VStack(alignment: .leading, spacing: 2) {
                 title
                 Text(remaining)
-                    .font(.system(size: 18, weight: .bold).monospacedDigit())
+                    .font(.system(size: 16, weight: .semibold).monospacedDigit())
                     .foregroundColor(over ? palette.warning : palette.text)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+                    .minimumScaleFactor(0.8)
                 if let activity = activity {
                     Text(activity)
-                        .font(.system(size: 11, weight: .medium).monospacedDigit())
+                        .font(.system(size: 12).monospacedDigit())
                         .foregroundColor(palette.muted)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.7)
+                        .minimumScaleFactor(0.8)
                 }
                 Spacer(minLength: 0)
                 buttons(height: 34)
                 interact(.open(URL(string: "planner://calories")!), AnyView(
                     Text("Other amount…")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(palette.accent)
+                        .font(.system(size: 14))
+                        .foregroundColor(palette.muted)
                         .frame(maxWidth: .infinity)
+                        .frame(height: 28)
+                        .contentShape(Rectangle())
                 ))
             }
         }
@@ -153,14 +150,12 @@ struct CaloriesWidgetView: View {
             ForEach(Array(amounts.enumerated()), id: \.offset) { _, amount in
                 interact(.addCalories(amount), AnyView(
                     Text("+\(amount)")
-                        .font(.system(size: 13, weight: .bold).monospacedDigit())
-                        .foregroundColor(palette.accent)
+                        .font(.system(size: 14, weight: .semibold).monospacedDigit())
+                        .foregroundColor(palette.text)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.7)
+                        .minimumScaleFactor(0.8)
                         .frame(maxWidth: .infinity)
                         .frame(height: height)
-                        .background(palette.accent.opacity(0.16))
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                         .contentShape(Rectangle())
                 ))
             }
