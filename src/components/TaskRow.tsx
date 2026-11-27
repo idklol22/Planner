@@ -7,16 +7,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { createPortal } from "react-dom";
-import {
-  Archive,
-  Clock,
-  Flag,
-  ListChecks,
-  MoreHorizontal,
-  Repeat,
-  StickyNote,
-  Trash2,
-} from "lucide-react";
+import { MoreHorizontal } from "lucide-react";
 import { addDays } from "../domain/dates";
 import type { Task } from "../domain/model";
 import { resolveSwipe, type SwipeState } from "../domain/swipe";
@@ -24,7 +15,6 @@ import { subtaskProgress } from "../domain/tasks";
 import { useStore } from "../state/store";
 import { useToast } from "../state/toast";
 import { TaskCheck } from "./TaskMark";
-import { CalendarArrowRight } from "./icons";
 
 const REST: SwipeState = { axis: null, dx: 0, action: null, settled: false };
 
@@ -42,7 +32,6 @@ export function TaskRow({
   const { data, actions } = useStore();
   const notify = useToast();
   const progress = subtaskProgress(data.tasks, task.id);
-  const hasNote = !!task.note?.content.trim();
   const [menu, setMenu] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
   const popover = useRef<HTMLDivElement>(null);
@@ -181,18 +170,10 @@ export function TaskRow({
     });
     if (resolved.action === "delete") {
       actions.deleteTask(task.id);
-      notify("Task deleted", "success", {
-        label: "Undo",
-        run: actions.undoTaskChange,
-        durationMs: 5000,
-      });
+      undo("Task deleted");
     } else if (resolved.action === "archive") {
       actions.archiveTask(task.id);
-      notify("Task archived", "success", {
-        label: "Undo",
-        run: actions.undoTaskChange,
-        durationMs: 5000,
-      });
+      undo("Task archived");
     }
   }
 
@@ -206,30 +187,25 @@ export function TaskRow({
       onPointerUp={endSwipe}
       onPointerCancel={cancelSwipe}
       onClickCapture={onClickCapture}
-      className={`group relative flex min-h-11 touch-pan-y items-center gap-1.5 overflow-hidden rounded-xl px-0 transition-colors ${
-        active ? "bg-ink/[0.07]" : "hover:bg-ink/[0.04]"
+      className={`group relative flex min-h-11 touch-pan-y items-center overflow-hidden ${
+        active ? "bg-ink/[0.07]" : ""
       }`}
     >
-      {/* Left underlay: revealed by a swipe right = Archive. */}
+      {/* Swipe right: Archive. Text only, no coloured slab. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-y-0 left-0 z-0 flex items-center justify-start overflow-hidden rounded-xl bg-accent text-accent-ink"
+        className="pointer-events-none absolute inset-y-0 left-0 z-0 flex items-center overflow-hidden"
         style={{ width: swipe.dx > 0 ? underlayWidth : 0, opacity: swipe.dx > 0 ? underlayOpacity : 0 }}
       >
-        <span className="flex shrink-0 items-center gap-1.5 px-3 text-[12px] font-semibold">
-          <Archive size={18} /> Archive
-        </span>
+        <span className="shrink-0 px-3 text-[12px] text-muted">Archive</span>
       </div>
-      {/* Right underlay: revealed by a swipe left = Delete. Solid danger token (not a
-          tint) so the affordance reads at every width; the label uses canvas for contrast. */}
+      {/* Swipe left: Delete. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-y-0 right-0 z-0 flex items-center justify-end overflow-hidden rounded-xl bg-rose text-canvas"
+        className="pointer-events-none absolute inset-y-0 right-0 z-0 flex items-center justify-end overflow-hidden"
         style={{ width: swipe.dx < 0 ? underlayWidth : 0, opacity: swipe.dx < 0 ? underlayOpacity : 0 }}
       >
-        <span className="flex shrink-0 items-center gap-1.5 px-3 text-[12px] font-semibold">
-          <Trash2 size={18} /> Delete
-        </span>
+        <span className="shrink-0 px-3 text-[12px] text-rose">Delete</span>
       </div>
       <div
         className="relative z-10 flex w-full min-w-0 flex-1 items-center gap-1.5"
@@ -251,20 +227,14 @@ export function TaskRow({
           <span className="min-w-0 flex-1 truncate text-[14.5px] leading-snug">
             <span className={`task-title ${task.done ? "done" : ""}`}>{task.title}</span>
           </span>
-          <span className="flex shrink-0 items-center gap-2 text-faint">
-            {task.seriesId || task.rrule ? <Repeat size={16} aria-label="Repeats" /> : null}
-            {hasNote && <StickyNote size={16} aria-label="Has a note" />}
-            {task.time && (
-              <span className="flex items-center gap-1 text-[12px] font-medium tabular-nums">
-                <Clock size={14} /> {task.time}
-              </span>
-            )}
-            {task.deadline && <Flag size={14} className="text-rose" aria-label="Deadline" />}
+          <span className="flex shrink-0 items-center gap-2.5 text-[12px] text-faint">
+            {task.time && <span className="tabular-nums">{task.time}</span>}
             {progress.total > 0 && (
-              <span className="flex items-center gap-1 text-[12px] font-medium tabular-nums">
-                <ListChecks size={15} /> {progress.done}/{progress.total}
+              <span className="tabular-nums">
+                {progress.done}/{progress.total}
               </span>
             )}
+            {task.deadline && <span className="text-amber">due</span>}
           </span>
         </button>
         <button
@@ -274,8 +244,8 @@ export function TaskRow({
           aria-label={`More options for ${task.title}`}
           aria-expanded={menu}
           aria-haspopup="menu"
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-faint transition-colors hover:bg-ink/[0.08] hover:text-ink focus-visible:ring-2 focus-visible:ring-accent ${
-            menu ? "bg-ink/[0.08]" : ""
+          className={`flex h-11 w-11 shrink-0 items-center justify-center text-faint transition-colors hover:text-ink focus-visible:ring-2 focus-visible:ring-accent ${
+            menu ? "text-ink" : ""
           }`}
         >
           <MoreHorizontal size={18} />
@@ -294,7 +264,7 @@ export function TaskRow({
                 role="menu"
                 onKeyDown={onMenuKeyDown}
                 style={{ top: popoverPos.top, left: popoverPos.left }}
-                className="animate-pop fixed z-20 w-52 origin-top-right overflow-hidden rounded-2xl border border-line-2 bg-[var(--pop)] p-1 shadow-2xl shadow-black"
+                className="animate-pop fixed z-20 w-48 origin-top-right overflow-hidden border border-line bg-[var(--pop)] py-1"
               >
                 <button
                   role="menuitem"
@@ -302,9 +272,9 @@ export function TaskRow({
                     actions.moveTaskToDay(task.id, addDays(task.date, 1));
                     setMenu(false);
                   }}
-                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[13.5px] font-medium hover:bg-ink/5 focus-visible:ring-2 focus-visible:ring-accent"
+                  className="flex min-h-11 w-full items-center px-3 text-left text-[13px] hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
                 >
-                  <CalendarArrowRight size={16} className="text-muted" /> Move to tomorrow
+                  Move to tomorrow
                 </button>
                 <button
                   role="menuitem"
@@ -313,9 +283,9 @@ export function TaskRow({
                     undo("Task archived");
                     setMenu(false);
                   }}
-                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[13.5px] font-medium hover:bg-ink/5 focus-visible:ring-2 focus-visible:ring-accent"
+                  className="flex min-h-11 w-full items-center px-3 text-left text-[13px] hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
                 >
-                  <Archive size={16} className="text-muted" /> Archive
+                  Archive
                 </button>
                 <button
                   role="menuitem"
@@ -324,9 +294,9 @@ export function TaskRow({
                     undo("Task deleted");
                     setMenu(false);
                   }}
-                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[13.5px] font-medium text-rose hover:bg-ink/5 focus-visible:ring-2 focus-visible:ring-accent"
+                  className="flex min-h-11 w-full items-center px-3 text-left text-[13px] text-rose focus-visible:ring-2 focus-visible:ring-accent"
                 >
-                  <Trash2 size={16} /> Delete
+                  Delete
                 </button>
               </div>
             </>,
