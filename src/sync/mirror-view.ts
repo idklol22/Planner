@@ -1,6 +1,6 @@
 /** Read-only views over the Harness mirror, shaped for the UI. */
 
-import type { HarnessSubject } from "../lib/harness";
+import type { HarnessSubject } from "../lib/harness-types";
 import type { HDeadlineRow, HMaterialRow } from "../storage/hub";
 import type { Mirror } from "./mapping";
 

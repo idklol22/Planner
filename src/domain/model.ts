@@ -1,9 +1,6 @@
 import { z } from "zod";
 import { uid } from "./ids";
 
-/** Base URL of a locally running LearnHarness dev server. */
-export const DEFAULT_HARNESS_URL = "http://localhost:3000";
-
 // ── Schemas ────────────────────────────────────────────────────────────────
 export const NoteImageSchema = z.object({
   id: z.string(),
@@ -134,8 +131,6 @@ export const SettingsSchema = z.object({
   handoffFolder: z.string(),
   /** User-managed list of LearnHarness subjects a task can be linked to. */
   learnharnessSubjects: z.array(z.string()),
-  /** Base URL of the running LearnHarness dev server. */
-  harnessUrl: z.string().default(DEFAULT_HARNESS_URL),
   dailyCalorieGoal: z.number(),
   /** Category that receives tasks created from LetCode `practice.solved` events. */
   letcodeCategoryId: z.string().optional(),
@@ -273,7 +268,6 @@ export function defaultData(): AppData {
     settings: {
       handoffFolder: "",
       learnharnessSubjects: [],
-      harnessUrl: DEFAULT_HARNESS_URL,
       dailyCalorieGoal: 2000,
     },
   };

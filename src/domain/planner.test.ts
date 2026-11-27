@@ -9,7 +9,6 @@ import {
   makeTask,
   migrateV2,
   parseAppData,
-  type AppData,
   type Task,
 } from "./model";
 import { daySummary, weekSummary } from "./summaries";
@@ -123,6 +122,36 @@ describe("migration v2 -> v3", () => {
   });
 });
 
+describe("legacy settings migration", () => {
+  it("ignores legacy harnessUrl on load", () => {
+    const legacy = {
+      version: 4,
+      tasks: [task({ id: "t1", title: "Kept task", done: true })],
+      categories: [],
+      habits: [],
+      calories: [],
+      goals: [],
+      settings: {
+        handoffFolder: "exports",
+        learnharnessSubjects: ["Biology"],
+        harnessUrl: "http://localhost:3000",
+        dailyCalorieGoal: 2200,
+        letcodeCategoryId: "cat-letcode",
+      },
+    };
+
+    const parsed = parseAppData(legacy);
+    expect(parsed.tasks).toEqual(legacy.tasks);
+    expect(parsed.settings).toEqual({
+      handoffFolder: "exports",
+      learnharnessSubjects: ["Biology"],
+      dailyCalorieGoal: 2200,
+      letcodeCategoryId: "cat-letcode",
+    });
+    expect(parsed.settings).not.toHaveProperty("harnessUrl");
+  });
+});
+
 describe("archived tasks in the planner", () => {
   const study = makeCategory("Study", 0);
   const cats = [study];
@@ -143,7 +172,7 @@ describe("archived tasks in the planner", () => {
   });
 
   it("parseAppData keeps archivedAt on a current record", () => {
-    const data: AppData = {
+    const data = {
       version: 4,
       tasks: [task({ id: "arch", archivedAt: "2026-11-21T10:00:00.000Z" })],
       categories: [],

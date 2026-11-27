@@ -22,7 +22,7 @@ import {
   type HubOp,
 } from "../storage/hub";
 import { parseNoteItems, type NoteItem } from "../lib/absorb";
-import type { HarnessNote } from "../lib/harness";
+import type { HarnessNote } from "../lib/harness-types";
 import { SyncEngine, type CursorStore } from "./engine";
 import { keepaliveBatch, KEEPALIVE_MAX_BYTES, KEEPALIVE_MAX_OPS } from "./flush";
 import {

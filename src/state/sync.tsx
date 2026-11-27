@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import type { AppData } from "../domain/model";
-import type { HarnessNote } from "../lib/harness";
+import type { HarnessNote } from "../lib/harness-types";
 import { isTauri } from "../storage";
 import { HubClient } from "../storage/hub";
 import { SyncController, type SyncStatus } from "../sync/controller";

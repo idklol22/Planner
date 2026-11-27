@@ -2,8 +2,8 @@ import { catColor } from "../theme/store";
 import { useEffect, useMemo, useState } from "react";
 import { Archive, ArchiveRestore, ChevronDown, ChevronUp, GripVertical, Plus, Trash2 } from "lucide-react";
 import { countCategoryTasks } from "../domain/categories";
-import { CATEGORY_COLORS, DEFAULT_HARNESS_URL, type Category } from "../domain/model";
-import { HarnessClient, type HarnessSubject } from "../lib/harness";
+import { CATEGORY_COLORS, type Category } from "../domain/model";
+import type { HarnessSubject } from "../lib/harness-types";
 import { useStore } from "../state/store";
 import { useSync } from "../state/sync";
 import { useToast } from "../state/toast";
@@ -22,7 +22,6 @@ function CategoryRow({
   onMove,
   onDelete,
   subjects,
-  unreachable,
 }: {
   cat: Category;
   index: number;
@@ -34,7 +33,6 @@ function CategoryRow({
   onMove: (dir: -1 | 1) => void;
   onDelete: () => void;
   subjects: HarnessSubject[];
-  unreachable: boolean;
 }) {
   const { actions } = useStore();
   const [name, setName] = useState(cat.name);
@@ -142,14 +140,8 @@ function CategoryRow({
             <div className="mb-2 text-[12px] font-semibold uppercase tracking-[0.12em] text-faint">
               Linked LearnHarness subject
             </div>
-            {unreachable && (
-              <p className="mb-2 text-[12px] text-rose" role="status">
-                LearnHarness not reachable
-              </p>
-            )}
             <select
               value={savedSubject ?? ""}
-              disabled={unreachable}
               aria-label="Linked LearnHarness subject"
               onChange={(event) =>
                 actions.updateCategory(cat.id, {
@@ -173,7 +165,6 @@ function CategoryRow({
             {(selectedSubject?.topics.length || cat.linkedTopicId) && (
               <select
                 value={cat.linkedTopicId ?? ""}
-                disabled={unreachable}
                 aria-label="LearnHarness topic"
                 onChange={(event) =>
                   actions.updateCategory(cat.id, { linkedTopicId: event.target.value || null })
@@ -272,36 +263,9 @@ export function CategoriesView() {
   const [name, setName] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
-  const [subjects, setSubjects] = useState<HarnessSubject[]>([]);
-  const [unreachable, setUnreachable] = useState(false);
-  const harnessUrl = data.settings.harnessUrl || DEFAULT_HARNESS_URL;
   const hub = useSync();
-  const hubSubjects = useMemo(() => mirrorSubjects(hub.mirror), [hub.mirror]);
-
-  useEffect(() => {
-    if (hub.configured) {
-      // Hub mode: subjects/topics come from the synced Harness mirror.
-      setSubjects(hubSubjects);
-      setUnreachable(false);
-      return;
-    }
-    let alive = true;
-    setUnreachable(false);
-    void new HarnessClient(harnessUrl).subjects().then((result) => {
-      if (!alive) return;
-      if (result.ok) {
-        setSubjects(result.data.subjects);
-        setUnreachable(false);
-      } else {
-        // Saved links are left untouched; only the picker loses its options.
-        setSubjects([]);
-        setUnreachable(true);
-      }
-    });
-    return () => {
-      alive = false;
-    };
-  }, [harnessUrl, hub.configured, hubSubjects]);
+  // Subjects and topics are read-only rows mirrored from the hub.
+  const subjects = useMemo(() => mirrorSubjects(hub.mirror), [hub.mirror]);
 
   const active = data.categories
     .filter((c) => !c.archived && !c.deletedAt)
@@ -345,9 +309,9 @@ export function CategoriesView() {
       <p className="mb-4 px-1 text-[14px] leading-relaxed text-muted">
         Categories group each day&apos;s tasks. Drag to reorder, tap one to change its colour, icon or linked subject.
       </p>
-      {unreachable && (
-        <p className="mb-4 px-1 text-[13px] text-rose" role="status">
-          LearnHarness not reachable
+      {!hub.configured && (
+        <p className="mb-4 px-1 text-[13px] text-muted">
+          Open LearnHarness on the laptop so it syncs.
         </p>
       )}
 
@@ -388,7 +352,6 @@ export function CategoriesView() {
               onMove={(dir) => reorder(cat.id, i + dir)}
               onDelete={() => askDelete(cat)}
               subjects={subjects}
-              unreachable={unreachable}
               dragProps={{
                 draggable: true,
                 onDragStart: (e) => {

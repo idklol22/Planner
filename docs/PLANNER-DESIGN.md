@@ -91,14 +91,17 @@ Note      { (unchanged from ToDoMate) + updatedAt }
    days on goal, per-category counts).
 6. **Hand-off to LearnHarness.** A task whose category is linked to a Harness subject sends its note when the task is
    completed, or at day end (first app open after midnight, for the previous day) if it isn't done, marked
-   `finished: false`. It's sent again when the note changes after being sent. It goes through the Harness API (below);
-   the handoff status chip on the task page shows not sent / sent / failed (retry).
-7. **Categories → linked subject** is a dropdown of the real Harness subjects, fetched from the Harness API. Settings
-   holds the Harness URL (default `http://localhost:3000`). If the Harness isn't reachable, the dropdown says so and
-   keeps the saved link.
+   `finished: false`. It's sent again when the note changes after being sent. The hub queues it as a `harness.note`
+   command; the handoff status chip on the task page shows not sent / sent / failed (retry).
+7. **Categories → linked subject** is a dropdown of the real Harness subjects and topics mirrored from the hub. The
+   mirror is read-only; a saved link whose id is no longer mirrored is kept in the picker as "(saved)".
 
-## Harness API used by the Planner (CORS-enabled for the Planner origin)
-- `GET  /api/planner/subjects` → `{ subjects: [{ id, name, color, topics: [{ id, name }] }] }`
-- `POST /api/planner/notes` `{ externalId, subjectId, topicId?, title, date, markdown, finished }` → stores or updates a
-  text material in that subject named `<date> <title>.md`, upserted by `externalId` (the task id). Unfinished notes get
-  a first line `> Unfinished notes (task not completed)`.
+## Hub channel used by the Planner
+- Subjects, topics, materials and deadlines are read-only rows mirrored from LearnHarness by the hub
+  (`h_subject`, `h_topic`, `h_material`, `h_deadline`). The Planner never writes them.
+- `POST /commands { type: "harness.note", payload: note }` (from `SyncController.sendNote`) queues the note for the
+  laptop agent. `note` is `{ externalId, subjectId, topicId?, title, date, markdown, finished }`; the agent stores or
+  updates a text material in that subject named `<date> <title>.md`, upserted by `externalId` (the task id). Unfinished
+  notes get a first line `> Unfinished notes (task not completed)`.
+- Command results return through the hub and are applied by `SyncController.trackCommands`; there is no direct
+  Planner → LearnHarness request.

@@ -1,17 +1,11 @@
 import { useCallback, useEffect, useRef } from "react";
 import { toISODate } from "../domain/dates";
-import {
-  DEFAULT_HARNESS_URL,
-  type Category,
-  type Note,
-  type Settings,
-  type Task,
-} from "../domain/model";
+import type { Category, Note, Settings, Task } from "../domain/model";
 import { useStore } from "../state/store";
 import { useToast } from "../state/toast";
-import { itemsFromDeadlines, parseNoteItems, taskCountMessage } from "./absorb";
+import { itemsFromDeadlines, taskCountMessage } from "./absorb";
 import { useSync } from "../state/sync";
-import { HarnessClient, type HarnessNote } from "./harness";
+import type { HarnessNote } from "./harness-types";
 
 export interface HandoffPayload {
   fileName: string;
@@ -79,7 +73,7 @@ export function buildHandoffMarkdown(
 
 // ── Harness hand-off engine ────────────────────────────────────────────────
 
-/** One API note to send; exactly the shape accepted by `HarnessClient.sendNote`. */
+/** One note to send as a `harness.note` hub command. */
 export interface DueHandoff extends HarnessNote {
   /** Content hash recorded once the note is handed off (not sent to the Harness). */
   hash: string;
@@ -185,8 +179,6 @@ export function dueHandoffs(
 export const NOTE_TASKS_EVENT = "planner:tasks-from-note";
 const RETRY_AFTER_MS = 60_000;
 const TICK_MS = 15_000;
-const RESULT_POLL_MS = 2_000;
-const RESULT_POLL_MAX = 30;
 /** A hub deadline only becomes a task while a note of that subject was handed off this recently. */
 const MIRROR_WINDOW_MS = 10 * 60_000;
 
@@ -197,30 +189,13 @@ export function useHandoff(): void {
   const hub = useSync();
   const notify = useToast();
   const hubMode = hub.configured;
-  const url = data.settings.harnessUrl || DEFAULT_HARNESS_URL;
   const busyRef = useRef(false);
   const pendingRef = useRef(false);
   const sendingRef = useRef(new Set<string>());
   const attemptRef = useRef(new Map<string, number>());
 
-  const pollResult = useCallback(
-    async (client: HarnessClient, externalId: string, categoryId: string) => {
-      for (let i = 0; i < RESULT_POLL_MAX; i += 1) {
-        await new Promise((resolve) => setTimeout(resolve, RESULT_POLL_MS));
-        const result = await client.noteResult(externalId);
-        if (!result.ok) continue;
-        if (result.data.status === "failed") return;
-        if (result.data.status === "done") {
-          actions.addNoteItems(categoryId, parseNoteItems(result.data.items));
-          return;
-        }
-      }
-    },
-    [actions],
-  );
-
   const run = useCallback(async () => {
-    if (!ready || (!url && !hubMode) || busyRef.current) {
+    if (!ready || !hubMode || busyRef.current) {
       if (busyRef.current) pendingRef.current = true;
       return;
     }
@@ -234,50 +209,25 @@ export function useHandoff(): void {
     if (next.length === 0) return;
 
     busyRef.current = true;
-    const client = new HarnessClient(url);
     try {
       for (const { hash, ...note } of next) {
         sendingRef.current.add(note.externalId);
         attemptRef.current.set(note.externalId, Date.now());
         try {
-          if (hubMode) {
-            // Hub mode: queue a harness.note command; the laptop agent runs it.
-            const commandId = await hub.sendNote(note);
-            actions.recordHandoff(note.externalId, {
-              status: "ready",
-              sentAt: new Date().toISOString(),
-              error: undefined,
-              finished: note.finished,
-              hash,
-              commandId,
-              commandStatus: "queued",
-            });
-            continue;
-          }
-          const result = await client.sendNote(note);
-          if (result.ok) {
-            actions.recordHandoff(note.externalId, {
-              status: "sent",
-              sentAt: new Date().toISOString(),
-              error: undefined,
-              finished: note.finished,
-              hash,
-            });
-            const categoryId = tasks.find((t) => t.id === note.externalId)?.categoryId;
-            if (categoryId) void pollResult(client, note.externalId, categoryId);
-          } else {
-            actions.recordHandoff(note.externalId, {
-              status: "failed",
-              error: result.error,
-              finished: note.finished,
-            });
-          }
-        } catch (error) {
+          // Queue a harness.note command; the laptop agent runs it and
+          // trackCommands delivers the result (including any parsed note items).
+          const commandId = await hub.sendNote(note);
           actions.recordHandoff(note.externalId, {
-            status: "failed",
-            error: error instanceof Error ? error.message : String(error),
+            status: "ready",
+            sentAt: new Date().toISOString(),
+            error: undefined,
             finished: note.finished,
+            hash,
+            commandId,
+            commandStatus: "queued",
           });
+        } catch {
+          // A command that could not be queued stays unsent and is retried on a later tick.
         } finally {
           sendingRef.current.delete(note.externalId);
         }
@@ -289,7 +239,7 @@ export function useHandoff(): void {
         queueMicrotask(() => void runRef.current());
       }
     }
-  }, [tasks, categories, url, ready, actions, hubMode, hub.sendNote, pollResult]);
+  }, [tasks, categories, ready, actions, hubMode, hub.sendNote]);
 
   const runRef = useRef(run);
   runRef.current = run;

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Check, Cloud, Link2, Palette, PlugZap, Power, RefreshCw, Target } from "lucide-react";
-import { DEFAULT_HARNESS_URL, defaultData } from "../domain/model";
+import { defaultData } from "../domain/model";
 import { isTauri, storage } from "../storage";
 import { clearPlannerLocalData } from "../storage/reset";
 import {
@@ -9,7 +9,8 @@ import {
   loadAutostart,
   setAutostart,
 } from "../lib/autostart";
-import { HarnessClient } from "../lib/harness";
+import { harnessStatus } from "../lib/harness-link";
+import { harnessLink } from "../lib/messages";
 import { useStore } from "../state/store";
 import { useSync } from "../state/sync";
 import { useToast } from "../state/toast";
@@ -157,24 +158,7 @@ export function SettingsView() {
   const [hubTesting, setHubTesting] = useState(false);
   const [hubResult, setHubResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [goalDraft, setGoalDraft] = useState(String(data.settings.dailyCalorieGoal));
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
-
-  async function testConnection() {
-    setTesting(true);
-    setTestResult(null);
-    const result = await new HarnessClient(data.settings.harnessUrl || DEFAULT_HARNESS_URL).subjects();
-    setTesting(false);
-    if (result.ok) {
-      const message = `Connected · ${result.data.subjects.length} subjects`;
-      setTestResult({ ok: true, message });
-      notify(message, "success");
-    } else {
-      const message = `LearnHarness not reachable · ${result.error}`;
-      setTestResult({ ok: false, message });
-      notify(message, "error");
-    }
-  }
+  const harnessState = harnessStatus(sync.configured, harnessLink(sync.mirror.subjects));
 
   async function testHub() {
     setHubTesting(true);
@@ -213,44 +197,15 @@ export function SettingsView() {
       </Panel>
 
       <Panel>
-        <div className="mb-5 flex items-start gap-3">
+        <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent">
-            <Link2 size={18} />
+            <Link2 size={16} />
           </div>
-          <div>
-            <h3 className="text-sm font-semibold text-ink">LearnHarness integration</h3>
-            <p className="mt-1 text-xs leading-relaxed text-muted">
-              Point Planner at a running LearnHarness dev server. Its real subjects and topics then fill the
-              picker on each category, and linked notes are handed off automatically.
-            </p>
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-ink">LearnHarness</div>
+            <p className="mt-0.5 text-[13px] text-muted">{harnessState}</p>
           </div>
         </div>
-
-        <label
-          htmlFor="harness-url"
-          className="mb-2 flex items-center gap-2 text-[11px] font-medium text-muted"
-        >
-          <Link2 size={13} className="text-faint" /> LearnHarness URL
-        </label>
-        <div className="flex gap-2">
-          <Input
-            id="harness-url"
-            value={data.settings.harnessUrl ?? DEFAULT_HARNESS_URL}
-            placeholder={DEFAULT_HARNESS_URL}
-            onChange={(event) => {
-              actions.updateSettings({ harnessUrl: event.target.value });
-              setTestResult(null);
-            }}
-          />
-          <Button onClick={() => void testConnection()} disabled={testing}>
-            <PlugZap size={15} /> {testing ? "Testing…" : "Test connection"}
-          </Button>
-        </div>
-        {testResult && (
-          <p className={`mt-2 text-[12px] ${testResult.ok ? "text-mint" : "text-rose"}`} role="status">
-            {testResult.message}
-          </p>
-        )}
       </Panel>
 
       <Panel>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_HARNESS_URL, type Category, type Note, type Settings, type Task } from "../domain/model";
+import { type Category, type Note, type Settings, type Task } from "../domain/model";
 import { buildApiMarkdown, buildHandoffMarkdown, dueHandoffs, slugify } from "./handoff";
 
 const task: Task = {
@@ -44,7 +44,6 @@ const category: Category = {
 const settings: Settings = {
   handoffFolder: "",
   learnharnessSubjects: ["Biology"],
-  harnessUrl: DEFAULT_HARNESS_URL,
   dailyCalorieGoal: 2000,
 };
 
