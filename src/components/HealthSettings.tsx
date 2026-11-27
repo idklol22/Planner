@@ -43,7 +43,7 @@ export function HealthSettings() {
         <div className="min-w-0">
           <h3 className="text-sm font-semibold text-ink">Apple Health</h3>
           <p className="mt-1 text-xs leading-relaxed text-muted">
-            Bring today&apos;s activity into Planner on iPhone. Data stays on this device until you sync.
+            Bring today&apos;s activity into Planner. With cloud sync on, daily totals are saved to your cloud too.
           </p>
         </div>
       </div>
