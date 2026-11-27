@@ -17,6 +17,11 @@ export function dayKcal(entries: CalorieEntry[], date: ISODate): number {
   return entriesForDay(entries, date).reduce((sum, e) => sum + e.kcal, 0);
 }
 
+/** Grams of protein from live entries for a day (0 when none carry protein). */
+export function dayProtein(entries: CalorieEntry[], date: ISODate): number {
+  return entriesForDay(entries, date).reduce((sum, e) => sum + (e.protein ?? 0), 0);
+}
+
 export function hasEntries(entries: CalorieEntry[], date: ISODate): boolean {
   return entries.some((e) => e.date === date && !e.deletedAt);
 }

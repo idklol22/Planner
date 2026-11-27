@@ -69,6 +69,8 @@ export interface MealRow {
   slot: string;
   label: string;
   kcal: number;
+  /** Grams of protein; absent on rows written by a hub that predates the column. */
+  protein?: number | null;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;

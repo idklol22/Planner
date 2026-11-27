@@ -159,6 +159,9 @@ export function SettingsView() {
   const [hubTesting, setHubTesting] = useState(false);
   const [hubResult, setHubResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [goalDraft, setGoalDraft] = useState(String(data.settings.dailyCalorieGoal));
+  const [proteinGoalDraft, setProteinGoalDraft] = useState(
+    data.settings.dailyProteinGoal === undefined ? "" : String(data.settings.dailyProteinGoal),
+  );
   const harnessState = harnessStatus(sync.configured, harnessLink(sync.mirror.subjects));
 
   async function testHub() {
@@ -306,7 +309,7 @@ export function SettingsView() {
           </div>
           <div>
             <h3 className="text-sm font-semibold text-ink">Preferences</h3>
-            <p className="mt-1 text-xs text-muted">Your daily calorie target.</p>
+            <p className="mt-1 text-xs text-muted">Your daily calorie and protein targets.</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -330,6 +333,39 @@ export function SettingsView() {
             <Check size={15} /> Save
           </Button>
         </div>
+        <label htmlFor="protein-goal" className="mb-2 mt-4 block text-[11px] font-medium text-muted">
+          Daily protein goal (g)
+        </label>
+        <div className="flex gap-2">
+          <Input
+            id="protein-goal"
+            type="number"
+            min="0"
+            aria-label="Daily protein goal (g)"
+            value={proteinGoalDraft}
+            placeholder="No goal"
+            onChange={(event) => setProteinGoalDraft(event.target.value)}
+          />
+          <Button
+            variant="primary"
+            onClick={() => {
+              const raw = proteinGoalDraft.trim();
+              if (raw === "") {
+                actions.updateSettings({ dailyProteinGoal: undefined });
+                notify("Protein goal cleared");
+                return;
+              }
+              const value = Number(raw);
+              if (Number.isFinite(value) && value >= 0) {
+                actions.updateSettings({ dailyProteinGoal: Math.round(value) });
+                notify("Protein goal updated");
+              }
+            }}
+          >
+            <Check size={15} /> Save
+          </Button>
+        </div>
+        <p className="mt-2 text-[11px] leading-relaxed text-faint">Leave empty for no protein goal.</p>
       </Panel>
 
       {isNative && <DesktopPanel />}

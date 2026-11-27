@@ -100,6 +100,8 @@ export interface MealRow {
   slot: string;
   label: string;
   kcal: number;
+  /** Grams of protein; null/absent when the row predates the column. */
+  protein?: number | null;
   updatedAt: string;
   deletedAt: string | null;
   createdAt?: string | null;
