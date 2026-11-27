@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Archive, Check, Library, ListFilter, Menu, Plus, Repeat, Settings2, Sparkles, Tags, Settings, Flame } from "lucide-react";
+import { Archive, Check, Library, ListFilter, Menu, MessageSquare, Plus, Repeat, Settings2, Sparkles, Tags, Settings, Flame } from "lucide-react";
 import {
   addDays,
   formatDayTitle,
@@ -14,6 +14,7 @@ import { CATEGORY_COLORS } from "../domain/palette";
 import { catColor } from "../theme/store";
 import { dayKcal } from "../domain/calories";
 import { sectionsForDay, tasksForDay, unfinishedTopLevelOn, type Section } from "../domain/tasks";
+import { useMessages } from "../state/messages";
 import { useStore } from "../state/store";
 import { useToast } from "../state/toast";
 import { CalendarStrip, type CalendarMode } from "./CalendarStrip";
@@ -26,7 +27,7 @@ import { CalendarArrowRight, CategoryIcon } from "./icons";
 import { DaySummaryCard, WeekSummaryCard } from "./Summaries";
 import { TaskRow } from "./TaskRow";
 
-export type MenuPage = "categories" | "habits" | "library" | "archive" | "settings";
+export type MenuPage = "categories" | "habits" | "library" | "chat" | "archive" | "settings";
 
 interface Prefs {
   showCompleted: boolean;
@@ -228,6 +229,7 @@ export function DayView({
 }) {
   const { data, actions } = useStore();
   const notify = useToast();
+  const { unread } = useMessages();
   const [prefs, setPrefs] = useState<Prefs>(loadPrefs);
   const [adding, setAdding] = useState<string | null>(null);
   const [listMenu, setListMenu] = useState(false);
@@ -362,6 +364,7 @@ export function DayView({
                     ["categories", "Categories", Tags],
                     ["habits", "Habits", Flame],
                     ["library", "Library", Library],
+                    ["chat", "LearnHarness", MessageSquare],
                     ["archive", "Archive", Archive],
                     ["settings", "Settings", Settings],
                   ] as const
@@ -378,6 +381,14 @@ export function DayView({
                     }`}
                   >
                     <Icon size={18} className="text-muted" /> {label}
+                    {page === "chat" && unread > 0 && (
+                      <span
+                        aria-label={`${unread} unread messages`}
+                        className="ml-auto flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[var(--accent)] px-1 text-[11px] font-bold tabular-nums text-[var(--accent-contrast)]"
+                      >
+                        {unread}
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>

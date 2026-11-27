@@ -3,6 +3,7 @@ import { AppShell } from "./components/AppShell";
 import { TaskPage } from "./components/task-page/TaskPage";
 import { taskIdFromHash } from "./components/task-page/route";
 import { useHandoff } from "./lib/handoff";
+import { MessagesProvider } from "./state/messages";
 import { StoreProvider, useStore } from "./state/store";
 import { SyncProvider } from "./state/sync";
 import { ToastProvider } from "./state/toast";
@@ -39,9 +40,11 @@ export function App() {
     <StoreProvider>
       <SyncProvider>
         <ToastProvider>
-          <Scene />
-          <HandoffRunner />
-          <Routes />
+          <MessagesProvider>
+            <Scene />
+            <HandoffRunner />
+            <Routes />
+          </MessagesProvider>
         </ToastProvider>
       </SyncProvider>
     </StoreProvider>

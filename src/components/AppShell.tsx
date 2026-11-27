@@ -5,6 +5,7 @@ import { useStore } from "../state/store";
 import { useThemeState } from "../theme/store";
 import { ArchiveView } from "./ArchiveView";
 import { CategoriesView } from "./CategoriesView";
+import { ChatView } from "./ChatView";
 import { DayView, type MenuPage } from "./DayView";
 import { Flower } from "./Flower";
 import { HabitsView } from "./HabitsView";
@@ -15,6 +16,7 @@ const TITLES: Record<MenuPage, string> = {
   categories: "Categories",
   habits: "Habits",
   library: "Library",
+  chat: "LearnHarness",
   archive: "Archive",
   settings: "Settings",
 };
@@ -63,6 +65,8 @@ function MenuPageView({ page, onBack }: { page: MenuPage; onBack: () => void }) 
           <HabitsView date={todayISO()} />
         ) : page === "library" ? (
           <LibraryView onTitle={setTitle} />
+        ) : page === "chat" ? (
+          <ChatView />
         ) : page === "archive" ? (
           <ArchiveView />
         ) : (
