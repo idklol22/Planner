@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef } from "react";
 import { toISODate } from "../domain/dates";
-import type { Category, Note, Settings, Task } from "../domain/model";
+import type { Category, HandoffState, Note, Settings, Task } from "../domain/model";
 import { useStore } from "../state/store";
 import { useToast } from "../state/toast";
 import { itemsFromDeadlines, taskCountMessage } from "./absorb";
-import { expandFileRefs } from "./note-files";
+import { expandFileRefs, MissingPhotoError, type FileStore } from "./note-files";
 import { useSync } from "../state/sync";
 import type { HarnessNote } from "./harness-types";
 
@@ -177,6 +177,65 @@ export function dueHandoffs(
   return due;
 }
 
+/** Everything a hand-off needs from the app shell. Injected so the
+ *  missing-photo decision is testable without rendering React. */
+export interface NoteDelivery {
+  sendNote(note: HarnessNote): Promise<string>;
+  recordHandoff(taskId: string, patch: Partial<HandoffState>): void;
+  notify?: (message: string, tone?: "error" | "info" | "success") => void;
+  /** Explicit store for tests; the live hook uses the device's store. */
+  store?: FileStore;
+  /** Task ids already warned this app session (mutated in place). */
+  warned?: Set<string>;
+}
+
+export type DeliveryResult = "sent" | "missing-photo" | "failed";
+
+/**
+ * Expand a due note's photos, then queue its command. A note whose photos are
+ * not all on this device is left unsent (no command, no recorded hand-off) so
+ * a later tick can send it by itself once the photos exist or their refs are
+ * removed. Other due notes are unaffected.
+ */
+export async function deliverDueNote(
+  { hash, ...note }: DueHandoff,
+  io: NoteDelivery,
+): Promise<DeliveryResult> {
+  let markdown: string;
+  try {
+    markdown = await expandFileRefs(note.markdown, io.store);
+  } catch (error) {
+    // An unreadable local photo is the only reason to expand nothing. Never
+    // fall back to placeholder bytes or a bare ref the computer cannot read.
+    if (!(error instanceof MissingPhotoError)) return "failed";
+    const warned = io.warned ?? new Set<string>();
+    if (!warned.has(note.externalId)) {
+      warned.add(note.externalId);
+      io.notify?.(`Not sent: a photo in "${note.title}" is not on this device.`, "error");
+    }
+    return "missing-photo";
+  }
+
+  try {
+    // Queue a harness.note command; the laptop agent runs it and
+    // trackCommands delivers the result (including any parsed note items).
+    const commandId = await io.sendNote({ ...note, markdown });
+    io.recordHandoff(note.externalId, {
+      status: "ready",
+      sentAt: new Date().toISOString(),
+      error: undefined,
+      finished: note.finished,
+      hash,
+      commandId,
+      commandStatus: "queued",
+    });
+    return "sent";
+  } catch {
+    // A command that could not be queued stays unsent and is retried on a later tick.
+    return "failed";
+  }
+}
+
 export const NOTE_TASKS_EVENT = "planner:tasks-from-note";
 const RETRY_AFTER_MS = 60_000;
 const TICK_MS = 15_000;
@@ -194,6 +253,8 @@ export function useHandoff(): void {
   const pendingRef = useRef(false);
   const sendingRef = useRef(new Set<string>());
   const attemptRef = useRef(new Map<string, number>());
+  /** Tasks whose missing photo was already reported this app session. */
+  const warnedRef = useRef(new Set<string>());
 
   const run = useCallback(async () => {
     if (!ready || !hubMode || busyRef.current) {
@@ -211,32 +272,21 @@ export function useHandoff(): void {
 
     busyRef.current = true;
     try {
-      for (const { hash, ...note } of next) {
+      for (const note of next) {
         sendingRef.current.add(note.externalId);
         attemptRef.current.set(note.externalId, Date.now());
         try {
-          // Queue a harness.note command; the laptop agent runs it and
-          // trackCommands delivers the result (including any parsed note items).
-          // LearnHarness cannot read planner-file refs: expand them only on the
-          // way out, after the hash and the scheduling decision were made.
-          let markdown = note.markdown;
-          try {
-            markdown = await expandFileRefs(markdown);
-          } catch {
-            // No photo storage on this device: send the note with its refs.
-          }
-          const commandId = await hub.sendNote({ ...note, markdown });
-          actions.recordHandoff(note.externalId, {
-            status: "ready",
-            sentAt: new Date().toISOString(),
-            error: undefined,
-            finished: note.finished,
-            hash,
-            commandId,
-            commandStatus: "queued",
+          // LearnHarness cannot read planner-file refs: expand them only on
+          // the way out, after the hash and scheduling decision were made.
+          const result = await deliverDueNote(note, {
+            sendNote: (payload) => hub.sendNote(payload),
+            recordHandoff: (taskId, patch) => actions.recordHandoff(taskId, patch),
+            notify,
+            warned: warnedRef.current,
           });
-        } catch {
-          // A command that could not be queued stays unsent and is retried on a later tick.
+          // A blocked note must be retried as soon as the user changes it,
+          // not only after the ordinary retry delay.
+          if (result === "missing-photo") attemptRef.current.delete(note.externalId);
         } finally {
           sendingRef.current.delete(note.externalId);
         }

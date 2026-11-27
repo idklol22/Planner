@@ -1,7 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { type Category, type Note, type Settings, type Task } from "../domain/model";
-import { expandFileRefs, FILE_REF_PREFIX, memoryFileStore } from "./note-files";
-import { buildApiMarkdown, buildHandoffMarkdown, dueHandoffs, noteHash, slugify } from "./handoff";
+import type { HarnessNote } from "./harness-types";
+import { expandFileRefs, FILE_REF_PREFIX, memoryFileStore, type FileStore } from "./note-files";
+import {
+  buildApiMarkdown,
+  buildHandoffMarkdown,
+  deliverDueNote,
+  dueHandoffs,
+  type DueHandoff,
+  noteHash,
+  slugify,
+} from "./handoff";
 
 const task: Task = {
   id: "task_1",
@@ -240,5 +249,133 @@ describe("handoff photo embedding", () => {
     const embedded = await expandFileRefs(due[0].markdown, store);
     expect(embedded).toContain(`data:image/png;base64,${btoa("img")}`);
     expect(embedded).not.toContain(ref);
+  });
+});
+
+describe("hand-off with missing local photos", () => {
+  const missingHash = "c".repeat(64);
+  const presentHash = "d".repeat(64);
+
+  function dueNote(externalId: string, markdown: string, title = "Exam date for Biology"): DueHandoff {
+    return {
+      externalId,
+      subjectId: "subject-bio",
+      title,
+      date: "2026-12-01",
+      markdown,
+      finished: true,
+      hash: `hash-${externalId}`,
+    };
+  }
+
+  function storeWith(...hashes: string[]): FileStore {
+    return memoryFileStore(
+      hashes.map((hash) => ({
+        hash,
+        blob: new Blob(["photo"], { type: "image/jpeg" }),
+        mime: "image/jpeg",
+        name: "photo.jpg",
+      })),
+    );
+  }
+
+  function delivery(store: FileStore, warned = new Set<string>()) {
+    return {
+      store,
+      warned,
+      sendNote: vi.fn(async (_note: HarnessNote) => "cmd-1"),
+      recordHandoff: vi.fn(),
+      notify: vi.fn(),
+    };
+  }
+
+  it("blocks only the note with a missing photo and still sends the other one", async () => {
+    const store = storeWith(presentHash);
+    const io = delivery(store);
+    const blocked = dueNote(
+      "task_blocked",
+      `Photo ![missing](planner-file:${missingHash})`,
+      "Photos for Monday",
+    );
+    const good = dueNote("task_good", `Photo ![ok](planner-file:${presentHash})`);
+
+    expect(await deliverDueNote(blocked, io)).toBe("missing-photo");
+    expect(await deliverDueNote(good, io)).toBe("sent");
+
+    expect(io.sendNote).toHaveBeenCalledTimes(1);
+    expect(io.sendNote.mock.calls[0][0]).toMatchObject({ externalId: "task_good", markdown: expect.any(String) });
+    expect(io.sendNote.mock.calls[0][0].markdown).toContain(`data:image/jpeg;base64,${btoa("photo")}`);
+    expect(io.sendNote.mock.calls[0][0].markdown).not.toContain("data:image/svg+xml");
+    expect(io.recordHandoff).toHaveBeenCalledTimes(1);
+    expect(io.recordHandoff).toHaveBeenCalledWith(
+      "task_good",
+      expect.objectContaining({ hash: "hash-task_good", commandId: "cmd-1" }),
+    );
+    expect(io.notify).toHaveBeenCalledWith(
+      'Not sent: a photo in "Photos for Monday" is not on this device.',
+      "error",
+    );
+  });
+
+  it("retries the blocked note by itself once the photo returns or its ref is removed", async () => {
+    const store = storeWith();
+    const io = delivery(store);
+    const withRef = dueNote("task_1", `Photo ![x](planner-file:${missingHash})`);
+
+    expect(await deliverDueNote(withRef, io)).toBe("missing-photo");
+    expect(io.sendNote).not.toHaveBeenCalled();
+    expect(io.recordHandoff).not.toHaveBeenCalled();
+
+    // The photo arrives on this device: the very same note now goes out.
+    await store.put({
+      hash: missingHash,
+      blob: new Blob(["back"], { type: "image/jpeg" }),
+      mime: "image/jpeg",
+      name: "photo.jpg",
+    });
+    expect(await deliverDueNote(withRef, io)).toBe("sent");
+    expect(io.sendNote).toHaveBeenCalledTimes(1);
+    expect(io.sendNote.mock.calls[0][0].markdown).toContain(`data:image/jpeg;base64,${btoa("back")}`);
+
+    // Alternatively, removing the missing ref makes the note sendable again.
+    const withoutRef = dueNote("task_2", "Photo removed, text kept");
+    expect(await deliverDueNote(withoutRef, io)).toBe("sent");
+    expect(io.sendNote).toHaveBeenCalledTimes(2);
+    expect(io.sendNote.mock.calls[1][0].markdown).toBe("Photo removed, text kept");
+  });
+
+  it("shows one error toast per task per session, even across retries", async () => {
+    const io = delivery(storeWith());
+    const first = dueNote("task_1", `![x](planner-file:${missingHash})`);
+    const second = dueNote("task_1", `![y](planner-file:${"e".repeat(64)})`);
+    const other = dueNote("task_2", `![z](planner-file:${"f".repeat(64)})`, "Other task");
+
+    expect(await deliverDueNote(first, io)).toBe("missing-photo");
+    expect(await deliverDueNote(first, io)).toBe("missing-photo");
+    expect(await deliverDueNote(second, io)).toBe("missing-photo");
+    expect(io.notify).toHaveBeenCalledTimes(1);
+
+    expect(await deliverDueNote(other, io)).toBe("missing-photo");
+    expect(io.notify).toHaveBeenCalledTimes(2);
+    expect(io.notify.mock.calls[1][0]).toBe(
+      'Not sent: a photo in "Other task" is not on this device.',
+    );
+    expect(io.sendNote).not.toHaveBeenCalled();
+  });
+
+  it("does not queue a command when the photo store throws", async () => {
+    const broken: FileStore = {
+      get: async () => {
+        throw new Error("storage blocked");
+      },
+      put: async () => {},
+    };
+    const io = delivery(broken);
+    const note = dueNote("task_1", `![x](planner-file:${missingHash})`);
+
+    expect(await deliverDueNote(note, io)).toBe("missing-photo");
+    expect(io.sendNote).not.toHaveBeenCalled();
+    expect(io.recordHandoff).not.toHaveBeenCalled();
+    expect(io.notify).toHaveBeenCalledOnce();
   });
 });
