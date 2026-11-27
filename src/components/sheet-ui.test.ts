@@ -19,7 +19,7 @@ describe("the one content sheet", () => {
     expect(sheet).toContain("backdrop-filter: blur(");
     // Light and high-contrast themes get a fully solid surface.
     expect(styles).toContain('html[data-theme="contrast"] .sheet');
-    expect(styles).toContain("background: var(--surface)");
+    expect(styles).toContain("background: var(--surface-2)");
   });
 
   it("has a docked 48px full-width control above the safe area", async () => {
