@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Plus } from "lucide-react";
 import { dayKcal, entriesForDay, entryTimeLabel } from "../domain/calories";
 import type { ISODate } from "../domain/dates";
 import { healthLine } from "../lib/health";
@@ -51,7 +52,6 @@ export function CalorieBar({ date }: { date: ISODate }) {
     blocked.current = true;
     actions.addCalorie(date, n);
     setKcal("");
-    kcalRef.current?.focus();
   }
 
   /** Cancel must win over the blur that a tap on "x" or the keyboard's Escape would otherwise cause. */
@@ -87,9 +87,14 @@ export function CalorieBar({ date }: { date: ISODate }) {
             }
           }}
           aria-label={mode === "add" ? "Close calorie input" : "Add calories"}
-          className="flex h-11 w-11 items-center justify-center text-[22px] leading-none text-ink"
+          className="flex h-11 w-11 items-center justify-center text-ink"
         >
-          <span aria-hidden>{mode === "add" ? "×" : "+"}</span>
+          <Plus
+            size={18}
+            strokeWidth={2}
+            className="transition-transform duration-150"
+            style={{ transform: mode === "add" ? "rotate(45deg)" : undefined }}
+          />
         </button>
       </div>
 
@@ -112,7 +117,11 @@ export function CalorieBar({ date }: { date: ISODate }) {
               blocked.current = false;
               setKcal(e.target.value.replace(/[^\d,]/g, ""));
             }}
-            onBlur={commit}
+            onBlur={() => {
+              // The iOS "Done" key only blurs: save, then close the field.
+              commit();
+              setMode((m) => (m === "add" ? "idle" : m));
+            }}
             inputMode="numeric"
             placeholder="kcal"
             aria-label="Calories"

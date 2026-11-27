@@ -275,11 +275,12 @@ function CategoryRow({
                   onClick={() => actions.updateCategory(cat.id, { color: c })}
                   aria-label={`Colour ${c}`}
                   aria-pressed={c === cat.color}
-                  className={`flex h-11 w-11 items-center justify-center ${c === cat.color ? "underline underline-offset-4" : ""}`}
+                  className="flex h-11 w-11 items-center justify-center"
                 >
+                  {/* A picker needs readable swatches; the chosen one gets a ring. */}
                   <span
                     aria-hidden
-                    className="h-[7px] w-[7px] rounded-full"
+                    className={`h-5 w-5 rounded-full ${c === cat.color ? "ring-2 ring-ink ring-offset-2 ring-offset-canvas" : ""}`}
                     style={{ backgroundColor: catColor(c) }}
                   />
                 </button>
