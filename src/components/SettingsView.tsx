@@ -14,7 +14,9 @@ import { harnessLink } from "../lib/messages";
 import { useStore } from "../state/store";
 import { useSync } from "../state/sync";
 import { useToast } from "../state/toast";
+import { HealthSettings } from "./HealthSettings";
 import { ThemePicker } from "./ThemePicker";
+import { WidgetSettings } from "./WidgetSettings";
 import { Button, Input, Panel, SectionTitle } from "./ui";
 
 function ResetAll() {
@@ -295,6 +297,9 @@ export function SettingsView() {
           Solved LetCode problems tick the matching task for that day, or add a finished task here.
         </p>
       </Panel>
+
+      <WidgetSettings />
+      <HealthSettings />
 
       <Panel>
         <div className="mb-5 flex items-start gap-3">

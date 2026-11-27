@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronLeft } from "lucide-react";
 import { addDays, todayISO, type ISODate } from "../domain/dates";
+import { useNavCommand } from "../state/deeplink";
 import { useStore } from "../state/store";
 import { useThemeState } from "../theme/store";
 import { ArchiveView } from "./ArchiveView";
@@ -93,6 +94,17 @@ export function AppShell() {
   const [selected, setSelected] = useState<ISODate>(todayISO());
   const [page, setPage] = useState<MenuPage | null>(null);
   const [addSignal, setAddSignal] = useState(0);
+  const nav = useNavCommand();
+  const lastNav = useRef(0);
+
+  // planner://today and planner://calories: show today and leave any menu page.
+  useEffect(() => {
+    if (!nav.seq || nav.seq === lastNav.current) return;
+    lastNav.current = nav.seq;
+    setSelected(nav.date || todayISO());
+    setPage(null);
+    if (window.location.hash.startsWith("#/task/")) window.location.hash = "";
+  }, [nav]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {

@@ -11,7 +11,7 @@ import {
 import type { AppData } from "../domain/model";
 import type { HarnessNote } from "../lib/harness-types";
 import { isTauri } from "../storage";
-import { HubClient } from "../storage/hub";
+import { HubClient, type HubOp } from "../storage/hub";
 import { SyncController, type SyncStatus } from "../sync/controller";
 import { localCursorStore, CURSOR_KEY, LAST_SYNC_KEY } from "../sync/engine";
 import { emptyMirror, type Mirror } from "../sync/mapping";
@@ -60,6 +60,8 @@ export interface SyncContextValue {
   testConnection(config?: HubConfig): Promise<{ ok: boolean; message: string }>;
   /** Hub mode: queue a `harness.note` command. Rejects when no hub is set. */
   sendNote(note: HarnessNote): Promise<string>;
+  /** Queue rows owned outside AppData (health days) for the normal outbox/retry path. */
+  enqueue(ops: HubOp[]): void;
   /** Authenticated hub client, or null when not configured. */
   client: HubClient | null;
 }
@@ -184,6 +186,17 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     await controllerRef.current?.syncNow();
   }, []);
 
+  const enqueue = useCallback((ops: HubOp[]) => {
+    const controller = controllerRef.current;
+    if (!controller) {
+      // Not connected yet (app start, or no hub): the saved outbox is sent later.
+      new LocalOutbox().enqueueAll(ops);
+      return;
+    }
+    controller.enqueue(ops);
+    void controller.engine.push().catch(() => {});
+  }, []);
+
   // Stable for the provider's lifetime: the unload listeners hold this function
   // directly, so it must not be replaced on re-renders.
   const flush = useRef<() => void>(() => {
@@ -263,8 +276,8 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo<SyncContextValue>(
-    () => ({ config, configured, setConfig, status, mirror, syncNow, flush, testConnection, sendNote, client }),
-    [config, configured, setConfig, status, mirror, syncNow, flush, testConnection, sendNote, client],
+    () => ({ config, configured, setConfig, status, mirror, syncNow, flush, testConnection, sendNote, enqueue, client }),
+    [config, configured, setConfig, status, mirror, syncNow, flush, testConnection, sendNote, enqueue, client],
   );
 
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;

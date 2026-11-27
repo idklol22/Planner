@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { Flame, Plus, Trash2, TriangleAlert, X } from "lucide-react";
 import { dayKcal, entriesForDay, entryTimeLabel, onGoal } from "../domain/calories";
 import type { ISODate } from "../domain/dates";
+import { healthLine } from "../lib/health";
+import { useNavCommand } from "../state/deeplink";
+import { useHealth } from "../state/health";
 import { useStore } from "../state/store";
 
 const fmt = (n: number) => n.toLocaleString("en-US");
@@ -9,14 +12,23 @@ const fmt = (n: number) => n.toLocaleString("en-US");
 /** Slim kcal bar under the calendar: tap + to add, tap the total to list entries. */
 export function CalorieBar({ date }: { date: ISODate }) {
   const { data, actions } = useStore();
+  const health = useHealth();
+  const nav = useNavCommand();
   const goal = data.settings.dailyCalorieGoal;
   const entries = entriesForDay(data.calories, date);
   const total = dayKcal(data.calories, date);
+  const burnedLine = healthLine(health.day(date));
   const [mode, setMode] = useState<"idle" | "add" | "list">("idle");
   const [kcal, setKcal] = useState("");
   const kcalRef = useRef<HTMLInputElement>(null);
+  const lastNav = useRef(0);
 
   useEffect(() => setMode("idle"), [date]);
+  useEffect(() => {
+    if (!nav.seq || nav.seq === lastNav.current || date !== nav.date) return;
+    lastNav.current = nav.seq;
+    if (nav.openCalories) setMode("add");
+  }, [nav, date]);
   useEffect(() => {
     if (mode === "add") kcalRef.current?.focus();
   }, [mode]);
@@ -73,6 +85,9 @@ export function CalorieBar({ date }: { date: ISODate }) {
             style={{ width: `${pct * 100}%`, backgroundColor: barColor }}
           />
         </div>
+        {burnedLine && (
+          <p className="break-words px-3 py-1.5 text-[12px] leading-relaxed text-faint">{burnedLine}</p>
+        )}
 
         {mode === "add" && (
           <div className="animate-row flex items-center gap-2 px-3 py-2.5">
