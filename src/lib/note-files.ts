@@ -92,6 +92,20 @@ export function placeholderUrl(): string {
   return `data:image/svg+xml,${encodeURIComponent(PLACEHOLDER_SVG)}`;
 }
 
+/** Thrown by `expandFileRefs` when a note references a photo that cannot be
+ *  read here. Callers must not send that note: the placeholder is only for the
+ *  editor, where it stands in for a photo the device does not have. */
+export class MissingPhotoError extends Error {
+  /** The `planner-file:` refs that could not be read on this device. */
+  readonly refs: string[];
+
+  constructor(refs: string[]) {
+    super("A photo in this note is not on this device.");
+    this.name = "MissingPhotoError";
+    this.refs = refs;
+  }
+}
+
 async function blobToDataUrl(blob: Blob): Promise<string> {
   const bytes = new Uint8Array(await blob.arrayBuffer());
   let binary = "";
@@ -102,7 +116,8 @@ async function blobToDataUrl(blob: Blob): Promise<string> {
 }
 
 /** Replace every file reference in Markdown with bytes LearnHarness can read.
- *  Unknown files become the inline placeholder, never a dangling reference. */
+ *  If any photo is missing or unreadable, throw `MissingPhotoError` instead of
+ *  substituting the editor placeholder: placeholder bytes must never be sent. */
 export async function expandFileRefs(markdown: string, store?: FileStore): Promise<string> {
   const found = markdown.match(REF_GLOBAL);
   if (!found?.length) return markdown;
@@ -112,20 +127,26 @@ export async function expandFileRefs(markdown: string, store?: FileStore): Promi
     try {
       target = getFileStore();
     } catch {
-      return markdown;
+      throw new MissingPhotoError([...new Set(found.map((ref) => ref.toLowerCase()))]);
     }
   }
 
   const hashes = [...new Set(found.map((ref) => parseFileRef(ref)!).filter(Boolean))];
   const dataUrls = new Map<string, string>();
+  const missing: string[] = [];
   for (const hash of hashes) {
     try {
       const file = await target.get(hash);
-      dataUrls.set(hash, file ? await blobToDataUrl(file.blob) : placeholderUrl());
+      if (!file) {
+        missing.push(`${FILE_REF_PREFIX}${hash}`);
+        continue;
+      }
+      dataUrls.set(hash, await blobToDataUrl(file.blob));
     } catch {
-      dataUrls.set(hash, placeholderUrl());
+      missing.push(`${FILE_REF_PREFIX}${hash}`);
     }
   }
+  if (missing.length) throw new MissingPhotoError(missing);
   return markdown.replace(REF_GLOBAL, (ref: string, hash: string) => dataUrls.get(hash.toLowerCase()) ?? ref);
 }
 
@@ -244,6 +265,32 @@ function jpegName(name: string): string {
   return `${name.replace(/\.[^.]+$/, "") || "photo"}.jpg`;
 }
 
+const PHOTO_EXTENSIONS: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/gif": "gif",
+  "image/webp": "webp",
+  "image/heic": "heic",
+  "image/heif": "heif",
+  "image/avif": "avif",
+};
+
+/** Extension of the bytes actually stored, not of the file the user picked. */
+function photoExtension(mime: string): string {
+  const type = mime.toLowerCase().split(";")[0].trim();
+  return PHOTO_EXTENSIONS[type] ?? ((type.split("/")[1] ?? "jpg").replace(/[^a-z0-9]/g, "") || "jpg");
+}
+
+const pad2 = (value: number): string => String(value).padStart(2, "0");
+
+/** Exact name of a new image block: `photo YYYY-MM-DD HH.mm.ss.<ext>` in the
+ *  device's LOCAL time. The computer uses this name for its file. */
+export function photoBlockName(mime: string, when: Date = new Date()): string {
+  const day = `${when.getFullYear()}-${pad2(when.getMonth() + 1)}-${pad2(when.getDate())}`;
+  const time = `${pad2(when.getHours())}.${pad2(when.getMinutes())}.${pad2(when.getSeconds())}`;
+  return `photo ${day} ${time}.${photoExtension(mime)}`;
+}
+
 /** Keep GIFs and small PNGs byte-for-byte; re-encode everything else as JPEG. */
 export async function prepareImage(input: Blob & { name?: string }): Promise<PreparedImage> {
   const mime = (input.type || "").toLowerCase();
@@ -303,20 +350,38 @@ export function setFileHubClient(_client: HubClient | null): void {}
 
 export function scheduleUploads(_client: HubClient | null = null, _store?: FileStore): void {}
 
-/** Store prepared bytes and return the short reference used in note blocks. */
-export async function saveImage(
+export interface SavedPhoto {
+  /** Short `planner-file:` reference stored in the image block URL. */
+  ref: string;
+  /** Time-stamped block name, ready for the computer's file name. */
+  name: string;
+}
+
+/** Store a newly added photo and return both its ref and its exact block name.
+ *  `when` is injectable for tests; by default it is the local time of addition. */
+export async function addPhoto(
   input: Blob & { name?: string },
   store: FileStore = getFileStore(),
-): Promise<string> {
+  when: Date = new Date(),
+): Promise<SavedPhoto> {
   const prepared = await prepareImage(input);
+  const name = photoBlockName(prepared.mime, when);
   const hash = await sha256Hex(await prepared.blob.arrayBuffer());
   await store.put({
     hash,
     blob: prepared.blob,
     mime: prepared.mime,
-    name: prepared.name,
+    name,
   });
-  return `${FILE_REF_PREFIX}${hash}`;
+  return { ref: `${FILE_REF_PREFIX}${hash}`, name };
+}
+
+/** Store prepared bytes and return the short reference used in note blocks. */
+export async function saveImage(
+  input: Blob & { name?: string },
+  store: FileStore = getFileStore(),
+): Promise<string> {
+  return (await addPhoto(input, store)).ref;
 }
 
 // ── URL resolution ─────────────────────────────────────────────────────────

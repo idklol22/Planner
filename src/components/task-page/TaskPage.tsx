@@ -10,7 +10,7 @@ import "./task-page.css";
 import { TASK_KINDS, type Task } from "../../domain/model";
 import { parseDays, REPEAT_OPTIONS } from "../../domain/recurrence";
 import { activeCategories } from "../../domain/tasks";
-import { saveImage, resolveFileUrl, scheduleUploads, setFileHubClient } from "../../lib/note-files";
+import { addPhoto, resolveFileUrl, scheduleUploads, setFileHubClient } from "../../lib/note-files";
 import { useStore } from "../../state/store";
 import { useSync } from "../../state/sync";
 import { useToast } from "../../state/toast";
@@ -252,7 +252,12 @@ function TaskDocument({
     {
       schema,
       initialContent: Array.isArray(task.note?.blocks) && task.note.blocks.length ? (task.note.blocks as never) : undefined,
-      uploadFile: (file) => saveImage(file),
+      // Paste/drop inserts an image block itself; returning the stored ref and
+      // name overwrites the browser's original file name with the photo stamp.
+      uploadFile: async (file) => {
+        const { ref, name } = await addPhoto(file);
+        return { props: { url: ref, name } };
+      },
       resolveFileUrl: (url) => resolveFileUrl(url, clientRef.current),
       placeholders: { default: "Write something, or type '/' for commands" },
       // Plain Markdown pastes become real blocks, even alongside HTML.
@@ -365,7 +370,8 @@ function TaskDocument({
       const inserted: { ref: string; name: string }[] = [];
       for (const file of chosen) {
         try {
-          inserted.push({ ref: await saveImage(file), name: file.name });
+          const { ref, name } = await addPhoto(file);
+          inserted.push({ ref, name });
         } catch (error) {
           notify(error instanceof Error ? error.message : "Could not add that photo.", "error");
         }
