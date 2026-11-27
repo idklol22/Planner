@@ -3,9 +3,7 @@ import type { HubClient } from "../storage/hub";
 import {
   expandFileRefs,
   FILE_REF_PREFIX,
-  FileUploadQueue,
   fitToMaxSide,
-  flushPendingUploads,
   KEEP_PNG_BELOW,
   memoryFileStore,
   MAX_SIDE,
@@ -13,6 +11,8 @@ import {
   placeholderUrl,
   resetFileUrlCache,
   resolveFileUrl,
+  scheduleUploads,
+  setFileHubClient,
   type StoredFile,
 } from "./note-files";
 
@@ -20,13 +20,12 @@ const hashA = "a".repeat(64);
 const hashB = "b".repeat(64);
 const refA = `${FILE_REF_PREFIX}${hashA}`;
 
-function stored(fileHash: string, body = "photo", uploaded = false): StoredFile {
+function stored(fileHash: string, body = "photo"): StoredFile {
   return {
     hash: fileHash,
     blob: new Blob([body], { type: "image/jpeg" }),
     mime: "image/jpeg",
     name: "photo.jpg",
-    uploaded,
   };
 }
 
@@ -96,35 +95,18 @@ describe("expandFileRefs", () => {
   });
 });
 
-describe("FileUploadQueue", () => {
-  it("uploads pending bytes and retries the failures on the next pass", async () => {
-    const store = memoryFileStore([
-      stored(hashA),
-      stored(hashB),
-      stored("c".repeat(64), "already uploaded", true),
-    ]);
-    let failB = true;
-    const putFile = vi.fn(async (fileHash: string) => {
-      if (fileHash === hashB && failB) {
-        failB = false;
-        throw new Error("offline");
-      }
-      return { sha256: fileHash, bytes: 4 };
-    });
+describe("legacy hub hooks", () => {
+  it("expose no-op uploads that never touch a hub client or local storage", async () => {
+    const putFile = vi.fn();
     const client = { putFile } as unknown as HubClient;
+    const store = memoryFileStore([stored(hashA)]);
 
-    const queue = new FileUploadQueue(store);
-    expect(await queue.flush(client)).toBe(1);
-    expect((await store.get(hashA))?.uploaded).toBe(true);
-    expect((await store.get(hashB))?.uploaded).toBe(false);
-
-    expect(await queue.flush(client)).toBe(1);
-    expect((await store.get(hashB))?.uploaded).toBe(true);
-    expect(putFile.mock.calls.map((call) => call[0])).toEqual([hashA, hashB, hashB]);
-  });
-
-  it("does nothing when no hub client is available", async () => {
-    expect(await flushPendingUploads(null, memoryFileStore([stored(hashA)]))).toBe(0);
+    expect(() => setFileHubClient(client)).not.toThrow();
+    expect(() => scheduleUploads(client, store)).not.toThrow();
+    expect(() => setFileHubClient(null)).not.toThrow();
+    expect(() => scheduleUploads(null)).not.toThrow();
+    expect(putFile).not.toHaveBeenCalled();
+    expect(await store.get(hashA)).toEqual(stored(hashA));
   });
 });
 
@@ -141,28 +123,17 @@ describe("resolveFileUrl", () => {
     expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
   });
 
-  it("uses the placeholder when neither storage nor hub has the file", async () => {
+  it("uses the placeholder when local storage has no file", async () => {
     expect(await resolveFileUrl(refA, null, memoryFileStore())).toBe(placeholderUrl());
   });
 
-  it("downloads from the hub, caches the bytes and does not download twice", async () => {
+  it("never downloads from a hub client, even when one is supplied", async () => {
     const store = memoryFileStore();
     const getFile = vi.fn(async () => new Blob(["remote"], { type: "image/png" }));
     const client = { getFile } as unknown as HubClient;
 
-    expect(await resolveFileUrl(refA, client, store)).toBe("blob:mock");
-    expect((await store.get(hashA))?.blob.type).toBe("image/png");
-    expect((await store.get(hashA))?.uploaded).toBe(true);
-    expect(await resolveFileUrl(refA, client, store)).toBe("blob:mock");
-    expect(getFile).toHaveBeenCalledTimes(1);
-  });
-
-  it("falls back to the placeholder when the hub cannot deliver", async () => {
-    const client = {
-      getFile: vi.fn(async () => {
-        throw new Error("offline");
-      }),
-    } as unknown as HubClient;
-    expect(await resolveFileUrl(refA, client, memoryFileStore())).toBe(placeholderUrl());
+    expect(await resolveFileUrl(refA, client, store)).toBe(placeholderUrl());
+    expect(getFile).not.toHaveBeenCalled();
+    expect(await store.get(hashA)).toBeUndefined();
   });
 });

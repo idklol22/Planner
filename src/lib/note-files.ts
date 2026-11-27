@@ -1,8 +1,10 @@
 /** Note photos live in IndexedDB as bytes keyed by their SHA-256. Note blocks
  *  only ever contain a short `planner-file:<sha256>` reference, so the note row
- *  (and localStorage) never carries image data. Storage is injectable so the
- *  pure parts can be tested with an in-memory store. */
+ *  (and localStorage) never carries image data. Photos are never uploaded to or
+ *  downloaded from the hub: they are embedded in a note only when that note is
+ *  handed off. Storage is injectable so the pure parts can be tested in memory. */
 
+// Only for the signatures of the legacy no-op exports below; no hub calls are made.
 import type { HubClient } from "../storage/hub";
 
 export const FILE_REF_PREFIX = "planner-file:";
@@ -20,7 +22,7 @@ const REF_SOURCE = `${FILE_REF_PREFIX}([0-9a-f]{64})`;
 const REF_GLOBAL = new RegExp(REF_SOURCE, "gi");
 const REF_EXACT = new RegExp(`^${REF_SOURCE}$`, "i");
 
-/** A tiny inline image used when neither local storage nor the hub has the file. */
+/** A tiny inline image used when local storage has no file. */
 const PLACEHOLDER_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180">' +
   '<rect width="320" height="180" fill="#191916"/>' +
@@ -32,15 +34,11 @@ export interface StoredFile {
   blob: Blob;
   mime: string;
   name: string;
-  /** True once the hub has accepted the bytes. */
-  uploaded: boolean;
 }
 
 export interface FileStore {
   get(hash: string): Promise<StoredFile | undefined>;
   put(file: StoredFile): Promise<void>;
-  all(): Promise<StoredFile[]>;
-  markUploaded(hash: string): Promise<void>;
 }
 
 export interface PreparedImage {
@@ -86,13 +84,6 @@ export function memoryFileStore(initial: StoredFile[] = []): FileStore {
     },
     async put(file) {
       map.set(file.hash, { ...file });
-    },
-    async all() {
-      return [...map.values()].map((file) => ({ ...file }));
-    },
-    async markUploaded(hash) {
-      const file = map.get(hash);
-      if (file) map.set(hash, { ...file, uploaded: true });
     },
   };
 }
@@ -186,25 +177,6 @@ export function createIdbFileStore(): FileStore {
       const transaction = database.transaction(STORE_NAME, "readwrite");
       transaction.objectStore(STORE_NAME).put(file);
       await idbDone(transaction);
-    },
-    async all() {
-      const database = await open();
-      return idbRequest(database.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME).getAll());
-    },
-    async markUploaded(hash) {
-      const database = await open();
-      return new Promise<void>((resolve, reject) => {
-        const transaction = database.transaction(STORE_NAME, "readwrite");
-        const store = transaction.objectStore(STORE_NAME);
-        const request = store.get(hash);
-        request.onsuccess = () => {
-          const file = request.result as StoredFile | undefined;
-          if (file) store.put({ ...file, uploaded: true });
-        };
-        transaction.oncomplete = () => resolve();
-        transaction.onerror = () => reject(transaction.error ?? new Error("Photo storage failed."));
-        transaction.onabort = () => reject(transaction.error ?? new Error("Photo storage failed."));
-      });
     },
   };
 }
@@ -322,74 +294,14 @@ async function sha256Hex(bytes: ArrayBuffer): Promise<string> {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-// ── Upload queue ───────────────────────────────────────────────────────────
+// ── Legacy hub hooks ──────────────────────────────────────────────────────
 
-let hubClient: HubClient | null = null;
+// Photos never leave the device outside a hand-off. These exports remain as
+// no-ops because components outside this module still call them; changing those
+// callers is out of scope. Do not add upload/download behaviour back here.
+export function setFileHubClient(_client: HubClient | null): void {}
 
-/** Called by the sync provider; null when the hub is not configured. */
-export function setFileHubClient(client: HubClient | null): void {
-  hubClient = client;
-}
-
-/** Uploads pending files one at a time. A failure leaves the file pending for
- *  the next sync/online retry; a concurrent flush is folded into the current run. */
-export class FileUploadQueue {
-  private running = false;
-  private again = false;
-
-  constructor(private readonly store: FileStore) {}
-
-  async flush(client: HubClient): Promise<number> {
-    if (this.running) {
-      this.again = true;
-      return 0;
-    }
-    this.running = true;
-    let uploaded = 0;
-    try {
-      do {
-        this.again = false;
-        const pending = (await this.store.all()).filter((file) => !file.uploaded);
-        for (const file of pending) {
-          try {
-            await client.putFile(file.hash, file.blob, file.mime || file.blob.type || "image/jpeg");
-            await this.store.markUploaded(file.hash);
-            uploaded += 1;
-          } catch {
-            // Offline or rejected: keep it pending and try again later.
-          }
-        }
-      } while (this.again);
-    } catch {
-      // Storage may disappear while the app is running; the queue stays intact.
-    } finally {
-      this.running = false;
-    }
-    return uploaded;
-  }
-}
-
-const queues = new WeakMap<FileStore, FileUploadQueue>();
-
-/** Fire-and-forget upload of whatever is still pending. Never awaited by the UI. */
-export function flushPendingUploads(client: HubClient | null, store?: FileStore): Promise<number> {
-  if (!client) return Promise.resolve(0);
-  try {
-    const target = store ?? getFileStore();
-    let queue = queues.get(target);
-    if (!queue) {
-      queue = new FileUploadQueue(target);
-      queues.set(target, queue);
-    }
-    return queue.flush(client);
-  } catch {
-    return Promise.resolve(0);
-  }
-}
-
-export function scheduleUploads(client: HubClient | null = hubClient, store?: FileStore): void {
-  void flushPendingUploads(client, store).catch(() => {});
-}
+export function scheduleUploads(_client: HubClient | null = null, _store?: FileStore): void {}
 
 /** Store prepared bytes and return the short reference used in note blocks. */
 export async function saveImage(
@@ -403,9 +315,7 @@ export async function saveImage(
     blob: prepared.blob,
     mime: prepared.mime,
     name: prepared.name,
-    uploaded: false,
   });
-  scheduleUploads(hubClient, store);
   return `${FILE_REF_PREFIX}${hash}`;
 }
 
@@ -434,11 +344,12 @@ function objectUrlFor(blob: Blob): string | null {
   }
 }
 
-/** Resolve a note block URL. Plain URLs pass through; file refs resolve from
- *  local storage first, then the hub, with a small SVG as the last resort. */
+/** Resolve a note block URL. Plain URLs pass through; file refs resolve only
+ *  from local storage, with a small SVG as the fallback. The `client` argument
+ *  is ignored and kept only for callers outside this module. */
 export async function resolveFileUrl(
   url: string,
-  client: HubClient | null = null,
+  _client: HubClient | null = null,
   store?: FileStore,
 ): Promise<string> {
   const hash = parseFileRef(url);
@@ -449,16 +360,10 @@ export async function resolveFileUrl(
 
   let resolved: string | null = null;
   try {
-    const target = store ?? getFileStore();
-    let file = await target.get(hash);
-    if (!file && client) {
-      const blob = await client.getFile(hash);
-      file = { hash, blob, mime: blob.type || "image/jpeg", name: hash, uploaded: true };
-      await target.put(file);
-    }
+    const file = await (store ?? getFileStore()).get(hash);
     if (file) resolved = objectUrlFor(file.blob);
   } catch {
-    // Missing or offline: use the placeholder below.
+    // Storage unavailable or file missing: use the placeholder below.
   }
   if (!resolved) return placeholderUrl();
   objectUrls.set(hash, resolved);

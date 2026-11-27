@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { type Category, type Note, type Settings, type Task } from "../domain/model";
+import { expandFileRefs, FILE_REF_PREFIX, memoryFileStore } from "./note-files";
 import { buildApiMarkdown, buildHandoffMarkdown, dueHandoffs, noteHash, slugify } from "./handoff";
 
 const task: Task = {
@@ -211,5 +212,33 @@ describe("dueHandoffs: send on edit", () => {
     expect(due[0].hash).toBe(
       noteHash(noteWithPhoto.title, noteWithPhoto.date, `${content}\n\n![syllabus.png](data:image/png;base64,AAA)`),
     );
+  });
+});
+
+describe("handoff photo embedding", () => {
+  it("still expands local file refs into data URLs when the note is sent", async () => {
+    const fileHash = "b".repeat(64);
+    const ref = `${FILE_REF_PREFIX}${fileHash}`;
+    const content = `Syllabus ![page](${ref})`;
+    const noteWithPhoto = withNote(
+      { date: "2026-11-20", done: false, completedAt: undefined },
+      { content, updatedAt: "2026-11-20T10:00:00.000Z" },
+    );
+    const due = dueHandoffs([noteWithPhoto], [category], "2026-11-20T12:00:00.000Z");
+
+    expect(due).toHaveLength(1);
+    // The scheduler keeps the ref; expansion happens on the way out, not at rest.
+    expect(due[0].markdown).toContain(ref);
+    const store = memoryFileStore([
+      {
+        hash: fileHash,
+        blob: new Blob(["img"], { type: "image/png" }),
+        mime: "image/png",
+        name: "page.png",
+      },
+    ]);
+    const embedded = await expandFileRefs(due[0].markdown, store);
+    expect(embedded).toContain(`data:image/png;base64,${btoa("img")}`);
+    expect(embedded).not.toContain(ref);
   });
 });

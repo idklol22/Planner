@@ -6,6 +6,7 @@ import type {
   EventsResult, FileMeta, FileObject, FileStore, HubOp, HubStore, MealRow, SyncChange,
   SyncResult, SyncRow, SyncTable, TaskRow, UpsertResult, WidgetProfile,
 } from "./lib/db.ts";
+import { redactCommandPayload, shouldRedactCommand } from "./lib/command-payload.ts";
 import { compareUpdatedAt, normalize } from "./lib/logic.ts";
 
 export function createServiceClient(url: string, key: string): SupabaseClient {
@@ -193,9 +194,20 @@ export class PgStore implements HubStore {
   }
 
   async completeCommand(id: string, status: CommandStatus, result: unknown): Promise<CommandRow | null> {
+    // Read first so the stored payload can be stripped on success only, without
+    // a migration or an RPC: PostgREST cannot reference another column of the
+    // same row inside an update. Failures and retries keep their photos.
+    const { data: existing, error: lookupError } = await this.db.from("command")
+      .select("type, payload_json").eq("id", id).maybeSingle();
+    fail(lookupError, "complete lookup");
+    const update: Record<string, unknown> = {
+      status, result_json: result, lease_until: null, updated_at: new Date().toISOString(),
+    };
+    if (existing && shouldRedactCommand(existing.type, status)) {
+      update.payload_json = redactCommandPayload(existing.payload_json ?? null);
+    }
     const { data, error } = await this.db.from("command")
-      .update({ status, result_json: result, lease_until: null, updated_at: new Date().toISOString() })
-      .eq("id", id).select("*").maybeSingle();
+      .update(update).eq("id", id).select("*").maybeSingle();
     fail(error, "complete");
     return data ? commandRow(data) : null;
   }

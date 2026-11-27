@@ -4,7 +4,7 @@ import type { Category, Note, Settings, Task } from "../domain/model";
 import { useStore } from "../state/store";
 import { useToast } from "../state/toast";
 import { itemsFromDeadlines, taskCountMessage } from "./absorb";
-import { expandFileRefs, scheduleUploads, setFileHubClient } from "./note-files";
+import { expandFileRefs } from "./note-files";
 import { useSync } from "../state/sync";
 import type { HarnessNote } from "./harness-types";
 
@@ -194,23 +194,6 @@ export function useHandoff(): void {
   const pendingRef = useRef(false);
   const sendingRef = useRef(new Set<string>());
   const attemptRef = useRef(new Map<string, number>());
-
-  // Note photos upload independently of this engine: retry pending bytes after
-  // every successful sync and when connectivity returns, even with no note open.
-  const clientRef = useRef(hub.client);
-  clientRef.current = hub.client;
-  useEffect(() => {
-    setFileHubClient(hub.client);
-    if (hub.client) scheduleUploads(hub.client);
-  }, [hub.client]);
-  useEffect(() => {
-    if (hub.client && hub.status.lastSyncedAt) scheduleUploads(hub.client);
-  }, [hub.client, hub.status.lastSyncedAt]);
-  useEffect(() => {
-    const onOnline = () => scheduleUploads(clientRef.current);
-    window.addEventListener("online", onOnline);
-    return () => window.removeEventListener("online", onOnline);
-  }, []);
 
   const run = useCallback(async () => {
     if (!ready || !hubMode || busyRef.current) {
