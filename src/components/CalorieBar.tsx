@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { Flame, Plus, Trash2, TriangleAlert, X } from "lucide-react";
-import { dayKcal, entriesForDay, entryTimeLabel, onGoal } from "../domain/calories";
+import { dayKcal, entriesForDay, entryTimeLabel } from "../domain/calories";
 import type { ISODate } from "../domain/dates";
 import { healthLine } from "../lib/health";
 import { useNavCommand } from "../state/deeplink";
 import { useHealth } from "../state/health";
 import { useStore } from "../state/store";
+import { resolveInlineSave } from "./inlineSave";
 
 const fmt = (n: number) => n.toLocaleString("en-US");
 
-/** Slim kcal bar under the calendar: tap + to add, tap the total to list entries. */
+/** One flat row: total / goal, a plain "+", and a 2px hairline. No flame, no tiles, no warning icon. */
 export function CalorieBar({ date }: { date: ISODate }) {
   const { data, actions } = useStore();
   const health = useHealth();
@@ -21,13 +21,18 @@ export function CalorieBar({ date }: { date: ISODate }) {
   const [mode, setMode] = useState<"idle" | "add" | "list">("idle");
   const [kcal, setKcal] = useState("");
   const kcalRef = useRef<HTMLInputElement>(null);
+  const blocked = useRef(false);
   const lastNav = useRef(0);
 
   useEffect(() => setMode("idle"), [date]);
   useEffect(() => {
     if (!nav.seq || nav.seq === lastNav.current || date !== nav.date) return;
     lastNav.current = nav.seq;
-    if (nav.openCalories) setMode("add");
+    if (nav.openCalories) {
+      blocked.current = false;
+      setKcal("");
+      setMode("add");
+    }
   }, [nav, date]);
   useEffect(() => {
     if (mode !== "add") return;
@@ -36,123 +41,130 @@ export function CalorieBar({ date }: { date: ISODate }) {
   }, [mode]);
 
   const pct = goal > 0 ? Math.min(total / goal, 1) : 0;
-  const good = onGoal(total, goal);
-  const over = goal > 0 && total > goal * 1.1;
-  const barColor = over ? "var(--warn)" : good ? "var(--ok)" : "var(--accent)";
+  const over = goal > 0 && total > goal;
 
-  function submit() {
-    const n = Number(kcal.replace(/,/g, ""));
+  function commit() {
+    const attempt = resolveInlineSave(kcal, blocked.current);
+    if (!attempt.value) return;
+    const n = Number(attempt.value.replace(/,/g, ""));
     if (!Number.isFinite(n) || n <= 0) return;
+    blocked.current = true;
     actions.addCalorie(date, n);
     setKcal("");
     kcalRef.current?.focus();
   }
 
+  /** Cancel must win over the blur that a tap on "x" or the keyboard's Escape would otherwise cause. */
+  function discard() {
+    blocked.current = true;
+    setKcal("");
+    setMode("idle");
+  }
+
   return (
-    <section aria-label="Calories" className="module !p-0">
-      <div className="overflow-hidden rounded-[var(--r)]">
-        <div className="flex h-12 items-center pl-0.5 pr-1.5">
-          <button
-            onClick={() => setMode((m) => (m === "list" ? "idle" : "list"))}
-            aria-expanded={mode === "list"}
-            aria-label="Show calorie entries"
-            className="flex h-full min-w-0 flex-1 items-center gap-2.5 rounded-xl pl-3 text-left transition-colors hover:bg-ink/[0.04]"
-          >
-            {over ? (
-              <TriangleAlert size={19} className="text-amber" strokeWidth={2.2} aria-label="Over goal" />
-            ) : (
-              <Flame size={19} className={total > 0 ? "text-amber" : "text-faint"} strokeWidth={2.2} />
-            )}
-            <span className="text-[16px] font-semibold tabular-nums">{fmt(total)}</span>
-            <span className="text-[13.5px] font-medium tabular-nums text-faint">
-              / {fmt(goal)} kcal
-            </span>
-          </button>
-          <button
-            onClick={() => setMode((m) => (m === "add" ? "idle" : "add"))}
-            aria-label={mode === "add" ? "Close calorie input" : "Add calories"}
-            className="mod-btn !min-w-10 !px-0 !bg-ink/[0.07] !text-ink"
-          >
-            <Plus
-              size={20}
-              strokeWidth={2.5}
-              className="transition-transform duration-200"
-              style={{ transform: mode === "add" ? "rotate(45deg)" : undefined }}
-            />
-          </button>
-        </div>
-        <div className="h-[4px] w-full bg-ink/[0.07]">
-          <div
-            className="h-full rounded-full transition-[width,background-color] duration-500 ease-out"
-            style={{ width: `${pct * 100}%`, backgroundColor: barColor }}
+    <section aria-label="Calories" className="!p-0">
+      <div className="flex min-h-12 items-center pl-0.5 pr-1">
+        <button
+          onClick={() => setMode((m) => (m === "list" ? "idle" : "list"))}
+          aria-expanded={mode === "list"}
+          aria-label="Show calorie entries"
+          className="flex min-h-11 min-w-0 flex-1 items-center gap-2 text-left"
+        >
+          <span className="text-[15px] font-semibold tabular-nums">{fmt(total)}</span>
+          <span className="text-[13px] tabular-nums text-faint">{` / ${fmt(goal)} kcal`}</span>
+        </button>
+        <button
+          onPointerDown={(e) => {
+            // The "x" closes the input: don't let the blur it causes save the draft first.
+            if (mode === "add") e.preventDefault();
+          }}
+          onClick={() => {
+            if (mode === "add") discard();
+            else {
+              blocked.current = false;
+              setKcal("");
+              setMode("add");
+            }
+          }}
+          aria-label={mode === "add" ? "Close calorie input" : "Add calories"}
+          className="flex h-11 w-11 items-center justify-center text-[22px] leading-none text-ink"
+        >
+          <span aria-hidden>{mode === "add" ? "×" : "+"}</span>
+        </button>
+      </div>
+
+      <div aria-hidden className="h-[2px] w-full bg-line">
+        <div
+          className={`h-full transition-[width,background-color] duration-500 ease-out ${over ? "bg-amber" : "bg-muted"}`}
+          style={{ width: `${pct * 100}%` }}
+        />
+      </div>
+      {burnedLine && (
+        <p className="break-words py-1.5 text-[12px] leading-relaxed text-faint">{burnedLine}</p>
+      )}
+
+      {mode === "add" && (
+        <div className="animate-row flex items-center py-1">
+          <input
+            ref={kcalRef}
+            value={kcal}
+            onChange={(e) => {
+              blocked.current = false;
+              setKcal(e.target.value.replace(/[^\d,]/g, ""));
+            }}
+            onBlur={commit}
+            inputMode="numeric"
+            placeholder="kcal"
+            aria-label="Calories"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                commit();
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                e.stopPropagation();
+                discard();
+              }
+            }}
+            className="h-11 w-[104px] bg-transparent text-[16px] font-semibold tabular-nums outline-none placeholder:font-normal placeholder:text-faint"
           />
         </div>
-        {burnedLine && (
-          <p className="break-words px-3 py-1.5 text-[11.5px] leading-relaxed text-faint">{burnedLine}</p>
-        )}
+      )}
 
-        {mode === "add" && (
-          <div className="animate-row flex items-center gap-2 px-3 py-2.5">
-            <input
-              ref={kcalRef}
-              value={kcal}
-              onChange={(e) => setKcal(e.target.value.replace(/[^\d,]/g, ""))}
-              inputMode="numeric"
-              placeholder="kcal"
-              aria-label="Calories"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") submit();
-                else if (e.key === "Escape") {
-                  e.stopPropagation();
-                  setMode("idle");
-                }
-              }}
-              className="h-11 w-[92px] rounded-xl bg-canvas/50 px-3 text-[16px] font-semibold tabular-nums outline-none placeholder:font-normal placeholder:text-faint focus:ring-1 focus:ring-ink/30"
-            />
+      {mode === "list" && (
+        <div className="animate-row border-t border-line pt-1">
+          {entries.length === 0 ? (
+            <p className="py-3 text-center text-[13px] text-faint">Nothing logged for this day</p>
+          ) : (
+            <ul>
+              {entries.map((e) => (
+                <li key={e.id} className="flex min-h-11 items-center gap-3 border-b border-line">
+                  <span className="min-w-0 flex-1 truncate text-[12.5px] tabular-nums text-muted">
+                    {entryTimeLabel(e)}
+                  </span>
+                  <span className="text-[14px] font-semibold tabular-nums">{fmt(e.kcal)}</span>
+                  <button
+                    onClick={() => actions.deleteCalorie(e.id)}
+                    aria-label={`Delete entry at ${entryTimeLabel(e)}`}
+                    className="min-h-11 px-1 text-[12px] text-faint hover:text-ink"
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="flex justify-end">
             <button
-              onClick={submit}
-              disabled={!kcal}
-              className="h-11 rounded-xl bg-[var(--accent)] px-4 text-[13.5px] font-semibold text-accent-ink transition-opacity active:scale-95 disabled:opacity-30"
+              onPointerDown={(e) => e.preventDefault()}
+              onClick={() => setMode("idle")}
+              className="min-h-11 px-2 text-[12px] text-faint hover:text-ink"
             >
-              Add
+              Close
             </button>
           </div>
-        )}
-
-        {mode === "list" && (
-          <div className="animate-row border-t border-line px-3 py-1.5">
-            {entries.length === 0 ? (
-              <p className="py-3 text-center text-[13px] text-faint">Nothing logged for this day</p>
-            ) : (
-              <ul>
-                {entries.map((e) => (
-                  <li key={e.id} className="flex min-h-[44px] items-center gap-3">
-                    <span className="min-w-0 flex-1 truncate text-[13.5px] text-muted tabular-nums">
-                      {entryTimeLabel(e)}
-                    </span>
-                    <span className="text-[16px] font-semibold tabular-nums">{fmt(e.kcal)}</span>
-                    <button
-                      onClick={() => actions.deleteCalorie(e.id)}
-                      aria-label={`Delete entry at ${entryTimeLabel(e)}`}
-                      className="flex h-8 w-8 items-center justify-center rounded-full text-faint transition-colors hover:bg-ink/10 hover:text-rose active:scale-90"
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <div className="flex justify-end pb-1">
-              <button
-                onClick={() => setMode("idle")}
-                className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[11.5px] font-medium text-faint hover:text-ink"
-              >
-                <X size={12} /> Close
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+        </div>
+      )}
     </section>
   );
 }

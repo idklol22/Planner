@@ -1,4 +1,3 @@
-import { CalendarClock } from "lucide-react";
 import { addDays, type ISODate } from "../domain/dates";
 import { nearestCategoryColor } from "../domain/palette";
 import { useStore } from "../state/store";
@@ -34,28 +33,25 @@ export function DeadlinesCard({ date }: { date: ISODate }) {
   if (groups.length === 0) return null;
 
   return (
-    <section aria-label="Deadlines" className="module mt-4">
-      <div className="module-head">
-        <h2 className="module-title flex items-center gap-2">
-          <CalendarClock size={16} /> Deadlines
-        </h2>
-      </div>
-      <div className="space-y-3">
+    <section aria-label="Deadlines" className="mt-4">
+      <h2 className="px-1 text-[14px] font-semibold">Deadlines</h2>
+      <div className="mt-2">
         {groups.map((group) => (
           <div key={group.key}>
-            <div className="mb-1 flex items-center gap-2 text-[11.5px] font-semibold uppercase tracking-[0.12em] text-faint">
+            <div className="flex items-center gap-2 px-1 py-1 text-[12px] text-faint">
               {group.color && (
                 <span
-                  className="h-2 w-2 rounded-full"
-                  style={{ background: nearestCategoryColor(group.color) }}
+                  aria-hidden
+                  className="h-[7px] w-[7px] rounded-full"
+                  style={{ backgroundColor: nearestCategoryColor(group.color) }}
                 />
               )}
               {group.label}
             </div>
             {group.rows.map((d) => (
-              <div key={d.id} className="flex min-h-[44px] items-center gap-3 px-1 text-[13.5px]">
-                <span className="flex-1 truncate">{d.title}</span>
-                <span className="text-[11.5px] text-muted">
+              <div key={d.id} className="flex min-h-11 items-center gap-3 border-b border-line px-1 text-[14px]">
+                <span className="min-w-0 flex-1 truncate">{d.title}</span>
+                <span className="text-[12px] text-muted">
                   {[subjectName(d.subjectId), d.due.slice(5, 10)].filter(Boolean).join(" · ")}
                 </span>
               </div>

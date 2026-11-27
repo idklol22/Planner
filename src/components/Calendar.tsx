@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from "lucide-react";
-import { dayTiles, type DayTile } from "../domain/calendar";
+import { dayTiles } from "../domain/calendar";
 import {
   addDays,
   addMonths,
@@ -14,7 +14,7 @@ import {
   type ISODate,
 } from "../domain/dates";
 import { useStore } from "../state/store";
-import { catColor } from "../theme/store";
+import { dayAriaLabel, dayMark } from "./calendarStatus";
 
 export type CalendarMode = "week" | "month";
 
@@ -22,15 +22,7 @@ const WEEK_TILES = 5;
 const MONTH_TILES = 4;
 const labels = weekdayLabels(1);
 
-function Tile({ tile, className }: { tile: DayTile; className: string }) {
-  const color = tile.color ? catColor(tile.color) : "var(--accent)";
-  return <span className={`cal-tile ${tile.done ? "done" : ""} ${className}`} style={{ color }} />;
-}
-
-/**
- * The calendar draws every task as a tile in its category colour: filled when done, outlined when open.
- * A week reads as columns that fill up; a month as a row of small tiles under each date.
- */
+/** A flat, text-first calendar: one number, one mark, no boxes and no coloured tiles. */
 export function Calendar({
   selected,
   onSelect,
@@ -70,10 +62,10 @@ export function Calendar({
     onSelect(week ? addDays(selected, 7 * step) : addMonths(selected, step));
   }
 
-  const arrow = "flex h-9 w-9 items-center justify-center rounded-lg text-muted hover:bg-ink/10 active:scale-90";
+  const arrow = "flex h-11 w-11 items-center justify-center text-muted hover:text-ink";
 
   return (
-    <section aria-label="Calendar" className="module select-none !px-1.5 !pb-0 !pt-1.5">
+    <section aria-label="Calendar" className="select-none !px-1.5 !pb-0 !pt-1.5">
       {!week && (
         <div className="flex items-center justify-between pb-1 pl-2">
           <h2 className="text-[14px] font-semibold">{formatMonth(selected)}</h2>
@@ -106,8 +98,8 @@ export function Calendar({
         {!week && (
           <div className="grid grid-cols-[repeat(7,minmax(0,1fr))] pb-0.5 text-center">
             {labels.map((label, i) => (
-              <div key={label + i} className="text-[10px] font-semibold uppercase tracking-wide text-faint">
-                {label.slice(0, 2)}
+              <div key={label + i} className="text-[11px] font-medium text-faint">
+                {label.slice(0, 1)}
               </div>
             ))}
           </div>
@@ -121,55 +113,54 @@ export function Calendar({
         >
           {dates.map((date, index) => {
             const info = dayTiles(data.tasks, data.categories, date, week ? WEEK_TILES : MONTH_TILES);
+            const mark = dayMark(info.total, info.done);
             const isSelected = date === selected;
             const isToday = date === today;
             const outside = !week && !sameMonth(date, selected);
-            const name = fromISODate(date).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+            const name = fromISODate(date).toLocaleDateString("en-GB", {
+              weekday: "long",
+              day: "numeric",
+              month: "long",
+            });
             return (
               <button
                 key={date}
                 onClick={() => onSelect(date)}
-                aria-label={info.total ? `${name}, ${info.done} of ${info.total} done` : name}
+                aria-label={dayAriaLabel(name, info.total, info.done)}
                 aria-pressed={isSelected}
                 aria-current={isToday ? "date" : undefined}
-                className={`cal-day flex flex-col items-center rounded-[10px] active:scale-95 ${
-                  week ? "pb-1.5 pt-1" : "h-11 pt-1"
+                className={`flex min-h-11 flex-col items-center justify-center ${
+                  week ? "pb-0.5 pt-0.5" : ""
                 } ${outside ? "opacity-30" : ""}`}
               >
                 {week && (
-                  <span className={`text-[10px] font-semibold uppercase tracking-wide ${isToday ? "text-accent" : "text-faint"}`}>
-                    {labels[index].slice(0, 3)}
+                  <span className="text-[11px] font-medium uppercase leading-none text-faint">
+                    {labels[index].slice(0, 1)}
                   </span>
                 )}
                 <span
-                  className={`flex h-[22px] min-w-[22px] items-center justify-center rounded-md px-1 tabular-nums ${
-                    week ? "text-[16px]" : "text-[13px]"
-                  } ${isToday ? "bg-[var(--accent)] font-bold text-[var(--accent-contrast)]" : "font-semibold text-ink"}`}
+                  className={`flex h-7 w-7 items-center justify-center rounded-full tabular-nums ${
+                    week ? "text-[15px]" : "text-[14px]"
+                  } ${
+                    isSelected
+                      ? "bg-ink font-semibold text-canvas"
+                      : isToday
+                        ? "font-semibold text-accent"
+                        : "text-ink"
+                  }`}
                 >
                   {Number(date.slice(-2))}
                 </span>
-
-                {week ? (
-                  // Built from the bottom up, so a day visibly fills as tasks are finished.
-                  <span aria-hidden className="mt-1 flex h-[34px] w-full flex-col-reverse items-center gap-[2px]">
-                    {info.total === 0 && <span className="h-[2px] w-2.5 rounded-full bg-ink/15" />}
-                    {info.tiles.map((tile) => (
-                      <Tile key={tile.id} tile={tile} className="h-[5px] w-[22px]" />
-                    ))}
-                    {info.more > 0 && (
-                      <span className="text-[9px] font-bold leading-[7px] text-muted">+{info.more}</span>
-                    )}
-                  </span>
-                ) : (
-                  !outside && (
-                    <span aria-hidden className="mt-[3px] flex h-[6px] items-center justify-center gap-[2px]">
-                      {info.tiles.map((tile) => (
-                        <Tile key={tile.id} tile={tile} className="h-[6px] w-[6px]" />
-                      ))}
-                      {info.more > 0 && <span className="text-[8px] font-bold leading-none text-muted">+{info.more}</span>}
-                    </span>
-                  )
-                )}
+                <span
+                  aria-hidden
+                  className={`mt-0.5 h-1 w-1 rounded-full ${
+                    mark === "open"
+                      ? "bg-muted"
+                      : mark === "done"
+                        ? "border border-faint"
+                        : "invisible"
+                  }`}
+                />
               </button>
             );
           })}
@@ -179,7 +170,7 @@ export function Calendar({
       <button
         onClick={() => onModeChange(week ? "month" : "week")}
         aria-label={week ? "Switch to month view" : "Switch to week view"}
-        className="flex h-6 w-full items-center justify-center text-faint hover:text-ink"
+        className="flex min-h-11 w-full items-center justify-center text-faint hover:text-ink"
       >
         {week ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
       </button>

@@ -1,11 +1,8 @@
-import { ArchiveRestore, Trash2 } from "lucide-react";
 import { useStore } from "../state/store";
 import { useToast } from "../state/toast";
 import { catColor } from "../theme/store";
-import { Panel } from "./ui";
 
-const ACTION_BTN =
-  "flex min-h-10 min-w-10 shrink-0 items-center justify-center gap-1.5 rounded-xl px-3 text-[12px] font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-accent";
+const ACTION = "min-h-11 px-2 text-[12px] font-medium";
 
 /** Full-screen archive of tasks: restore them to their day or delete them for good. */
 export function ArchiveView() {
@@ -25,49 +22,43 @@ export function ArchiveView() {
 
   return (
     <div className="px-4 pb-8 pt-2 md:px-6">
-      <h2 className="mb-4 px-1 text-[14.5px] font-semibold text-ink">Archived tasks</h2>
+      <h2 className="mb-3 px-1 text-[15px] font-semibold text-ink">Archived tasks</h2>
       {archived.length === 0 ? (
-        <div className="glass-panel border border-dashed border-line-2 px-4 py-10 text-center text-[13px] text-muted">
-          Nothing archived.
-        </div>
+        <p className="py-6 text-[13px] text-muted">Nothing archived.</p>
       ) : (
-        <div className="space-y-2">
+        <div>
           {archived.map((task) => (
-            <Panel key={task.id} className="!p-0">
-              <div className="flex min-h-[52px] items-center gap-3 px-3 py-2">
-                <span
-                  aria-hidden
-                  className="h-2.5 w-2.5 shrink-0 rounded-full"
-                  style={{ backgroundColor: dotColor(task.categoryId) }}
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-[16px] font-semibold">{task.title}</div>
-                  <div className="truncate text-[12px] text-muted">{task.date}</div>
-                </div>
-                <button
-                  onClick={() => {
-                    actions.restoreTask(task.id);
-                    notify("Task restored", "success", undo);
-                  }}
-                  aria-label={`Restore ${task.title}`}
-                  className={`${ACTION_BTN} bg-surface-2 text-ink hover:bg-surface-3`}
-                  title="Restore"
-                >
-                  <ArchiveRestore size={16} /> Restore
-                </button>
-                <button
-                  onClick={() => {
-                    actions.deleteTask(task.id);
-                    notify("Task deleted", "success", undo);
-                  }}
-                  aria-label={`Delete ${task.title}`}
-                  className={`${ACTION_BTN} text-rose hover:bg-rose/10`}
-                  title="Delete"
-                >
-                  <Trash2 size={16} /> Delete
-                </button>
+            <div key={task.id} className="flex min-h-14 items-center gap-3 border-b border-line">
+              <span
+                aria-hidden
+                className="h-[7px] w-[7px] shrink-0 rounded-full"
+                style={{ backgroundColor: dotColor(task.categoryId) }}
+              />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[15px] font-semibold">{task.title}</div>
+                <div className="truncate text-[12px] text-muted">{task.date}</div>
               </div>
-            </Panel>
+              <button
+                onClick={() => {
+                  actions.restoreTask(task.id);
+                  notify("Task restored", "success", undo);
+                }}
+                aria-label={`Restore ${task.title}`}
+                className={`${ACTION} text-ink`}
+              >
+                Restore
+              </button>
+              <button
+                onClick={() => {
+                  actions.deleteTask(task.id);
+                  notify("Task deleted", "success", undo);
+                }}
+                aria-label={`Delete ${task.title}`}
+                className={`${ACTION} text-rose`}
+              >
+                Delete
+              </button>
+            </div>
           ))}
         </div>
       )}
