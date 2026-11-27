@@ -183,6 +183,14 @@ html[data-theme="wabi"] .mod-btn {
   z-index: 0;
   pointer-events: none;
 }
+/* The scene stays visible behind the panels, never directly under text: #root sits at z-index 1. */
+#scene-dim {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+}
 /* The cloud scene is the brightest backdrop; dim it so the --scrim on glass tiles holds text contrast
    (including the faint out-of-month dates) over its brightest part. */
 #scene[data-scene="clouds"] {
@@ -199,10 +207,63 @@ html[data-theme="wabi"] .mod-btn {
   padding: var(--pad);
   color: var(--text);
 }
-html[data-layout="tiles"] .module {
-  -webkit-backdrop-filter: blur(14px) saturate(1.1);
-  backdrop-filter: blur(14px) saturate(1.1);
+/* ── Shared glass recipe: LearnHarness Today panels, role tokens only ────── */
+.glass-panel,
+.module,
+.panel,
+.panel-soft {
+  background: color-mix(in srgb, var(--surface) 66%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+  backdrop-filter: blur(18px) saturate(1.15);
+  border-radius: 18px;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text) 8%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--text) 6%, transparent),
+    0 18px 50px rgb(0 0 0 / .32);
 }
+/* No blur support: solid panels and no dim, so contrast never depends on the scene. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass-panel,
+  .module,
+  .panel,
+  .panel-soft {
+    background: var(--surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: none;
+  }
+  #scene-dim {
+    display: none;
+  }
+}
+/* Contrast: solid surface, no blur/shadow, no scene. */
+html[data-theme="contrast"] .glass-panel,
+html[data-theme="contrast"] .module,
+html[data-theme="contrast"] .panel,
+html[data-theme="contrast"] .panel-soft {
+  background: var(--surface);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+html[data-theme="contrast"] #scene-dim {
+  display: none;
+}
+
+/* ── Calendar heatmap day cells ──────────────────────────────────────────── */
+.day-cell {
+  min-height: 42px;
+  transition: background-color 160ms ease, box-shadow 160ms ease;
+}
+.day-cell[data-level="0"] { background: color-mix(in srgb, var(--text) 3%, transparent); }
+.day-cell[data-level="1"] { background: color-mix(in srgb, var(--text) 9%, transparent); }
+.day-cell[data-level="2"] { background: color-mix(in srgb, var(--text) 16%, transparent); }
+.day-cell[data-level="3"] { background: color-mix(in srgb, var(--text) 25%, transparent); }
+.day-cell[data-level="4"] { background: color-mix(in srgb, var(--text) 36%, transparent); }
+.day-cell[data-out="true"] { background: transparent; }
+.day-cell:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 30%, transparent); }
+.day-cell[aria-pressed="true"] { box-shadow: inset 0 0 0 1.5px var(--text); }
+
 .module-head {
   display: flex;
   align-items: center;

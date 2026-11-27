@@ -27,5 +27,11 @@ export function Scene() {
   }, [kind, animation]);
   if (!kind) return null;
   // Portalled to <body> so it sits behind #root (z-index 1) rather than inside its stacking context.
-  return createPortal(<canvas key={kind} ref={ref} id="scene" aria-hidden="true" data-scene={kind} />, document.body);
+  return createPortal(
+    <>
+      <canvas key={kind} ref={ref} id="scene" aria-hidden="true" data-scene={kind} />
+      <div id="scene-dim" aria-hidden="true" />
+    </>,
+    document.body,
+  );
 }

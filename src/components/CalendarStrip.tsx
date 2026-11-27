@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { calendarHeatLevel } from "../domain/calendar";
 import {
   addDays,
   addMonths,
@@ -13,7 +14,7 @@ import {
   type ISODate,
 } from "../domain/dates";
 import { dayKcal, hasEntries, onGoal } from "../domain/calories";
-import { daySummary } from "../domain/tasks";
+import { daySummary, tasksForDay } from "../domain/tasks";
 import { useStore } from "../state/store";
 import { catColor } from "../theme/store";
 import { Flower } from "./Flower";
@@ -144,7 +145,9 @@ export function CalendarStrip({
                 onClick={() => onSelect(date)}
                 aria-label={fromISODate(date).toDateString()}
                 aria-pressed={isSel}
-                className={`group flex flex-col items-center gap-0.5 rounded-xl py-1 transition-opacity active:scale-95 ${
+                data-level={mode === "month" ? calendarHeatLevel(tasksForDay(data.tasks, date).length) : undefined}
+                data-out={dim ? "true" : undefined}
+                className={`day-cell group flex flex-col items-center gap-0.5 rounded-xl py-1 transition-opacity active:scale-95 ${
                   dim ? "opacity-35" : ""
                 }`}
               >

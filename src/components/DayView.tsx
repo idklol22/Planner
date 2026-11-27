@@ -319,7 +319,7 @@ export function DayView({
   }
 
   return (
-    <div className="px-4 pt-[calc(12px+var(--safe-top))] md:px-6 lg:grid lg:grid-cols-[420px_minmax(0,1fr)] lg:items-start lg:gap-5 lg:px-8 lg:pt-6">
+    <div className="px-4 pt-[calc(12px+var(--safe-top))] md:px-6 lg:grid lg:grid-cols-[420px_minmax(0,1fr)] lg:items-start lg:gap-4 lg:px-8 lg:pt-6">
       <div className="flex flex-col gap-4 lg:sticky lg:top-6">
       <header className="flex items-center justify-between gap-3 lg:contents">
         <div className="min-w-0 lg:hidden">

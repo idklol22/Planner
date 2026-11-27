@@ -51,7 +51,7 @@ export function Panel({
   className?: string;
   children: ReactNode;
 }) {
-  return <section className={`panel p-5 ${className}`}>{children}</section>;
+  return <section className={`panel glass-panel p-5 ${className}`}>{children}</section>;
 }
 
 export function Chip({
