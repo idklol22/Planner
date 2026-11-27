@@ -66,8 +66,38 @@
   font-family: "JetBrains Mono Variable", ui-monospace, monospace;
   font-size: 0.88em;
 }
-.planner-editor [data-content-type="image"] img {
-  border-radius: 12px;
+/* Photos: full column width, never a horizontal scrollbar or resize handles. */
+.planner-editor [data-content-type="image"] {
+  width: 100%;
+  margin-block: 10px;
+  max-width: 100%;
+}
+.planner-editor [data-content-type="image"] .bn-block-content {
+  padding-block: 0;
+}
+/* BlockNote sets an inline `width: fit-content` here; override it so photos
+   always use the whole note column. */
+.planner-editor [data-content-type="image"] .bn-file-block-content-wrapper {
+  width: 100% !important;
+  max-width: 100%;
+}
+.planner-editor [data-content-type="image"] img,
+.planner-editor [data-content-type="image"] .bn-visual-media {
+  display: block;
+  width: 100% !important;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  object-fit: contain;
+  cursor: zoom-in;
+}
+.planner-editor [data-content-type="image"] .bn-resize-handle {
+  display: none !important;
+}
+.note-editor {
+  min-width: 0;
+  overflow-x: hidden;
 }
 .planner-editor .bn-inline-content:has(> .ProseMirror-trailingBreak:only-child)::before,
 .planner-editor [data-is-empty-and-focused] .bn-inline-content::before {
