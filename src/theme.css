@@ -88,46 +88,58 @@ html[data-theme="contrast"] {
 }
 
 /* ── Page background ─────────────────────────────────────────────────────── */
-body {
+/* iOS ignores a fixed background attachment, so the gradients used to slide
+   with the page. Paint every theme background on a fixed pseudo-element
+   instead: it stays put like the old attachment did, but it puts no transform or
+   filter on any ancestor, so the app's position:fixed children (keyboard bar,
+   portals, #scene) keep the viewport as their containing block. */
+html::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
   background:
     radial-gradient(1100px 650px at 88% -12%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 62%),
     radial-gradient(900px 600px at -5% 110%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 60%),
-    var(--bg) fixed;
+    var(--bg);
+}
+body {
   font-size: var(--font-base);
 }
-html[data-theme="blue"] body {
+html[data-theme="blue"]::before {
   background:
     radial-gradient(1100px 650px at 88% -12%, rgba(29, 95, 224, 0.07), transparent 62%),
     radial-gradient(900px 600px at -5% 110%, rgba(29, 95, 224, 0.05), transparent 60%),
-    var(--bg) fixed;
+    var(--bg);
 }
-html[data-theme="contrast"] body {
+html[data-theme="contrast"]::before {
   background: var(--bg);
 }
 /* Scene themes: the canvas (#scene) paints on top of this, behind the app. */
-html[data-theme="midnight"] body {
+html[data-theme="midnight"]::before {
   background:
     radial-gradient(1100px 650px at 88% -12%, rgba(225, 225, 228, 0.1), transparent 62%),
     radial-gradient(900px 600px at -5% 110%, rgba(140, 160, 170, 0.07), transparent 60%),
-    var(--bg) fixed;
+    var(--bg);
 }
-html[data-theme="smoke"] body {
+html[data-theme="smoke"]::before {
   background:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1600' height='1000' preserveAspectRatio='none'%3E%3Cfilter id='m'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.006 .011' numOctaves='5' seed='11'/%3E%3CfeColorMatrix values='0 0 0 0 .6 0 0 0 0 .6 0 0 0 0 .62 1.5 0 0 0 -.62'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23m)'/%3E%3C/svg%3E")
-      center / cover no-repeat fixed,
-    radial-gradient(120% 90% at 50% 0%, #141415 0%, #060606 70%) fixed;
+      center / cover no-repeat,
+    radial-gradient(120% 90% at 50% 0%, #141415 0%, #060606 70%);
 }
-html[data-theme="smoke"][data-scene="1"] body {
+html[data-theme="smoke"][data-scene="1"]::before {
   background-blend-mode: normal;
 }
-html[data-theme="nimbus"] body {
-  background: linear-gradient(180deg, #05060f 0%, #080a18 100%) fixed;
+html[data-theme="nimbus"]::before {
+  background: linear-gradient(180deg, #05060f 0%, #080a18 100%);
 }
-html[data-theme="uzumaki"] body {
+html[data-theme="uzumaki"]::before {
   background:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1600' height='1000' preserveAspectRatio='none'%3E%3Cfilter id='m'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.0035 .007' numOctaves='5' seed='4'/%3E%3CfeColorMatrix values='0 0 0 0 .62 0 0 0 0 .62 0 0 0 0 .58 1 0 0 0 -.5'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23m)'/%3E%3C/svg%3E")
-      center / cover no-repeat fixed,
-    radial-gradient(140% 100% at 20% 0%, #23231f 0%, #10100e 55%, #070706 100%) fixed;
+      center / cover no-repeat,
+    radial-gradient(140% 100% at 20% 0%, #23231f 0%, #10100e 55%, #070706 100%);
 }
 /* Smoke and Uzumaki textures are bright specks: dim them so they stay a backdrop. */
 html[data-theme="smoke"] body::before,
@@ -143,14 +155,15 @@ html[data-theme="uzumaki"] body::before {
   background: rgba(0, 0, 0, 0.35);
 }
 /* Glass & animated backgrounds off (the default): every theme gets a flat page, no scrim textures. */
-html[data-fx="0"][data-theme] body {
+html[data-fx="0"][data-theme]::before {
   background: var(--bg);
 }
+/* No fixed dim scrim when all effects are off. */
 html[data-fx="0"][data-theme] body::before {
   display: none;
 }
 /* Wabi: matte, slightly worn. A very faint static grain, no glow. */
-html[data-fx="0"][data-theme="wabi"] body {
+html[data-fx="0"][data-theme="wabi"]::before {
   background:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 .9 0 0 0 0 .88 0 0 0 0 .8 0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E"),
     var(--bg);

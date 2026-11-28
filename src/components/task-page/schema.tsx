@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import katex from "katex";
 import { BlockNoteSchema, defaultBlockSpecs, defaultInlineContentSpecs } from "@blocknote/core";
 import { createReactBlockSpec, createReactInlineContentSpec } from "@blocknote/react";
@@ -97,6 +98,7 @@ function MathChip({
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(latex);
+  const inputRef = useRef<HTMLInputElement>(null);
   if (editing && editable) {
     const commit = () => {
       setEditing(false);
@@ -104,7 +106,7 @@ function MathChip({
     };
     return (
       <input
-        autoFocus
+        ref={inputRef}
         className="math-input"
         value={draft}
         size={Math.max(draft.length, 3)}
@@ -125,8 +127,14 @@ function MathChip({
       className="math-chip"
       title={editable ? "Click to edit" : undefined}
       onClick={() => {
-        setDraft(latex);
-        setEditing(true);
+        // An automatic focus attribute does not open the keyboard on
+        // WKWebView. Render the input synchronously from this tap, then focus
+        // it in the same gesture.
+        flushSync(() => {
+          setDraft(latex);
+          setEditing(true);
+        });
+        inputRef.current?.focus();
       }}
     >
       <Katex latex={latex} />

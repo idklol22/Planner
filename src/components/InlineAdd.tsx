@@ -8,7 +8,7 @@ import {
   type RefObject,
 } from "react";
 import type { ISODate } from "../domain/dates";
-import { useKeyboardInset } from "../lib/keyboard";
+import { keyboardDismissed, keyboardInset, useKeyboardInset } from "../lib/keyboard";
 import { useStore } from "../state/store";
 import {
   emptyDraft,
@@ -145,18 +145,43 @@ export function InlineAdd({
     };
   }, []);
 
-  // iOS can dismiss the keyboard without firing a blur. Detect the inset
-  // going from open to zero and commit the draft ourselves.
-  const lastInset = useRef(keyboard);
+  // iOS can dismiss the keyboard without firing a blur. Never treat
+  // `keyboard === 0` as that signal: the shared inset subtracts offsetTop,
+  // which WKWebView raises while the page scrolls with the keyboard up, so it
+  // can read 0 mid-typing. Track the height-only inset instead and let the
+  // pure `keyboardDismissed` decide, with the field's focus as a guard.
+  const lastInset = useRef(0);
   useEffect(() => {
-    const was = lastInset.current;
-    lastInset.current = keyboard;
-    if (was > 0 && keyboard === 0) {
-      dispatchRef.current({ type: "commit", reason: "keyboard-hide" });
-    } else if (keyboard > 0) {
-      // The keyboard may appear after focus; keep the row in view above it.
-      inputRef.current?.scrollIntoView({ block: "center", inline: "nearest" });
-    }
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    const measure = () => {
+      const heightInset = keyboardInset(window.innerHeight, viewport.height);
+      const was = lastInset.current;
+      lastInset.current = heightInset;
+      if (
+        keyboardDismissed(
+          window.innerHeight,
+          viewport.height,
+          viewport.offsetTop,
+          was > 0,
+          document.activeElement === inputRef.current,
+        )
+      ) {
+        dispatchRef.current({ type: "commit", reason: "keyboard-hide" });
+      }
+    };
+    measure();
+    viewport.addEventListener("resize", measure);
+    viewport.addEventListener("scroll", measure);
+    return () => {
+      viewport.removeEventListener("resize", measure);
+      viewport.removeEventListener("scroll", measure);
+    };
+  }, []);
+
+  // The keyboard may appear after focus; keep the row in view above it.
+  useEffect(() => {
+    if (keyboard > 0) inputRef.current?.scrollIntoView({ block: "center", inline: "nearest" });
   }, [keyboard]);
 
   function onKeyDown(e: ReactKeyboardEvent<HTMLInputElement>) {
