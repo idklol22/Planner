@@ -35,19 +35,23 @@ export const noCalorieTap: CalorieTapDecision = {
  * @param typed      Either field holds uncommitted text.
  * @param keyboardUp The on-screen keyboard is up for the open form.
  * @param keepTap    The tap is on a form control, another "+", "Add goal", etc.
+ * @param discard    The tap is on Cancel: its own click throws the draft away,
+ *                   so committing here would save what the user just cancelled.
  */
 export function calorieOutsideTapDecision(
   formOpen: boolean,
   typed: boolean,
   keyboardUp: boolean,
   keepTap: boolean,
+  discard = false,
 ): CalorieTapDecision {
   // A closed form is never a reason to swallow a click. Returning the empty
   // decision on every pointerdown also clears a suppression left behind by a
-  // scroll gesture that produced no click.
-  if (!formOpen) return noCalorieTap;
+  // scroll gesture that produced no click. Cancel is the same kind of no-op:
+  // the click that follows does the discarding.
+  if (!formOpen || discard) return noCalorieTap;
 
-  // Meters, Cancel, Remove and other "+" buttons must save the draft, but the
+  // Meters, Remove and other "+" buttons must save the draft, but the
   // row has to stay put until their own click fires — collapsing now would
   // move the button out from under the finger. Their handler decides what to
   // do with the open form once the click has landed.

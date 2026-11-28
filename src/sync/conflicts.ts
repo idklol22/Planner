@@ -33,7 +33,9 @@ export interface ConflictStorage {
 }
 
 export interface ConflictStore {
-  save(records: ConflictInput[], at?: string): void;
+  /** True only when every copy was actually persisted; the caller must not
+   *  promise the user a copy that could not be written. */
+  save(records: ConflictInput[], at?: string): boolean;
   all(): ConflictRecord[];
 }
 
@@ -71,15 +73,39 @@ function canonical(value: unknown): unknown {
   return value;
 }
 
-export function sameRowContent(a: PullRow, b: PullRow): boolean {
+export function sameContent(a: unknown, b: unknown): boolean {
   return JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
 }
 
+export function sameRowContent(a: PullRow, b: PullRow): boolean {
+  return sameContent(a, b);
+}
+
+/** A note from the rejected op can survive a pull when the controller merges
+ *  the newer local note into the winning hub row. In that case the user has
+ *  not lost the edit, so it is not a conflict worth alarming about. */
+export function noteWasPreserved(
+  sent: PullRow,
+  hub: PullRow,
+  local: PullRow | null | undefined,
+): boolean {
+  if (!local) return false;
+  const note = (sent as { note?: unknown }).note;
+  if (!note || typeof note !== "object") return false;
+  // The note must actually be the disputed field; otherwise other edits in
+  // this row were genuinely lost and still need to be reported.
+  if (sameContent(note, (hub as { note?: unknown }).note)) return false;
+  return sameContent(note, (local as { note?: unknown }).note);
+}
+
 /** One line per sync: name at most two items and say what happened to them. */
-export function describeConflicts(records: ConflictRecord[]): string {
+export function describeConflicts(records: ConflictRecord[], copyKept = true): string {
+  const kept = copyKept
+    ? "A copy was kept on this device."
+    : "No copy could be kept on this device (storage may be full).";
   const known = records.filter((record) => record.reason === "superseded");
   if (known.length === 0) {
-    return "Some changes could not be saved on the hub. A copy was kept on this device.";
+    return `Some changes could not be saved on the hub. ${kept}`;
   }
   const label = (record: ConflictRecord) => {
     const row = record.row as unknown as { title?: unknown; name?: unknown; label?: unknown };
@@ -91,7 +117,7 @@ export function describeConflicts(records: ConflictRecord[]): string {
   const names = known.slice(0, 2).map(label);
   const rest = known.length > 2 ? ` and ${known.length - 2} more` : "";
   const items = `${names.join(", ")}${rest}`;
-  return `${items} ${known.length === 1 ? "was" : "were"} not saved because a newer version exists on another device. A copy was kept on this device.`;
+  return `${items} ${known.length === 1 ? "was" : "were"} not saved because a newer version exists on another device. ${kept}`;
 }
 
 export class LocalConflictStore implements ConflictStore {
@@ -114,8 +140,8 @@ export class LocalConflictStore implements ConflictStore {
     }
   }
 
-  save(records: ConflictInput[], at = new Date().toISOString()): void {
-    if (records.length === 0) return;
+  save(records: ConflictInput[], at = new Date().toISOString()): boolean {
+    if (records.length === 0) return true;
     const incoming = new Map<string, ConflictRecord>();
     for (const record of records) {
       incoming.set(conflictKey(record), { ...record, savedAt: at });
@@ -130,8 +156,10 @@ export class LocalConflictStore implements ConflictStore {
     const kept = [...merged.values()].slice(-MAX_CONFLICTS);
     try {
       this.store.setItem(CONFLICTS_KEY, JSON.stringify(kept));
+      return true;
     } catch {
-      // Quota or private mode: the current session still has the notice.
+      // Quota or private mode: say so instead of promising a kept copy.
+      return false;
     }
   }
 }

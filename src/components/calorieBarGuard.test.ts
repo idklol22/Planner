@@ -45,6 +45,21 @@ describe("the calorie form dismisses like the inline task field", () => {
     expect(bar.match(/data-calorie-keep-tap/g)?.length).toBeGreaterThanOrEqual(4);
   });
 
+  it("closes the form after an external keep-tap's click has landed", async () => {
+    const bar = await source("./CalorieBar.tsx");
+    expect(bar).toContain("closeAfterClick.current = keepTap");
+    expect(bar).toContain('el?.closest?.("[data-calorie-keep-tap]")');
+    expect(bar).toMatch(/queueMicrotask\(\(\) => \{[\s\S]{0,80}setMode\("idle"\)/);
+    expect(bar).toContain("closeAfterClick.current = false;");
+  });
+
+  it("never commits a draft from the Cancel control", async () => {
+    const bar = await source("./CalorieBar.tsx");
+    expect(bar).toContain("data-calorie-discard");
+    expect(bar).toContain('el?.closest?.("[data-calorie-discard]")');
+    expect(bar).toMatch(/discard,\n      \);/);
+  });
+
   it("detects the keyboard from viewport height, not a scrolled offset", async () => {
     const bar = await source("./CalorieBar.tsx");
     expect(bar).toContain('import { keyboardOpenFromHeight } from "../lib/keyboard"');

@@ -82,6 +82,9 @@ export function CalorieBar({ date }: { date: ISODate }) {
   const blocked = useRef(false);
   /** The click following a dismissal pointerdown is swallowed only once. */
   const suppressClick = useRef(false);
+  /** External "+"/Add goal controls save without collapsing the row under the
+   *  finger, so close the form after their own click has been dispatched. */
+  const closeAfterClick = useRef(false);
   /** Height-only keyboard signal: WKWebView's offsetTop lies while scrolling. */
   const keyboardUp = useRef(false);
   const lastNav = useRef(0);
@@ -131,6 +134,7 @@ export function CalorieBar({ date }: { date: ISODate }) {
     // are cleared, even when WKWebView never blurred them on the day change.
     if (prevDate.current !== date) {
       suppressClick.current = false;
+      closeAfterClick.current = false;
       commitFor(prevDate.current, false);
       prevDate.current = date;
     }
@@ -145,6 +149,7 @@ export function CalorieBar({ date }: { date: ISODate }) {
     lastNav.current = nav.seq;
     if (nav.openCalories) {
       suppressClick.current = false;
+      closeAfterClick.current = false;
       blocked.current = false;
       setKcal("");
       setProtein("");
@@ -210,6 +215,7 @@ export function CalorieBar({ date }: { date: ISODate }) {
         return;
       }
       const keepTap = !!el?.closest?.("[data-calorie-keep-tap], [data-inline-add-keep-tap]");
+      const discard = !!el?.closest?.("[data-calorie-discard]");
       const active = document.activeElement;
       const focused = active === kcalRef.current || active === proteinRef.current;
       const decision = calorieOutsideTapDecision(
@@ -217,10 +223,14 @@ export function CalorieBar({ date }: { date: ISODate }) {
         !!(draftRef.current.kcal || draftRef.current.protein),
         keyboardUp.current || focused,
         keepTap,
+        discard,
       );
       // Overwrite on every pointerdown: a touch-scroll has no click, so its
       // suppression must not be left to swallow the next real tap's click.
       suppressClick.current = decision.suppress;
+      // Form controls manage their own open state; another "+" or "Add goal"
+      // does not, so arrange to close once their click has landed.
+      closeAfterClick.current = keepTap && !el?.closest?.("[data-calorie-keep-tap]");
       if (!decision.commit) return;
       // Keep-tap controls save with close:false so the row stays put until
       // their own click fires; a plain outside tap closes it right away.
@@ -228,6 +238,15 @@ export function CalorieBar({ date }: { date: ISODate }) {
       if (decision.blur) releaseFocus();
     };
     const onClickCapture = (e: MouseEvent) => {
+      if (closeAfterClick.current) {
+        closeAfterClick.current = false;
+        // Microtasks run after the whole click dispatch: the control under the
+        // finger has handled the tap before the row collapses.
+        queueMicrotask(() => {
+          setMode("idle");
+          releaseFocus();
+        });
+      }
       if (!suppressClick.current) return;
       suppressClick.current = false;
       e.preventDefault();
@@ -235,6 +254,7 @@ export function CalorieBar({ date }: { date: ISODate }) {
     };
     const onExit = () => {
       suppressClick.current = false;
+      closeAfterClick.current = false;
       if (modeRef.current !== "add") return;
       commitFor(dateRef.current, true);
       releaseFocus();
@@ -388,6 +408,7 @@ export function CalorieBar({ date }: { date: ISODate }) {
               type="button"
               data-calorie-keep-tap
               data-inline-add-keep-tap
+              data-calorie-discard
               onPointerDown={(e) => e.preventDefault()}
               onClick={discard}
               className="cal-press min-h-11 shrink-0 px-1 text-[12px] text-faint hover:text-ink"

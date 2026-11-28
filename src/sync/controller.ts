@@ -83,7 +83,7 @@ export interface SyncControllerOptions {
   /** Safety copies for rows the hub refused to store. */
   conflicts?: ConflictStore;
   /** At most one call per sync when an edit was not saved. */
-  onConflicts?(records: ConflictRecord[]): void;
+  onConflicts?(records: ConflictRecord[], copyKept: boolean): void;
 }
 
 export interface SyncStatus {

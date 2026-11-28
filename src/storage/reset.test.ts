@@ -18,6 +18,7 @@ describe("reset all data", () => {
   it("lists every planner data, sync and LetCode key", () => {
     expect([...RESET_KEYS].sort()).toEqual(
       [
+        "planner.conflicts.v1",
         "planner.cursor.v1",
         "planner.lastSynced.v1",
         "planner.letcode.cursor.v1",

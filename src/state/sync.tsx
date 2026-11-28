@@ -136,9 +136,12 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const actionsRef = useRef(actions);
   actionsRef.current = actions;
 
-  const onConflicts = useCallback((records: ConflictRecord[]) => {
+  const onConflicts = useCallback((records: ConflictRecord[], copyKept: boolean) => {
     if (records.length === 0) return;
-    setConflictNotice({ id: Date.now() + Math.random(), message: describeConflicts(records) });
+    setConflictNotice({
+      id: Date.now() + Math.random(),
+      message: describeConflicts(records, copyKept),
+    });
   }, []);
 
   const configured = isHubConfigured(config);

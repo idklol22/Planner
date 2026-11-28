@@ -6,6 +6,7 @@ import {
   type ConflictRecord,
   type ConflictStore,
   LocalConflictStore,
+  noteWasPreserved,
   sameRowContent,
 } from "./conflicts";
 import { isNewerRow, LocalOutbox, type Outbox } from "./queue";
@@ -35,8 +36,9 @@ export interface SyncEngineOptions {
   outbox?: Outbox;
   /** Where rejected rows are copied before the next pull replaces them. */
   conflicts?: ConflictStore;
-  /** Called at most once per sync with the rows that were not saved. */
-  onConflicts?(records: ConflictRecord[]): void;
+  /** Called at most once per sync with the rows that were not saved and
+   *  whether any local copy of them actually made it to storage. */
+  onConflicts?(records: ConflictRecord[], copyKept: boolean): void;
 }
 
 /** Ready-made browser cursor store; any { get, set } object works too. */
@@ -137,10 +139,11 @@ export class SyncEngine {
   /** Report once per sync, however many batches were affected. */
   private async runPush(): Promise<void> {
     const lost: ConflictRecord[] = [];
-    await this.doPush(lost);
+    const copies = { kept: true };
+    await this.doPush(lost, copies);
     if (lost.length > 0) {
       try {
-        this.options.onConflicts?.(lost);
+        this.options.onConflicts?.(lost, copies.kept);
       } catch {
         // A broken notification must not fail the sync itself.
       }
@@ -150,7 +153,7 @@ export class SyncEngine {
   /** Drain the outbox in batches of 200. Failures keep the ops and retry with
    *  exponential backoff; the promise resolves either way so background calls
    *  never produce unhandled rejections. */
-  private async doPush(lost: ConflictRecord[]): Promise<void> {
+  private async doPush(lost: ConflictRecord[], copies: { kept: boolean }): Promise<void> {
     try {
       for (;;) {
         const batch = this.outbox.pending(PUSH_BATCH_SIZE);
@@ -159,7 +162,7 @@ export class SyncEngine {
         // A rejected row must not replay forever: ack it, then resolve it from
         // the hub's current rows and keep a local copy of the losing version.
         this.outbox.ack(batch);
-        if (result.applied < batch.length) await this.investigate(batch, lost);
+        if (result.applied < batch.length) await this.investigate(batch, lost, copies);
       }
       this.clearBackoff();
     } catch {
@@ -169,7 +172,11 @@ export class SyncEngine {
 
   /** The hub only reports how many ops it applied. Read the rows back so a
    *  genuine last-write-wins loss is told apart from a harmless repeat. */
-  private async investigate(sent: HubOp[], lost: ConflictRecord[]): Promise<void> {
+  private async investigate(
+    sent: HubOp[],
+    lost: ConflictRecord[],
+    copies: { kept: boolean },
+  ): Promise<void> {
     const wanted = new Map<string, HubOp>();
     for (const op of sent) wanted.set(`${op.table}:${op.row.id}`, op);
     const found = new Map<string, SeenRow>();
@@ -209,12 +216,15 @@ export class SyncEngine {
         // The count says something lost, but we cannot identify the winner.
         records.push({ table: op.table, row: op.row, savedAt: at, reason: "unconfirmed" });
       } else if (isNewerRow(hubRow, op.row) && !sameRowContent(hubRow, op.row)) {
+        // The controller may already have merged a newer local note back into
+        // the pulled row; then the edit survived and there is no loss to report.
+        if (noteWasPreserved(op.row, hubRow, this.options.getLocal(op.table, op.row.id))) continue;
         records.push({ table: op.table, row: op.row, savedAt: at, reason: "superseded" });
       }
       // Otherwise the hub already has this row: a repeat, not a conflict.
     }
     if (records.length === 0) return;
-    this.conflicts.save(records, at);
+    if (!this.conflicts.save(records, at)) copies.kept = false;
     lost.push(...records);
   }
 

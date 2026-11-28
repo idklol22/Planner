@@ -53,6 +53,21 @@ export function saveBlockedMessage(reason: SaveBlockReason): string {
     : "Saved data could not be read, so changes are not being saved. The original is left untouched while the app retries.";
 }
 
+/** Word the load report from what was actually copied, not from the reason
+ *  alone: a partial load may only have copies of the dropped records. */
+export function recoveryMessage(issue: LoadIssue): string {
+  const kept = issue.quarantinedKeys.length;
+  if (issue.reason === "unreadable") {
+    return kept
+      ? "Saved data could not be read. The original was copied aside."
+      : "Saved data could not be read. The original was kept as a backup.";
+  }
+  if (kept) {
+    return `Some saved items could not be read (${issue.dropped} skipped). Copies of those items were kept.`;
+  }
+  return `Some saved settings could not be read (${issue.dropped} skipped) and were repaired.`;
+}
+
 /** The toast lives in the store so it can report a failed load on the very
  *  first render, before the app's toast provider (a child) is mounted. */
 function RecoveryNotice({ issue }: { issue: LoadIssue }) {
@@ -62,10 +77,7 @@ function RecoveryNotice({ issue }: { issue: LoadIssue }) {
     return () => window.clearTimeout(timer);
   }, []);
   if (!open) return null;
-  const message =
-    issue.reason === "unreadable"
-      ? "Saved data could not be read. The original was kept as a backup."
-      : `Some saved items could not be read (${issue.dropped} skipped). The original was kept as a backup.`;
+  const message = recoveryMessage(issue);
   return (
     <div
       role="status"

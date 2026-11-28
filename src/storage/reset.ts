@@ -1,4 +1,5 @@
 import { LETCODE_CURSOR_KEY, LETCODE_SEEN_KEY, MIRROR_KEY } from "../sync/controller";
+import { CONFLICTS_KEY } from "../sync/conflicts";
 import { CURSOR_KEY, LAST_SYNC_KEY } from "../sync/engine";
 import { OUTBOX_KEY } from "../sync/queue";
 import { DATA_KEY, HANDOFF_PREFIX } from "./local";
@@ -15,6 +16,7 @@ export const RESET_KEYS: readonly string[] = [
   LETCODE_CURSOR_KEY,
   LETCODE_SEEN_KEY,
   BACKUP_KEY,
+  CONFLICTS_KEY,
 ];
 export const RESET_PREFIXES: readonly string[] = [HANDOFF_PREFIX, QUARANTINE_PREFIX];
 

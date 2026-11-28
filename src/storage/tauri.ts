@@ -4,11 +4,14 @@ import { recoverStored, retrySafetyCopies } from "./recovery";
 
 /** The native store holds one document; safety copies live in the WebView
  *  storage alongside the other app settings. */
-let readFailed = false;
+/** Set only when `read_store` throws. Only a reload that the store adopts may
+ *  clear it: a diagnostic read from `save()` must never open the gate, or a
+ *  later flush could write in-memory defaults over the recovered original. */
+let reloadRequired = false;
 
 /** Test seam: forget a remembered read failure. */
 export function resetTauriReadState() {
-  readFailed = false;
+  reloadRequired = false;
 }
 
 /** `undefined` is the sentinel for "invoke threw": it is not the same as
@@ -26,34 +29,36 @@ async function read(): Promise<LoadResult> {
   if (raw === undefined) {
     // Nothing was read, so nothing was backed up. The store on disk is still
     // the only copy: do not let any save replace it with defaults.
-    readFailed = true;
+    reloadRequired = true;
     return { data: null, issue: null, blocked: true, readFailed: true };
   }
-  readFailed = false;
+  // Only a reload the store adopts clears the latch. A diagnostic read from
+  // save() must not, or a later flush could write stale in-memory data over
+  // the file that just became readable.
   return recoverStored(raw, localStorage);
+}
+
+async function reload(): Promise<LoadResult> {
+  const result = await read();
+  if (!result.readFailed) reloadRequired = false;
+  return result;
 }
 
 export const tauriAdapter: StorageAdapter = {
   async load() {
-    return (await read()).data;
+    return (await reload()).data;
   },
 
   async loadWithReport() {
-    return read();
+    return reload();
   },
 
   async retryLoad() {
-    return read();
+    return reload();
   },
 
   async save(data) {
-    if (readFailed) {
-      // Retry the read on every save attempt. Even when it now works, the
-      // caller's in-memory data may be defaults, so it must be reloaded by the
-      // store rather than written over the real file.
-      await read();
-      throw new SafetyCopyError("read");
-    }
+    if (reloadRequired) throw new SafetyCopyError("read");
     if (!retrySafetyCopies(localStorage)) throw new SafetyCopyError("backup");
     await invoke("write_store", { contents: JSON.stringify(data) });
   },

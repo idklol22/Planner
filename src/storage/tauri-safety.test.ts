@@ -89,4 +89,31 @@ describe("native read failures", () => {
     await expect(tauriAdapter.save(defaultData())).resolves.toBeUndefined();
     expect(invoke).toHaveBeenCalledWith("write_store", { contents: JSON.stringify(defaultData()) });
   });
+
+  it("a diagnostic save never opens the write gate for a later flush", async () => {
+    const storage = fakeStorage();
+    vi.stubGlobal("localStorage", storage);
+    let readFails = true;
+    invoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "read_store") {
+        if (readFails) throw new Error("disk busy");
+        return damaged();
+      }
+      return "/tmp/note.md";
+    });
+
+    await tauriAdapter.loadWithReport!();
+    await expect(tauriAdapter.save(defaultData())).rejects.toMatchObject({ reason: "read" });
+
+    // The disk recovered, but nobody has reloaded its contents yet: a second
+    // background flush must still not write defaults over the real store.
+    readFails = false;
+    await expect(tauriAdapter.save(defaultData())).rejects.toMatchObject({ reason: "read" });
+    expect(invoke).not.toHaveBeenCalledWith("write_store", expect.anything());
+
+    // Only after the store adopts a fresh read may saving resume.
+    await tauriAdapter.retryLoad!();
+    await expect(tauriAdapter.save(defaultData())).resolves.toBeUndefined();
+    expect(invoke).toHaveBeenCalledWith("write_store", expect.anything());
+  });
 });

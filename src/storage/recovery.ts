@@ -38,6 +38,11 @@ export interface BackupEnvelope {
 export interface SafetyCopy {
   key: string;
   value: string;
+  /** The existing value could not be read: never replace it, just wait until
+   *  it is readable again. Used when verification fails on a transient error. */
+  ifAbsent?: true;
+  /** No copy can be computed at all: hold saves until a fresh load re-plans. */
+  hold?: true;
 }
 
 const RANK: Record<BackupQuality, number> = { unreadable: 0, partial: 1 };
@@ -193,7 +198,17 @@ function copyIsThere(storage: RecoveryStorage, copy: SafetyCopy): boolean {
 
 /** Write a copy and verify it by reading it back; never trust setItem alone. */
 function writeCopy(storage: RecoveryStorage, copy: SafetyCopy): boolean {
-  if (copyIsThere(storage, copy)) return true;
+  if (copy.hold) return false;
+  let existing: string | null;
+  try {
+    existing = storage.getItem(copy.key);
+  } catch {
+    return false;
+  }
+  // An unreadable slot may already hold the only good copy. Leave it alone; a
+  // fabricated marker here would destroy it and clear the gate falsely.
+  if (copy.ifAbsent && existing !== null) return true;
+  if (!copy.ifAbsent && existing === copy.value) return true;
   try {
     storage.setItem(copy.key, copy.value);
   } catch {
@@ -234,14 +249,27 @@ export function recoverStored(raw: string | null, storage: RecoveryStorage): Loa
       plan = planRecovery(raw, existingBackup);
     } catch {
       plan = { data: null, quarantine: [], backup: null, issue: null };
-      needed = [{ key: BACKUP_KEY, value: existingBackup ?? "\u0000unverifiable-backup" }];
+      // We cannot tell what is needed. Keep whatever is already in the slot,
+      // or hold saves if there is nothing we can safely copy.
+      needed = existingBackup
+        ? [{ key: BACKUP_KEY, value: existingBackup, ifAbsent: true }]
+        : [{ key: BACKUP_KEY, value: "", hold: true }];
     }
     if (plan.backup) needed.push({ key: BACKUP_KEY, value: JSON.stringify(plan.backup) });
     needed.push(...plan.quarantine);
   } catch {
-    // get/set on the storage itself failed: hold every save.
-    needed = [{ key: BACKUP_KEY, value: "\u0000unverifiable-storage" }];
-    plan = { data: null, quarantine: [], backup: null, issue: null };
+    // The backup slot could not be read. Plan as if it were empty, but never
+    // overwrite whatever is actually there: wait until the read works again.
+    try {
+      plan = planRecovery(raw, null);
+      if (plan.backup) {
+        needed.push({ key: BACKUP_KEY, value: JSON.stringify(plan.backup), ifAbsent: true });
+      }
+      needed.push(...plan.quarantine);
+    } catch {
+      needed = [{ key: BACKUP_KEY, value: "", hold: true }];
+      plan = { data: null, quarantine: [], backup: null, issue: null };
+    }
   }
 
   const all = mergeCopies(pendingSafetyCopies(storage), needed);
