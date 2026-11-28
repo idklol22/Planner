@@ -1,4 +1,5 @@
 import { useRef, useState, type ReactNode } from "react";
+import { Collapse } from "./Collapse";
 import { ChevronLeft } from "lucide-react";
 import { addDays } from "../domain/dates";
 import { TASK_KINDS, type Task } from "../domain/model";
@@ -33,7 +34,7 @@ function Switch({ on, onChange, label }: { on: boolean; onChange: (v: boolean) =
       aria-checked={on}
       aria-label={label}
       onClick={() => onChange(!on)}
-      className={`min-h-11 min-w-11 text-[13px] font-semibold ${on ? "text-accent" : "text-faint"}`}
+      className={`ui-press min-h-11 min-w-11 text-[13px] font-semibold ${on ? "text-accent" : "text-faint"}`}
     >
       {on ? "On" : "Off"}
     </button>
@@ -101,7 +102,7 @@ function SheetBody({
           {isSub && parent ? (
             <button
               onClick={() => onOpen(parent.id)}
-              className="flex min-h-11 min-w-0 items-center gap-1 py-1 pr-3 text-[13px] font-medium text-muted"
+              className="ui-press flex min-h-11 min-w-0 items-center gap-1 py-1 pr-3 text-[13px] font-medium text-muted"
             >
               <ChevronLeft size={18} />
               <span className="truncate">{parent.title}</span>
@@ -114,11 +115,11 @@ function SheetBody({
               href={taskHref(task.id)}
               aria-label="Open as page"
               title="Open as page"
-              className="flex min-h-11 items-center px-1 text-[12px] text-muted"
+              className="ui-press flex min-h-11 items-center px-1 text-[12px] text-muted"
             >
               Open as page
             </a>
-            <button onClick={onClose} aria-label="Close" className="flex min-h-11 items-center px-1 text-[12px] text-muted">
+            <button onClick={onClose} aria-label="Close" className="ui-press flex min-h-11 items-center px-1 text-[12px] text-muted">
               Close
             </button>
           </div>
@@ -157,7 +158,7 @@ function SheetBody({
                   <button
                     key={c.id}
                     onClick={() => actions.updateTask(task.id, { categoryId: c.id })}
-                    className={`flex min-h-11 shrink-0 items-center gap-2 text-[13px] ${
+                    className={`ui-press flex min-h-11 shrink-0 items-center gap-2 text-[13px] ${
                       on ? "font-semibold text-ink" : "text-muted"
                     }`}
                   >
@@ -188,7 +189,7 @@ function SheetBody({
                 {task.time && (
                   <button
                     onClick={() => actions.updateTask(task.id, { time: undefined, durationMin: undefined })}
-                    className="min-h-11 text-[12px] text-faint"
+                    className="ui-press min-h-11 text-[12px] text-faint"
                   >
                     Clear
                   </button>
@@ -234,7 +235,7 @@ function SheetBody({
                   </select>
                 )}
               </Field>
-              {repeatValue === "custom" && (
+              <Collapse open={repeatValue === "custom"}>
                 <div className="flex justify-between gap-1 px-1 py-3">
                   {DAY_NAMES.map((name, day) => {
                     const on = customDays.includes(day);
@@ -243,7 +244,7 @@ function SheetBody({
                         key={day}
                         onClick={() => toggleDay(day)}
                         aria-pressed={on}
-                        className={`h-11 w-9 text-[12px] font-semibold ${
+                        className={`ui-press h-11 w-9 text-[12px] font-semibold ${
                           on ? "text-accent underline underline-offset-4" : "text-faint"
                         }`}
                       >
@@ -252,7 +253,7 @@ function SheetBody({
                     );
                   })}
                 </div>
-              )}
+              </Collapse>
               <Field label="Deadline">
                 <Switch on={task.deadline} label="Deadline" onChange={(v) => actions.updateTask(task.id, { deadline: v })} />
               </Field>
@@ -292,7 +293,7 @@ function SheetBody({
                     />
                     <button
                       onClick={() => onOpen(sub.id)}
-                      className={`min-w-0 flex-1 py-1.5 text-left text-[15px] ${
+                      className={`ui-press min-w-0 flex-1 py-1.5 text-left text-[15px] ${
                         sub.done ? "text-faint line-through decoration-ink/30" : ""
                       }`}
                     >
@@ -302,7 +303,7 @@ function SheetBody({
                     <button
                       onClick={() => actions.deleteTask(sub.id)}
                       aria-label={`Delete ${sub.title}`}
-                      className="min-h-11 px-1 text-[12px] text-faint"
+                      className="ui-press min-h-11 px-1 text-[12px] text-faint"
                     >
                       Remove
                     </button>
@@ -349,7 +350,7 @@ function SheetBody({
             onClose();
           }}
           aria-label="Delete"
-          className="min-h-11 text-[13px] font-medium text-rose"
+          className="ui-press min-h-11 text-[13px] font-medium text-rose"
         >
           Delete
         </button>
@@ -362,7 +363,7 @@ function SheetBody({
                 notify("Moved to the next day", "info");
                 onClose();
               }}
-              className="min-h-11 text-[13px] font-medium text-muted"
+              className="ui-press min-h-11 text-[13px] font-medium text-muted"
             >
               Tomorrow
             </button>
@@ -371,7 +372,7 @@ function SheetBody({
                 actions.duplicateTask(task.id);
                 notify("Task duplicated", "info");
               }}
-              className="min-h-11 text-[13px] font-medium text-muted"
+              className="ui-press min-h-11 text-[13px] font-medium text-muted"
             >
               Duplicate
             </button>
@@ -385,9 +386,12 @@ function SheetBody({
 /** Side panel on desktop, bottom sheet on phones. */
 export function TaskSheet({
   taskId,
+  closing = false,
   onOpen,
 }: {
   taskId: string;
+  /** Set by the owner while the panel is animating down (usePresence). */
+  closing?: boolean;
   onOpen: (id: string | null) => void;
 }) {
   const { data } = useStore();
@@ -400,12 +404,12 @@ export function TaskSheet({
         aria-label="Close task"
         onPointerDown={(e) => e.preventDefault()}
         onClick={close}
-        className="animate-fade fixed inset-0 z-40 cursor-default bg-scrim md:hidden"
+        className={`panel-backdrop fixed inset-0 z-40 cursor-default bg-scrim md:hidden ${closing ? "is-closing" : ""}`}
       />
       <aside
         role="dialog"
         aria-label="Task"
-        className="sheet-panel fixed inset-x-0 bottom-0 z-50 flex h-[92dvh] flex-col overflow-hidden border-t border-line bg-canvas md:static md:z-auto md:h-full md:w-[380px] md:shrink-0 md:border-l md:border-t-0 lg:w-[460px]"
+        className={`panel-sheet task-panel fixed inset-x-0 bottom-0 z-50 flex h-[92dvh] flex-col overflow-hidden border-t border-line bg-canvas md:static md:z-auto md:h-full md:w-[380px] md:shrink-0 md:border-l md:border-t-0 lg:w-[460px] ${closing ? "is-closing" : ""}`}
       >
         <SheetBody key={task.id} task={task} onClose={close} onOpen={onOpen} />
       </aside>

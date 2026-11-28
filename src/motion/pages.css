@@ -1,1 +1,227 @@
-/* Motion owned by the pages area. */
+/* Motion owned by the pages area: screen pushes, page blocks, toasts, panels,
+   row collapses and shared control feedback. Only transform / opacity animate
+   here, plus short 0fr↔1fr grid collapses where a row must leave the flow.
+   Durations come from src/motion/index.css; reduced motion is shortened there. */
+
+/* ── Menu page push / pop ─────────────────────────────────────────────── */
+@keyframes page-push-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.page {
+  /* `backwards` leaves no resting transform, so fixed children keep the
+     viewport as their containing block once the push has finished. */
+  animation: page-push-in var(--motion) var(--ease-out) backwards;
+  transition: transform var(--motion) var(--ease-spring);
+}
+.page.is-dragging {
+  animation: none;
+  transition: none;
+}
+.page.is-exiting {
+  animation: none;
+  transform: translateX(100%);
+  transition: transform var(--motion) var(--ease-in);
+}
+
+/* The day screen underneath shifts a little and dims while a page is up. */
+.page-behind {
+  transform: translateX(-16px);
+  opacity: 0.55;
+  transition: transform var(--motion) var(--ease-out), opacity var(--motion) var(--ease-out);
+}
+
+/* A short, staggered rise for the first few blocks of a page. */
+@keyframes page-block-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.page-block {
+  animation: page-block-in var(--motion) var(--ease-out) backwards;
+}
+.page-block:nth-child(2) {
+  animation-delay: 20ms;
+}
+.page-block:nth-child(3) {
+  animation-delay: 40ms;
+}
+.page-block:nth-child(4) {
+  animation-delay: 60ms;
+}
+.page-block:nth-child(5) {
+  animation-delay: 80ms;
+}
+.page-block:nth-child(6) {
+  animation-delay: 100ms;
+}
+
+/* ── Row / detail collapse ───────────────────────────────────────────── */
+.collapse-grid,
+.row-shell {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--motion) var(--ease-out), opacity var(--motion) var(--ease-out);
+}
+.collapse-grid {
+  opacity: 0;
+}
+.collapse-grid.is-open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.row-shell {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.row-shell.is-exiting {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+.collapse-inner,
+.row-shell > * {
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── Bottom sheets (habit editor, task panel, confirm dialog) ────────── */
+@keyframes panel-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes panel-rise {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes panel-side-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+.panel-backdrop {
+  animation: panel-fade-in var(--motion) var(--ease-out) backwards;
+}
+.panel-backdrop.is-closing {
+  animation: none;
+  opacity: 0;
+  transition: opacity var(--motion) var(--ease-in);
+}
+.panel-sheet {
+  animation: panel-rise var(--motion) var(--ease-out) backwards;
+}
+.panel-sheet.is-closing {
+  animation: none;
+  transform: translateY(100%);
+  transition: transform var(--motion) var(--ease-in);
+}
+/* The task inspector is a side panel on wide screens, so it enters sideways. */
+@media (min-width: 768px) {
+  .task-panel {
+    animation: panel-side-in var(--motion) var(--ease-out) backwards;
+  }
+  .task-panel.is-closing {
+    animation: none;
+    transform: translateX(24px);
+    opacity: 0;
+    transition: transform var(--motion) var(--ease-in), opacity var(--motion) var(--ease-in);
+  }
+}
+
+/* ── Toasts ──────────────────────────────────────────────────────────── */
+@keyframes toast-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.toast-slot {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows var(--motion) var(--ease-out);
+}
+.toast-slot.is-closing {
+  grid-template-rows: 0fr;
+}
+.toast-slot > * {
+  min-height: 0;
+  overflow: hidden;
+}
+.toast-card {
+  animation: toast-slide-in var(--motion-fast) var(--ease-out) backwards;
+}
+.toast-card.is-closing {
+  animation: none;
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity var(--motion) var(--ease-in), transform var(--motion) var(--ease-in);
+}
+
+/* ── Shared controls ─────────────────────────────────────────────────── */
+/* Press feedback is instant: no transition on transform while pressed. */
+.ui-press {
+  transition: opacity var(--motion-fast) linear;
+}
+.ui-press:active:not(:disabled) {
+  opacity: 0.72;
+  transform: scale(0.97);
+}
+
+/* A focus underline that grows from the left instead of snapping on. */
+.ui-input {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+.ui-input-line {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--accent);
+  opacity: 0;
+  transform: scaleX(0.5);
+  transform-origin: left center;
+  pointer-events: none;
+  transition: transform var(--motion-fast) var(--ease-out), opacity var(--motion-fast) var(--ease-out);
+}
+.ui-input:focus-within .ui-input-line {
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+.ui-switch-knob {
+  transition: transform var(--motion-fast) var(--ease-spring);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-block:nth-child(n) {
+    animation-delay: 0ms;
+  }
+}

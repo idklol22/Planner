@@ -53,7 +53,7 @@ function Toggle({
   onChange: (v: boolean) => void;
 }) {
   return (
-    <label className={`flex items-center gap-3 py-2 ${disabled ? "opacity-50" : "cursor-pointer"}`}>
+    <label className={`ui-press flex items-center gap-3 py-2 ${disabled ? "opacity-50" : "cursor-pointer"}`}>
       <span className="min-w-0 flex-1">
         <span className="block text-[13px] font-semibold text-ink">{label}</span>
         <span className="block text-[11.5px] text-muted">{hint}</span>
@@ -82,7 +82,7 @@ export function ThemePicker() {
           <button
             key={t.id}
             type="button"
-            className="theme-card"
+            className="ui-press theme-card"
             aria-pressed={t.id === theme}
             onClick={() => setTheme(t.id)}
           >
