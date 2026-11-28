@@ -142,6 +142,26 @@ html[data-theme="contrast"] .sheet {
   backdrop-filter: none;
 }
 
+/* Scene themes: the sheet and the add bar turn see-through, so the background runs on behind the whole screen.
+   Only a light blur on the sheet, or the shapes (dithered clouds, spirals) smear into a flat glow. The bar blurs
+   more because list text scrolls underneath it. Without blur support both stay solid (rules above). */
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  html[data-scene="1"] .sheet {
+    background: color-mix(in srgb, var(--surface-2) 49%, transparent);
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
+  }
+  html[data-scene="1"] .add-dock-inner {
+    background: color-mix(in srgb, var(--surface-2) 55%, transparent);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+  }
+  /* The clouds are the brightest scene: a denser sheet keeps faint text readable. */
+  html[data-theme="nimbus"][data-scene="1"] .sheet {
+    background: color-mix(in srgb, var(--surface-2) 59%, transparent);
+  }
+}
+
 /* ── The single docked add bar ─────────────────────────────────────────── */
 .add-dock {
   position: fixed;

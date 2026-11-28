@@ -195,13 +195,16 @@ html[data-theme="wabi"] .mod-btn {
    (including the faint out-of-month dates) over its brightest part. */
 #scene[data-scene="clouds"] {
   image-rendering: pixelated;
-  opacity: 0.6;
+  opacity: 0.8;
+}
+/* These two are drawn faintly, so they get a lighter dim to stay visible behind the sheet. */
+html[data-theme="nimbus"] #scene-dim,
+html[data-theme="uzumaki"] #scene-dim {
+  background: color-mix(in srgb, var(--bg) 40%, transparent);
 }
 
-/* The day's single `.sheet` (recipe in index.css) is painted straight from
-   these role tokens: 96% --surface plus a blur, solid for light and contrast.
-   Its hairline is --border and its text is --color-ink, so it stays readable
-   over every theme and animated scene without per-theme overrides. */
+/* The day's single `.sheet` (recipe in index.css) is painted from these role
+   tokens: nearly solid --surface-2, see-through over scene themes. */
 
 /* ── Module card (LetCode tile) ──────────────────────────────────────────── */
 .module {
