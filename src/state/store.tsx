@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { AlertCircle } from "lucide-react";
 import { uid } from "../domain/ids";
 import { addDays, todayISO, type ISODate } from "../domain/dates";
 import { deleteCategory as deleteCategoryData, undoCategoryDelete } from "../domain/categories";
@@ -39,8 +40,39 @@ import {
 import { tasksForItems, type NoteItem } from "../lib/absorb";
 import { buildHandoffMarkdown, NOTE_TASKS_EVENT } from "../lib/handoff";
 import { isTauri, storage } from "../storage";
+import type { LoadIssue } from "../storage/port";
 
 type Mutator = (data: AppData) => AppData;
+
+/** The toast lives in the store so it can report a failed load on the very
+ *  first render, before the app's toast provider (a child) is mounted. */
+function RecoveryNotice({ issue }: { issue: LoadIssue }) {
+  const [open, setOpen] = useState(true);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setOpen(false), 8_000);
+    return () => window.clearTimeout(timer);
+  }, []);
+  if (!open) return null;
+  const message =
+    issue.reason === "unreadable"
+      ? "Saved data could not be read. The original was kept as a backup."
+      : `Some saved items could not be read (${issue.dropped} skipped). The original was kept as a backup.`;
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="pointer-events-none fixed left-1/2 top-[calc(12px+var(--safe-top))] z-[110] w-max max-w-[calc(100vw-32px)] -translate-x-1/2"
+    >
+      <div className="pointer-events-auto flex items-center gap-2.5 rounded-xl border border-line-2 bg-surface-2/95 px-4 py-2.5 text-sm text-ink shadow-2xl shadow-black/50 backdrop-blur-xl">
+        <AlertCircle size={16} className="shrink-0 text-rose" />
+        <span>{message}</span>
+        <button onClick={() => setOpen(false)} className="ui-press ml-2 text-faint hover:text-ink">
+          Dismiss
+        </button>
+      </div>
+    </div>
+  );
+}
 
 /** Snapshot behind a single category-delete Undo toast. */
 export interface CategoryDeleteSnapshot {
@@ -207,6 +239,7 @@ const StoreContext = createContext<StoreValue | null>(null);
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<AppData>(defaultData);
+  const [loadIssue, setLoadIssue] = useState<LoadIssue | null>(null);
   const [ready, setReady] = useState(false);
   const dataRef = useRef(data);
   dataRef.current = data;
@@ -217,14 +250,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let alive = true;
-    storage
-      .load()
+    (storage.loadWithReport
+      ? storage.loadWithReport()
+      : storage.load().then((data) => ({ data, issue: null })))
       .then((loaded) => {
         if (!alive) return;
-        if (loaded) setData(loaded);
+        if (loaded.data) setData(loaded.data);
+        if (loaded.issue) setLoadIssue(loaded.issue);
       })
       .catch(() => {
-        // First run or unreadable store: start from defaults.
+        // A native read failure cannot be backed up here; still tell the user.
+        if (alive) {
+          setLoadIssue({
+            reason: "unreadable",
+            dropped: 0,
+            repairedSettings: [],
+            quarantinedKeys: [],
+          });
+        }
       })
       .finally(() => {
         if (alive) setReady(true);
@@ -795,7 +838,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [data, getData, flush, applyData, ready, actions],
   );
 
-  return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
+  return (
+    <StoreContext.Provider value={value}>
+      {children}
+      {loadIssue && <RecoveryNotice issue={loadIssue} />}
+    </StoreContext.Provider>
+  );
 }
 
 export function useStore(): StoreValue {

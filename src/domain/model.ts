@@ -316,36 +316,43 @@ export function migrateV3(value: unknown): AppData | null {
   return AppDataSchema.parse({ ...parsed.data, version: 4, goals: [] });
 }
 
-/** v2 → v3: habits become scheduled ghost suggestions, calories gain sync stamps. */
-export function migrateV2(value: unknown): AppData | null {
-  const parsed = V2Schema.safeParse(value);
-  if (!parsed.success) return null;
-  const v2 = parsed.data;
-  const habits: Habit[] = v2.habits.map((h) => {
-    const start = h.createdAt.slice(0, 10);
-    // A weekly habit has no weekday in v2; anchor it to the weekday it was created on.
-    const weekdays =
-      h.cadence === "weekly" ? [new Date(`${start}T12:00:00`).getDay()] : undefined;
-    return {
-      id: h.id,
-      title: h.title,
-      categoryId: null,
-      startDate: start,
-      endDate: null,
-      weekdays,
-      createdAt: h.createdAt,
-      updatedAt: h.createdAt,
-    };
-  });
-  const calories: CalorieEntry[] = v2.calories.map((c) => ({
+function fromLegacyHabit(h: z.infer<typeof LegacyHabitSchema>): Habit {
+  const start = h.createdAt.slice(0, 10);
+  // A weekly habit has no weekday in v2; anchor it to the weekday it was created on.
+  return {
+    id: h.id,
+    title: h.title,
+    categoryId: null,
+    startDate: start,
+    endDate: null,
+    weekdays: h.cadence === "weekly" ? [new Date(`${start}T12:00:00`).getDay()] : undefined,
+    createdAt: h.createdAt,
+    updatedAt: h.createdAt,
+  };
+}
+
+function fromLegacyCalorie(c: z.infer<typeof LegacyCalorieSchema>): CalorieEntry {
+  return {
     id: c.id,
     date: c.date,
     kcal: c.kcal,
     label: [c.slot, c.label].filter(Boolean).join(": ") || undefined,
     createdAt: c.createdAt,
     updatedAt: c.createdAt,
-  }));
-  return migrateV3({ ...v2, version: 3, habits, calories });
+  };
+}
+
+/** v2 → v3: habits become scheduled ghost suggestions, calories gain sync stamps. */
+export function migrateV2(value: unknown): AppData | null {
+  const parsed = V2Schema.safeParse(value);
+  if (!parsed.success) return null;
+  const v2 = parsed.data;
+  return migrateV3({
+    ...v2,
+    version: 3,
+    habits: v2.habits.map(fromLegacyHabit),
+    calories: v2.calories.map(fromLegacyCalorie),
+  });
 }
 
 const V1TaskSchema = z.object({
@@ -418,9 +425,177 @@ export function migrateV1(value: unknown): AppData | null {
   });
 }
 
-/** Parse persisted data; migrate older versions, fall back to a clean slate if corrupt. */
+// ── Tolerant loading ───────────────────────────────────────────────────────
+// A damaged record must cost only that record. The rejected values are handed
+// back verbatim so the storage layer can quarantine them instead of losing them.
+
+export type DroppedKind = "task" | "category" | "habit" | "calorie" | "goal" | "heading";
+
+export interface DroppedRecord {
+  kind: DroppedKind;
+  /** Index inside the stored array (-1 when the whole field was unusable). */
+  index: number;
+  id?: string;
+  /** Exact JSON text of the rejected value, preserved untouched. */
+  raw: string;
+}
+
+export interface AppDataInspection {
+  data: AppData;
+  dropped: DroppedRecord[];
+  /** Settings fields that fell back to their default individually. */
+  repairedSettings: string[];
+  /** True when nothing in the stored value looked like planner data at all. */
+  unrecognized: boolean;
+}
+
+const asObject = (value: unknown): Record<string, unknown> | null =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+
+const stringifyRejected = (value: unknown): string => {
+  try {
+    return JSON.stringify(value) ?? "null";
+  } catch {
+    return String(value);
+  }
+};
+
+function salvageList<T>(
+  schema: z.ZodType<T>,
+  raw: unknown,
+  kind: DroppedKind,
+  dropped: DroppedRecord[],
+): T[] {
+  if (!Array.isArray(raw)) {
+    dropped.push({ kind, index: -1, raw: stringifyRejected(raw) });
+    return [];
+  }
+  const out: T[] = [];
+  raw.forEach((item, index) => {
+    const result = schema.safeParse(item);
+    if (result.success) {
+      out.push(result.data);
+      return;
+    }
+    const id = asObject(item)?.id;
+    dropped.push({ kind, index, ...(typeof id === "string" ? { id } : {}), raw: stringifyRejected(item) });
+  });
+  return out;
+}
+
+function salvageSettings(raw: unknown, repaired: string[]): Settings {
+  const source = asObject(raw);
+  const fallback = defaultData().settings;
+  if (!source) {
+    // A present-but-wrong settings object is damage, not an older file.
+    if (raw !== undefined) repaired.push(...Object.keys(SettingsSchema.shape));
+    return fallback;
+  }
+  const out: Record<string, unknown> = {};
+  for (const [key, schema] of Object.entries(SettingsSchema.shape)) {
+    const value = source[key];
+    const result = schema.safeParse(value);
+    if (result.success) {
+      out[key] = result.data;
+    } else {
+      // An absent field is normal for an older file; a present but invalid one
+      // is repaired on its own without touching the other settings.
+      if (value !== undefined) repaired.push(key);
+      out[key] = fallback[key as keyof Settings];
+    }
+  }
+  return SettingsSchema.parse(out);
+}
+
+function inspectV4(v: Record<string, unknown>, dropped: DroppedRecord[], repaired: string[]): AppData {
+  return {
+    version: 4,
+    tasks: salvageList(TaskSchema, v.tasks, "task", dropped),
+    categories: salvageList(CategorySchema, v.categories, "category", dropped),
+    habits: salvageList(HabitSchema, v.habits, "habit", dropped),
+    calories: salvageList(CalorieEntrySchema, v.calories, "calorie", dropped),
+    goals: salvageList(CategoryGoalSchema, v.goals, "goal", dropped),
+    settings: salvageSettings(v.settings, repaired),
+  };
+}
+
+/** v3 has the same record shapes as v4 minus `goals`. */
+function inspectV3(v: Record<string, unknown>, dropped: DroppedRecord[], repaired: string[]): AppData {
+  return {
+    version: 4,
+    tasks: salvageList(TaskSchema, v.tasks, "task", dropped),
+    categories: salvageList(CategorySchema, v.categories, "category", dropped),
+    habits: salvageList(HabitSchema, v.habits, "habit", dropped),
+    calories: salvageList(CalorieEntrySchema, v.calories, "calorie", dropped),
+    goals: [],
+    settings: salvageSettings(v.settings, repaired),
+  };
+}
+
+function inspectV2(v: Record<string, unknown>, dropped: DroppedRecord[], repaired: string[]): AppData {
+  return {
+    version: 4,
+    tasks: salvageList(TaskSchema, v.tasks, "task", dropped),
+    categories: salvageList(CategorySchema, v.categories, "category", dropped),
+    habits: salvageList(LegacyHabitSchema, v.habits, "habit", dropped).map(fromLegacyHabit),
+    calories: salvageList(LegacyCalorieSchema, v.calories, "calorie", dropped).map(fromLegacyCalorie),
+    goals: [],
+    settings: salvageSettings(v.settings, repaired),
+  };
+}
+
+const V1HeadingSchema = z.object({ id: z.string(), title: z.string() }).passthrough();
+
+function inspectV1(v: Record<string, unknown>, dropped: DroppedRecord[], repaired: string[]): AppData | null {
+  const migrated = migrateV1({
+    version: 1,
+    headings: salvageList(V1HeadingSchema, v.headings, "heading", dropped),
+    tasks: salvageList(V1TaskSchema, v.tasks, "task", dropped),
+    habits: salvageList(LegacyHabitSchema, v.habits, "habit", dropped),
+    calories: salvageList(LegacyCalorieSchema, v.calories, "calorie", dropped),
+    settings: salvageSettings(v.settings, repaired),
+  });
+  return migrated;
+}
+
+/** Inspect persisted data without ever throwing away the good records next to
+ *  a bad one. Older versions are migrated record by record too. */
+export function inspectAppData(value: unknown): AppDataInspection {
+  const current = AppDataSchema.safeParse(value);
+  if (current.success) {
+    return { data: current.data, dropped: [], repairedSettings: [], unrecognized: false };
+  }
+  const v = asObject(value);
+  const dropped: DroppedRecord[] = [];
+  const repaired: string[] = [];
+  let data: AppData | null = null;
+  if (v) {
+    switch (v.version) {
+      case 4:
+        data = inspectV4(v, dropped, repaired);
+        break;
+      case 3:
+        data = inspectV3(v, dropped, repaired);
+        break;
+      case 2:
+        data = inspectV2(v, dropped, repaired);
+        break;
+      case 1:
+        data = inspectV1(v, dropped, repaired);
+        break;
+      default:
+        break;
+    }
+  }
+  if (data && AppDataSchema.safeParse(data).success) {
+    return { data, dropped, repairedSettings: repaired, unrecognized: false };
+  }
+  return { data: defaultData(), dropped: [], repairedSettings: [], unrecognized: true };
+}
+
+/** Parse persisted data; migrate older versions and salvage every valid record. */
 export function parseAppData(value: unknown): AppData {
-  const result = AppDataSchema.safeParse(value);
-  if (result.success) return result.data;
-  return migrateV3(value) ?? migrateV2(value) ?? migrateV1(value) ?? defaultData();
+  return inspectAppData(value).data;
 }

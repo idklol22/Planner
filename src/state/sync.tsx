@@ -15,6 +15,7 @@ import { isTauri } from "../storage";
 import { HubClient, type HubOp } from "../storage/hub";
 import { MIRROR_KEY, SyncController, type SyncStatus } from "../sync/controller";
 import { localCursorStore, CURSOR_KEY, LAST_SYNC_KEY } from "../sync/engine";
+import { applyRemoteHealthRow, getLocalHealthRow } from "../sync/health-apply";
 import { emptyMirror, type Mirror } from "../sync/mapping";
 import { LocalOutbox, OUTBOX_KEY } from "../sync/queue";
 import { useStore } from "./store";
@@ -135,6 +136,11 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       recordHandoff: (taskId, patch) => actionsRef.current.recordHandoff(taskId, patch),
       onNoteItems: (categoryId, items) => actionsRef.current.addNoteItems(categoryId, items),
       onMirror: setMirror,
+      // Pulled health days are written in the same format HealthProvider reads.
+      getLocalHealth: (id) => getLocalHealthRow(localStorage, id),
+      applyRemoteHealth: (row) => {
+        applyRemoteHealthRow(localStorage, row);
+      },
     });
     controllerRef.current = controller;
     prevDataRef.current = getData();

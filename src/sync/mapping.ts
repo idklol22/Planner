@@ -9,7 +9,8 @@
  *  the column: a missing `protein` key means "keep", an explicit null means
  *  "clear". */
 
-import type { AppData, CalorieEntry, Category, Task } from "../domain/model";
+import type { AppData, CalorieEntry, Category, Note, Task } from "../domain/model";
+import { newerStamp } from "../domain/stamp";
 import type {
   CategoryRow,
   HDeadlineRow,
@@ -140,9 +141,42 @@ function upsert<T extends { id: string }>(list: T[], item: T): T[] {
   return copy;
 }
 
+function stampValue(value: string | null | undefined): number {
+  if (typeof value !== "string") return Number.NEGATIVE_INFINITY;
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? Number.NEGATIVE_INFINITY : parsed;
+}
+
+/** Notes carry their own update stamp: a task toggle must not carry an old
+ *  copy of the note over a newer local edit. Missing/unusable stamps count as
+ *  oldest, so a missing value never beats a real one. */
+export function noteIsNewer(a: Note | null | undefined, b: Note | null | undefined): boolean {
+  return stampValue(a?.updatedAt) > stampValue(b?.updatedAt);
+}
+
+/** True when a pulled task row must keep the note already on this device. */
+export function keepsLocalNote(local: Task | undefined, row: TaskRow): boolean {
+  // An explicit delete (or a note-less row from an older hub) must not bring a
+  // deleted note back. Every other field still comes from the row.
+  if (!local?.note || row.deletedAt) return false;
+  const incoming = row.note as unknown as Note | null | undefined;
+  return !incoming || noteIsNewer(local.note, incoming);
+}
+
+function laterStamp(a: string, b: string | undefined): string {
+  if (!b) return a;
+  return stampValue(a) >= stampValue(b) ? a : b;
+}
+
 /** Merge one remote row into local data. Returns `data` unchanged for tables
- *  that have no local model (goal) or for unknown shapes. */
-export function applyRemoteRow(data: AppData, table: SyncTable, row: SyncRow): AppData {
+ *  that have no local model (goal) or for unknown shapes. `now` is injectable
+ *  so a merged task can be given a stamp strictly newer than both copies. */
+export function applyRemoteRow(
+  data: AppData,
+  table: SyncTable,
+  row: SyncRow,
+  now: string = new Date().toISOString(),
+): AppData {
   switch (table) {
     case "category": {
       const r = row as CategoryRow;
@@ -165,6 +199,7 @@ export function applyRemoteRow(data: AppData, table: SyncTable, row: SyncRow): A
     case "task": {
       const r = row as TaskRow;
       const old = data.tasks.find((x) => x.id === r.id);
+      const keepNote = keepsLocalNote(old, r);
       const next: Task = {
         id: r.id,
         title: r.title,
@@ -181,9 +216,15 @@ export function applyRemoteRow(data: AppData, table: SyncTable, row: SyncRow): A
         rrule: r.rrule ?? undefined,
         deadline: r.deadline,
         kind: r.kind,
-        note: r.note ? (r.note as unknown as Task["note"]) : null,
+        // A newer local note survives a remote task write; every other field
+        // still comes from the row. The note keeps its own original stamp.
+        note: keepNote ? old!.note! : r.note ? (r.note as unknown as Task["note"]) : null,
         createdAt: r.createdAt,
-        updatedAt: r.updatedAt,
+        // The hub is last-write-wins on the row stamp. A merged row must be
+        // newer than both inputs or the hub would reject the repaired note.
+        updatedAt: keepNote
+          ? newerStamp(now, laterStamp(r.updatedAt, old?.updatedAt))
+          : r.updatedAt,
         deletedAt: r.deletedAt ?? undefined,
         archivedAt: r.archivedAt ?? undefined,
       };

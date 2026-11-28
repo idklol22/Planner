@@ -20,6 +20,8 @@ import {
   type PullTable,
   type PushResult,
   type HubOp,
+  type HealthRow,
+  type TaskRow,
 } from "../storage/hub";
 import { parseNoteItems, type NoteItem } from "../lib/absorb";
 import type { HarnessNote } from "../lib/harness-types";
@@ -33,6 +35,8 @@ import {
   emptyMirror,
   getLocalRow,
   getMirrorRow,
+  keepsLocalNote,
+  taskToRow,
   type Mirror,
 } from "./mapping";
 import type { Outbox } from "./queue";
@@ -71,6 +75,10 @@ export interface SyncControllerOptions {
   onMirror?(mirror: Mirror): void;
   today?(): ISODate;
   now?(): Date;
+  /** Local health day row, so the engine can apply last-write-wins to health. */
+  getLocalHealth?(id: string): HealthRow | null;
+  /** Apply a pulled health row to the local health day store. */
+  applyRemoteHealth?(row: HealthRow): void;
 }
 
 export interface SyncStatus {
@@ -147,20 +155,42 @@ export class SyncController {
   }
 
   getLocal(table: PullTable, id: string): PullRow | null {
+    if (table === "health") return this.o.getLocalHealth?.(id) ?? null;
     if (isMirrorTable(table)) return getMirrorRow(this.mirror, table, id);
     return getLocalRow(this.o.getData(), table, id);
   }
 
   applyRemote(table: PullTable, row: PullRow): void {
-    if (table === "health") return; // health days are owned by the health provider
+    if (table === "health") {
+      // Days live in the health store, not AppData. The provider owns the UI
+      // state; a remote write announces itself so that state can be re-read.
+      this.o.applyRemoteHealth?.(row as HealthRow);
+      return;
+    }
     if (isMirrorTable(table)) {
       this.mirror = applyMirrorRow(this.mirror, table, row as never);
       writeJson(this.o.storage, MIRROR_KEY, this.mirror);
       this.o.onMirror?.(this.mirror);
       return;
     }
-    this.remote.set(`${table}:${row.id}`, row.updatedAt);
-    this.o.apply((data) => applyRemoteRow(data, table, row as never));
+    const key = `${table}:${row.id}`;
+    this.remote.set(key, row.updatedAt);
+    const mergedTask =
+      table === "task" && keepsLocalNote(this.o.getData().tasks.find((t) => t.id === row.id), row as TaskRow);
+    this.o.apply((data) =>
+      applyRemoteRow(data, table, row as never, this.o.now?.().toISOString()),
+    );
+    if (mergedTask) {
+      // The pulled row itself must not echo back, but the repaired row (newer
+      // stamp, local note) must reach the hub or the other device keeps its
+      // stale note copy. The outbox de-dupes this against a later handleChange.
+      const merged = this.o.getData().tasks.find((t) => t.id === row.id);
+      if (merged) {
+        this.remote.set(key, merged.updatedAt);
+        this.o.outbox.enqueue({ table: "task", row: taskToRow(merged) });
+        this.emit();
+      }
+    }
   }
 
   /** Call whenever local data changes; queues ops for changed records. */
