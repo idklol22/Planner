@@ -3,10 +3,12 @@ import { dayKcal, dayProtein, entriesForDay, entryTimeLabel } from "../domain/ca
 import type { ISODate } from "../domain/dates";
 import type { CalorieEntry } from "../domain/model";
 import { healthLine } from "../lib/health";
+import { keyboardOpenFromHeight } from "../lib/keyboard";
 import { prefersReducedMotion, MOTION_MS, usePresence } from "../lib/motion";
 import { useNavCommand } from "../state/deeplink";
 import { useHealth } from "../state/health";
 import { useStore } from "../state/store";
+import { calorieOutsideTapDecision } from "./calorieOutsideTap";
 import { useCount, useEntryRows, type EntryRow } from "./calorieMotion";
 import { resolveInlineSave } from "./inlineSave";
 
@@ -42,6 +44,7 @@ function EntryRowView({
           )}
           <button
             data-calorie-keep-tap
+            data-inline-add-keep-tap
             onPointerDown={(e) => e.preventDefault()}
             onMouseDown={(e) => e.preventDefault()}
             type="button"
@@ -77,6 +80,10 @@ export function CalorieBar({ date }: { date: ISODate }) {
   const proteinRef = useRef<HTMLInputElement>(null);
   /** An Enter (or a successful commit) must not be repeated by the blur that follows. */
   const blocked = useRef(false);
+  /** The click following a dismissal pointerdown is swallowed only once. */
+  const suppressClick = useRef(false);
+  /** Height-only keyboard signal: WKWebView's offsetTop lies while scrolling. */
+  const keyboardUp = useRef(false);
   const lastNav = useRef(0);
   const modeRef = useRef(mode);
   modeRef.current = mode;
@@ -105,9 +112,25 @@ export function CalorieBar({ date }: { date: ISODate }) {
   }
 
   useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    const measure = () => {
+      keyboardUp.current = keyboardOpenFromHeight(window.innerHeight, viewport.height);
+    };
+    measure();
+    viewport.addEventListener("resize", measure);
+    viewport.addEventListener("scroll", measure);
+    return () => {
+      viewport.removeEventListener("resize", measure);
+      viewport.removeEventListener("scroll", measure);
+    };
+  }, []);
+
+  useEffect(() => {
     // A draft belongs to the day it was typed for: save it before the inputs
     // are cleared, even when WKWebView never blurred them on the day change.
     if (prevDate.current !== date) {
+      suppressClick.current = false;
       commitFor(prevDate.current, false);
       prevDate.current = date;
     }
@@ -121,6 +144,7 @@ export function CalorieBar({ date }: { date: ISODate }) {
     if (!nav.seq || nav.seq === lastNav.current || date !== nav.date) return;
     lastNav.current = nav.seq;
     if (nav.openCalories) {
+      suppressClick.current = false;
       blocked.current = false;
       setKcal("");
       setProtein("");
@@ -174,16 +198,43 @@ export function CalorieBar({ date }: { date: ISODate }) {
   // iOS often does not blur a field when the user taps blank space above the
   // keyboard. Commit on that pointerdown (and on backgrounding) instead of
   // waiting for a blur that may never come. The listeners live here so they
-  // outlive the collapsed form; controls inside the form keep their own taps.
+  // outlive the collapsed form. A dismissal also swallows the click that
+  // follows, so the tap only dismisses the form — exactly like the task field.
   useEffect(() => {
     const onDown = (e: PointerEvent) => {
-      if (modeRef.current !== "add") return;
       const el = e.target as Element | null;
-      if (el?.closest?.("[data-calorie-field], [data-calorie-keep-tap]")) return;
-      commitFor(dateRef.current, true);
-      releaseFocus();
+      // Moving between the form's fields is not leaving it. Clear any stale
+      // suppression from a scroll that produced no click on the way through.
+      if (el?.closest?.("[data-calorie-field]")) {
+        suppressClick.current = false;
+        return;
+      }
+      const keepTap = !!el?.closest?.("[data-calorie-keep-tap], [data-inline-add-keep-tap]");
+      const active = document.activeElement;
+      const focused = active === kcalRef.current || active === proteinRef.current;
+      const decision = calorieOutsideTapDecision(
+        modeRef.current === "add",
+        !!(draftRef.current.kcal || draftRef.current.protein),
+        keyboardUp.current || focused,
+        keepTap,
+      );
+      // Overwrite on every pointerdown: a touch-scroll has no click, so its
+      // suppression must not be left to swallow the next real tap's click.
+      suppressClick.current = decision.suppress;
+      if (!decision.commit) return;
+      // Keep-tap controls save with close:false so the row stays put until
+      // their own click fires; a plain outside tap closes it right away.
+      commitFor(dateRef.current, decision.close);
+      if (decision.blur) releaseFocus();
+    };
+    const onClickCapture = (e: MouseEvent) => {
+      if (!suppressClick.current) return;
+      suppressClick.current = false;
+      e.preventDefault();
+      e.stopPropagation();
     };
     const onExit = () => {
+      suppressClick.current = false;
       if (modeRef.current !== "add") return;
       commitFor(dateRef.current, true);
       releaseFocus();
@@ -192,10 +243,12 @@ export function CalorieBar({ date }: { date: ISODate }) {
       if (document.visibilityState === "hidden") onExit();
     };
     document.addEventListener("pointerdown", onDown, true);
+    document.addEventListener("click", onClickCapture, true);
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("pagehide", onExit);
     return () => {
       document.removeEventListener("pointerdown", onDown, true);
+      document.removeEventListener("click", onClickCapture, true);
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("pagehide", onExit);
     };
@@ -251,6 +304,7 @@ export function CalorieBar({ date }: { date: ISODate }) {
           type="button"
           onClick={() => open("kcal")}
           data-calorie-keep-tap
+          data-inline-add-keep-tap
           onPointerDown={(e) => {
             if (mode === "add") e.preventDefault();
           }}
@@ -272,6 +326,7 @@ export function CalorieBar({ date }: { date: ISODate }) {
           type="button"
           onClick={() => open("protein")}
           data-calorie-keep-tap
+          data-inline-add-keep-tap
           onPointerDown={(e) => {
             if (mode === "add") e.preventDefault();
           }}
@@ -332,6 +387,7 @@ export function CalorieBar({ date }: { date: ISODate }) {
             <button
               type="button"
               data-calorie-keep-tap
+              data-inline-add-keep-tap
               onPointerDown={(e) => e.preventDefault()}
               onClick={discard}
               className="cal-press min-h-11 shrink-0 px-1 text-[12px] text-faint hover:text-ink"
