@@ -3,7 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { App } from "@capacitor/app";
 import { addDays, todayISO } from "../domain/dates";
-import { buildWidgetProfile } from "../lib/widget";
+import {
+  backgroundReloadDecision,
+  buildWidgetProfile,
+  emptyWidgetUploadState,
+  enqueueWidgetUpload,
+  finishWidgetUpload,
+  type WidgetUploadItem,
+} from "../lib/widget";
 import { isIOS, reloadWidgets } from "../native/planner-native";
 import type { WidgetProfile } from "../storage/hub";
 import { THEMES } from "../theme/themes";
@@ -26,44 +33,70 @@ export function WidgetRunner() {
   );
   const serialized = useMemo(() => JSON.stringify(profile), [profile]);
 
-  const lastUploaded = useRef<string | null>(null);
-  const uploading = useRef(false);
+  const uploadState = useRef(emptyWidgetUploadState());
+  const generation = useRef(0);
   const lastSynced = useRef(sync.status.lastSyncedAt);
+  const statusRef = useRef(sync.status);
+  statusRef.current = sync.status;
   const materializedFor = useRef<string | null>(null);
   const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** null = no background reload pending; otherwise the stamp it must exceed. */
+  const pendingBackgroundReload = useRef<string | null>(null);
+
+  const reload = useCallback(() => {
+    void reloadWidgets().catch(() => {});
+  }, []);
 
   const scheduleReload = useCallback(() => {
     if (!isIOS()) return;
     if (reloadTimer.current) clearTimeout(reloadTimer.current);
     reloadTimer.current = setTimeout(() => {
       reloadTimer.current = null;
-      void reloadWidgets().catch(() => {});
+      // A queued background push will trigger its own reload once accepted.
+      if (pendingBackgroundReload.current === null) reload();
     }, RELOAD_DELAY_MS);
-  }, []);
+  }, [reload]);
 
-  const upload = useCallback(
-    (json: string, value: WidgetProfile) => {
+  // Requests run one at a time. Changes made during an upload are queued (only
+  // the newest survives), so a fast theme/goal edit is never silently dropped.
+  const beginUpload = useCallback(
+    (item: WidgetUploadItem) => {
       const client = sync.client;
-      if (!client || uploading.current || lastUploaded.current === json) return;
-      uploading.current = true;
-      void client
-        .putWidgetProfile(value)
-        .then(() => {
-          uploading.current = false;
-          lastUploaded.current = json;
+      if (!client) return;
+      const gen = generation.current;
+      void client.putWidgetProfile(item.value).then(
+        () => {
+          if (gen !== generation.current) return;
+          const { state, start } = finishWidgetUpload(uploadState.current, item.json, true);
+          uploadState.current = state;
           scheduleReload();
-        })
-        .catch(() => {
-          // Leave the profile unsent; the next successful sync retries it.
-          uploading.current = false;
-        });
+          if (start) beginUpload(start);
+        },
+        () => {
+          if (gen !== generation.current) return;
+          const { state, start } = finishWidgetUpload(uploadState.current, item.json, false);
+          uploadState.current = state;
+          if (start) beginUpload(start);
+        },
+      );
     },
     [sync.client, scheduleReload],
   );
 
-  // A different hub has not seen this profile yet.
+  const upload = useCallback(
+    (json: string, value: WidgetProfile) => {
+      const { state, start } = enqueueWidgetUpload(uploadState.current, { json, value });
+      uploadState.current = state;
+      if (start) beginUpload(start);
+    },
+    [beginUpload],
+  );
+
+  // A different hub has not seen this profile yet. Ignore any response from a
+  // request that was in flight when the hub changed.
   useEffect(() => {
-    lastUploaded.current = null;
+    generation.current += 1;
+    uploadState.current = emptyWidgetUploadState();
   }, [sync.client]);
 
   // Recurring tasks must exist for the days the widget can show.
@@ -105,14 +138,35 @@ export function WidgetRunner() {
     scheduleReload,
   ]);
 
+  // A reload armed on backgrounding may run only after a push was accepted.
+  useEffect(() => {
+    const decision = backgroundReloadDecision(pendingBackgroundReload.current, sync.status);
+    pendingBackgroundReload.current = decision.pending;
+    if (!decision.reload) return;
+    if (reloadTimer.current) {
+      clearTimeout(reloadTimer.current);
+      reloadTimer.current = null;
+    }
+    reload();
+  }, [sync.status.lastSyncedAt, sync.status.error, reload]);
+
   // Going to background is the last chance to show fresh data on the Home Screen.
   useEffect(() => {
     if (!isIOS()) return;
     let active = true;
     let listener: { remove(): void } | undefined;
     void App.addListener("appStateChange", ({ isActive }) => {
-      // Ask at once: a delayed timer may never fire once the app is suspended.
-      if (active && !isActive) void reloadWidgets().catch(() => {});
+      if (!active) return;
+      if (isActive) {
+        // Do not fire a stale background reload after the app came back.
+        pendingBackgroundReload.current = null;
+        return;
+      }
+      sync.flush();
+      pendingBackgroundReload.current = statusRef.current.lastSyncedAt;
+      // Fire and forget: neither the UI nor app backgrounding waits on the hub.
+      // A successful sync advances lastSyncedAt, which releases the reload.
+      void sync.syncNow().catch(() => {});
     })
       .then((handle) => {
         if (active) listener = handle;
@@ -122,9 +176,10 @@ export function WidgetRunner() {
     return () => {
       active = false;
       listener?.remove();
+      pendingBackgroundReload.current = null;
       if (reloadTimer.current) clearTimeout(reloadTimer.current);
     };
-  }, [scheduleReload]);
+  }, [sync.flush, sync.syncNow]);
 
   return null;
 }

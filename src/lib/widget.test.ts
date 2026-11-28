@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { defaultData, makeGoal } from "../domain/model";
 import { THEMES } from "../theme/themes";
-import { buildWidgetProfile, encodeWidgetCode } from "./widget";
+import {
+  backgroundReloadDecision,
+  buildWidgetProfile,
+  emptyWidgetUploadState,
+  encodeWidgetCode,
+  enqueueWidgetUpload,
+  finishWidgetUpload,
+  type WidgetUploadItem,
+} from "./widget";
 
 const TOKENS = THEMES.wabi.tokens;
 
@@ -46,6 +54,82 @@ describe("buildWidgetProfile", () => {
   it("clamps the calorie goal into the hub range", () => {
     const base = defaultData();
     expect(buildWidgetProfile({ ...base, settings: { ...base.settings, dailyCalorieGoal: 999_999 } }, TOKENS, false).calorieGoal).toBe(100_000);
+  });
+});
+
+describe("widget upload queue", () => {
+  const base = buildWidgetProfile(defaultData(), TOKENS, false);
+  const item = (calorieGoal: number): WidgetUploadItem => ({
+    json: JSON.stringify({ ...base, calorieGoal }),
+    value: { ...base, calorieGoal },
+  });
+
+  it("starts the first profile and replaces newer changes made during an upload", () => {
+    const first = item(2000);
+    const queued = enqueueWidgetUpload(emptyWidgetUploadState(), first);
+    expect(queued.start).toEqual(first);
+
+    const second = item(2100);
+    const third = item(2200);
+    const afterSecond = enqueueWidgetUpload(queued.state, second);
+    expect(afterSecond.start).toBeNull();
+    const afterThird = enqueueWidgetUpload(afterSecond.state, third);
+    expect(afterThird.state.pending).toEqual(third);
+
+    const settled = finishWidgetUpload(afterThird.state, first.json, true);
+    expect(settled.start).toEqual(third); // not the superseded 2100 profile
+    expect(settled.state.inFlight).toEqual(third);
+    const done = finishWidgetUpload(settled.state, third.json, true);
+    expect(done.start).toBeNull();
+    expect(done.state.lastSent).toBe(third.json);
+    expect(done.state.pending).toBeNull();
+  });
+
+  it("does not resend an unchanged profile, but does not drop a newer one on failure", () => {
+    const first = item(2000);
+    const started = enqueueWidgetUpload(emptyWidgetUploadState(), first);
+    expect(enqueueWidgetUpload(started.state, first).start).toBeNull();
+
+    const failed = finishWidgetUpload(started.state, first.json, false);
+    expect(failed.start).toBeNull();
+    expect(failed.state.lastSent).toBeNull();
+
+    const second = item(2100);
+    const queued = enqueueWidgetUpload(started.state, second);
+    const retried = finishWidgetUpload(queued.state, first.json, false);
+    expect(retried.start).toEqual(second);
+  });
+});
+
+describe("backgroundReloadDecision", () => {
+  it("waits for a successful sync after backgrounding and reloads only once", () => {
+    expect(backgroundReloadDecision(null, { lastSyncedAt: null, error: null })).toEqual({
+      pending: null,
+      reload: false,
+    });
+
+    const pending = "2026-11-27T10:00:00.000Z";
+    expect(
+      backgroundReloadDecision(pending, { lastSyncedAt: pending, error: null }),
+    ).toEqual({ pending, reload: false });
+    expect(
+      backgroundReloadDecision(pending, {
+        lastSyncedAt: "2026-11-27T11:00:00.000Z",
+        error: "offline",
+      }),
+    ).toEqual({ pending, reload: false });
+
+    const released = backgroundReloadDecision(pending, {
+      lastSyncedAt: "2026-11-27T11:00:00.000Z",
+      error: null,
+    });
+    expect(released).toEqual({ pending: null, reload: true });
+    expect(
+      backgroundReloadDecision(released.pending, {
+        lastSyncedAt: "2026-11-27T12:00:00.000Z",
+        error: null,
+      }),
+    ).toEqual({ pending: null, reload: false });
   });
 });
 

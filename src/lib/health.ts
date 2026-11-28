@@ -197,6 +197,30 @@ export function toHealthRow(record: HealthRecord): HealthRow {
   };
 }
 
+/** Wire patch for POST /ops. A local `null` means "unknown", not "clear", so
+ *  those fields are omitted: the hub keeps whatever it already stored for the
+ *  day. Zero is still sent, because it is a real reading. */
+export type HealthRowPatch = Pick<HealthRow, "id" | "date" | "updatedAt" | "source" | "deletedAt"> &
+  Partial<Pick<HealthRow, (typeof HEALTH_FIELDS)[number] | "workouts">>;
+
+export function toHealthPatch(record: HealthRecord): HealthRowPatch {
+  const patch: HealthRowPatch = {
+    id: `health_${record.date}`,
+    date: record.date,
+    updatedAt: record.updatedAt,
+    source: record.source,
+    deletedAt: null,
+  };
+  for (const field of HEALTH_FIELDS) {
+    const value = record[field];
+    if (value !== null && value !== undefined) patch[field] = value;
+  }
+  // An empty local list means "nothing known about workouts"; omitting it stops
+  // a partial metric push from wiping workouts written by another device.
+  if (record.workouts?.length) patch.workouts = record.workouts;
+  return patch;
+}
+
 /** Accept either `{ <date>: record }` or `{ days: { <date>: record } }`. */
 export function sanitizeHealthData(value: unknown): HealthData {
   const source =
@@ -243,6 +267,9 @@ export function serializeHealthData(data: HealthData): string {
 
 /** Alias used by the state provider. */
 export const healthToRow = toHealthRow;
+
+/** Alias used by the state provider for partial hub pushes. */
+export const healthToPatch = toHealthPatch;
 
 const nf = (n: number) => n.toLocaleString("en-US");
 

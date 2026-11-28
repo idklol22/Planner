@@ -4,7 +4,12 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { App } from "@capacitor/app";
 import { todayISO, type ISODate } from "../domain/dates";
-import { parseDeepLink } from "../lib/deeplink";
+import {
+  decideAppOpen,
+  decideLaunchUrl,
+  initialLaunchLinkState,
+  parseDeepLink,
+} from "../lib/deeplink";
 import { describeSavedHealth } from "../lib/health";
 import { isIOS } from "../native/planner-native";
 import { useHealth } from "./health";
@@ -18,7 +23,8 @@ export interface NavCommand {
 }
 
 let sequence = 0;
-let launchHandled = false;
+/** Shared across provider mounts: iOS can deliver the launch link twice. */
+let launchState = initialLaunchLinkState();
 let current: NavCommand = { seq: 0, date: "", openCalories: false };
 const listeners = new Set<(nav: NavCommand) => void>();
 
@@ -63,8 +69,14 @@ export function DeeplinkProvider({ children }: { children: ReactNode }) {
       publish(today, link.kind === "calories");
     };
 
+    const handleOpen = (url: string) => {
+      const decision = decideAppOpen(launchState, url);
+      launchState = decision.state;
+      if (decision.handle) handle(url);
+    };
+
     void App.addListener("appUrlOpen", (event) => {
-      if (active) handle(event.url);
+      if (active) handleOpen(event.url);
     })
       .then((handle) => {
         if (active) listener = handle;
@@ -74,9 +86,10 @@ export function DeeplinkProvider({ children }: { children: ReactNode }) {
 
     void App.getLaunchUrl()
       .then((launch) => {
-        if (!active || launchHandled) return;
-        launchHandled = true;
-        if (launch?.url) handle(launch.url);
+        if (!active) return;
+        const decision = decideLaunchUrl(launchState, launch?.url ?? null);
+        launchState = decision.state;
+        if (decision.handle && launch?.url) handle(launch.url);
       })
       .catch(() => {});
 

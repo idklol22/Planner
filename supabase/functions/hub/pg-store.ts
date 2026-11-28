@@ -3,11 +3,12 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type {
   ByteRange, CategoryRow, CommandInput, CommandRow, CommandStatus, Device, EventInput, EventResult,
-  EventsResult, FileMeta, FileObject, FileStore, HubOp, HubStore, MealRow, SyncChange,
+  EventsResult, FileMeta, FileObject, FileStore, HealthRow, HubOp, HubStore, MealRow, SyncChange,
   SyncResult, SyncRow, SyncTable, TaskRow, UpsertResult, WidgetProfile,
 } from "./lib/db.ts";
 import { redactCommandPayload, shouldRedactCommand } from "./lib/command-payload.ts";
 import { compareUpdatedAt, normalize } from "./lib/logic.ts";
+import { mergeHealthPush, type HealthPushRow } from "./lib/widget.ts";
 
 export function createServiceClient(url: string, key: string): SupabaseClient {
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -78,16 +79,25 @@ export class PgStore implements HubStore {
       const row = normalize(op.row as unknown as Record<string, unknown>);
       const id = String(row.id);
       const updatedAt = String(row.updatedAt);
+      // Health needs the whole stored row so a partial push can merge onto it.
       const { data: existing, error: e1 } = await this.db.from(op.table)
-        .select("updated_at").eq("id", id).maybeSingle();
+        .select(op.table === "health" ? "*" : "updated_at").eq("id", id).maybeSingle();
       fail(e1, `read ${op.table}`);
       if (existing && compareUpdatedAt(updatedAt, existing.updated_at) < 0) continue;
-      const { error: e2 } = await this.db.from(op.table).upsert(toDb(op.table, row));
+      // Do the read-merge-write here (not in the router) so the freshest stored
+      // row is used at write time and concurrent pushes stay last-write-wins.
+      const writeRow = op.table === "health"
+        ? (mergeHealthPush(
+            existing ? fromDb("health", existing as Record<string, unknown>) as unknown as HealthRow : null,
+            row as unknown as HealthPushRow,
+          ) as unknown as Record<string, unknown>)
+        : row;
+      const { error: e2 } = await this.db.from(op.table).upsert(toDb(op.table, writeRow));
       fail(e2, `write ${op.table}`);
       const { error: e3 } = await this.db.from("change_log")
         .insert({ table_name: op.table, row_id: id, updated_at: updatedAt });
       fail(e3, "change_log");
-      rows.push({ table: op.table, row: row as unknown as SyncChange["row"] });
+      rows.push({ table: op.table, row: writeRow as unknown as SyncChange["row"] });
     }
     return { applied: rows.length, cursor: await this.maxSeq(), rows };
   }
