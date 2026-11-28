@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronLeft } from "lucide-react";
 import { addDays, todayISO, type ISODate } from "../domain/dates";
+import { MOTION_MS, usePresence } from "../lib/motion";
 import { useNavCommand } from "../state/deeplink";
 import { useStore } from "../state/store";
 import { useThemeState } from "../theme/store";
@@ -10,6 +11,7 @@ import { DayView, type MenuPage } from "./DayView";
 import { TaskMark } from "./TaskMark";
 import { HabitsView } from "./HabitsView";
 import { SettingsView } from "./SettingsView";
+import { useEdgeBackSwipe } from "./pageSwipe";
 
 const TITLES: Record<MenuPage, string> = {
   categories: "Categories",
@@ -40,16 +42,37 @@ function useOnTaskRoute(): boolean {
   return hash.startsWith("#/task/");
 }
 
-/** Full-screen page opened from the menu, with a back arrow. */
-function MenuPageView({ page, onBack }: { page: MenuPage; onBack: () => void }) {
+/** Full-screen page opened from the menu, with a back arrow. It pushes in from
+ *  the right, follows an edge drag 1:1, and pops back out on exit. */
+function MenuPageView({
+  page,
+  closing,
+  dragging,
+  dragDx,
+  onBack,
+  bind,
+}: {
+  page: MenuPage;
+  closing: boolean;
+  dragging: boolean;
+  dragDx: number;
+  onBack: () => void;
+  bind: ReturnType<typeof useEdgeBackSwipe>["bind"];
+}) {
   return (
-    <div className="animate-slide fixed inset-0 z-50 overflow-y-auto overflow-x-hidden overscroll-contain">
+    <div
+      {...bind}
+      className={`page touch-pan-y fixed inset-0 z-50 overflow-y-auto overflow-x-hidden overscroll-contain ${
+        closing ? "is-exiting" : ""
+      } ${dragging ? "is-dragging" : ""}`}
+      style={dragging ? { transform: `translateX(${dragDx}px)` } : undefined}
+    >
       <div className="mx-auto flex min-h-full w-full max-w-[720px] flex-col overscroll-contain">
         <header className="flex shrink-0 items-center gap-2 px-3 pb-3 pt-[calc(16px+var(--safe-top))] md:px-5">
           <button
             onClick={onBack}
             aria-label="Back"
-            className="flex h-11 w-11 items-center justify-center text-muted transition-colors hover:text-ink"
+            className="ui-press flex h-11 w-11 items-center justify-center text-muted transition-colors hover:text-ink"
           >
             <ChevronLeft size={20} />
           </button>
@@ -79,9 +102,16 @@ export function AppShell() {
   const onTask = useOnTaskRoute();
   const [selected, setSelected] = useState<ISODate>(todayISO());
   const [page, setPage] = useState<MenuPage | null>(null);
+  const [shownPage, setShownPage] = useState<MenuPage | null>(null);
   const [addSignal, setAddSignal] = useState(0);
   const nav = useNavCommand();
   const lastNav = useRef(0);
+
+  // Keep the last page mounted until its pop-out animation has finished.
+  const presence = usePresence(!!page, MOTION_MS.base);
+  if (page && page !== shownPage) setShownPage(page);
+  const back = useCallback(() => setPage(null), []);
+  const edge = useEdgeBackSwipe({ enabled: presence.mounted && !presence.closing, onBack: back });
 
   // planner://today and planner://calories: show today and leave any menu page.
   useEffect(() => {
@@ -127,7 +157,12 @@ export function AppShell() {
 
   return (
     <div className="h-dvh overflow-hidden" hidden={onTask}>
-      <main hidden={!!page} className="h-full overflow-y-auto overflow-x-hidden overscroll-contain">
+      <main
+        inert={presence.mounted}
+        className={`h-full overflow-y-auto overflow-x-hidden overscroll-contain ${
+          presence.mounted ? "page-behind" : ""
+        }`}
+      >
         <div className="animate-fade mx-auto flex min-h-full w-full max-w-[560px] flex-col lg:max-w-[1200px]">
           <DayView
             selected={selected}
@@ -139,7 +174,16 @@ export function AppShell() {
           />
         </div>
       </main>
-      {page && <MenuPageView page={page} onBack={() => setPage(null)} />}
+      {presence.mounted && shownPage && (
+        <MenuPageView
+          page={shownPage}
+          closing={presence.closing}
+          dragging={edge.dragging}
+          dragDx={edge.dx}
+          onBack={back}
+          bind={edge.bind}
+        />
+      )}
     </div>
   );
 }

@@ -2,16 +2,24 @@ import { useEffect, useMemo, useRef, useState, type HTMLAttributes, type MouseEv
 import { countCategoryTasks } from "../domain/categories";
 import { CATEGORY_COLORS, type Category } from "../domain/model";
 import { resolveSwipe, SWIPE_MAX_PX, type SwipeState } from "../domain/swipe";
+import { MOTION_MS, usePresence } from "../lib/motion";
 import type { HarnessSubject } from "../lib/harness-types";
 import { useStore } from "../state/store";
 import { useSync } from "../state/sync";
 import { useToast } from "../state/toast";
 import { mirrorSubjects } from "../sync/mirror-view";
 import { catColor } from "../theme/store";
+import { Collapse } from "./Collapse";
+import { useListExit } from "./listExit";
 import { resolveInlineSave } from "./inlineSave";
 import { Button } from "./ui";
 
 const REST: SwipeState = { axis: null, dx: 0, action: null, settled: false };
+
+interface DeleteTarget {
+  cat: Category;
+  count: number;
+}
 
 function CategoryRow({
   cat,
@@ -156,6 +164,7 @@ function CategoryRow({
   return (
     <div
       {...dragProps}
+      data-row-swipe
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={endSwipe}
@@ -216,8 +225,8 @@ function CategoryRow({
         </button>
       </div>
 
-      {expanded && (
-        <div className="animate-row border-b border-line pb-3 pt-2">
+      <Collapse open={expanded}>
+        <div className="border-b border-line pb-3 pt-2">
           <div className="flex items-center gap-2 pb-3">
             <span aria-hidden className="cursor-grab touch-none px-1 text-[12px] text-faint active:cursor-grabbing">
               Drag
@@ -349,7 +358,7 @@ function CategoryRow({
             </button>
           </div>
         </div>
-      )}
+      </Collapse>
     </div>
   );
 }
@@ -359,11 +368,13 @@ function CategoryRow({
 function DeleteCategoryDialog({
   cat,
   count,
+  closing,
   onCancel,
   onConfirm,
 }: {
   cat: Category;
   count: number;
+  closing: boolean;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
@@ -383,13 +394,13 @@ function DeleteCategoryDialog({
         aria-label="Cancel"
         onPointerDown={(e) => e.preventDefault()}
         onClick={onCancel}
-        className="absolute inset-0 cursor-default bg-scrim"
+        className={`panel-backdrop absolute inset-0 cursor-default bg-scrim ${closing ? "is-closing" : ""}`}
       />
       <div
         role="dialog"
         aria-modal="true"
         aria-label={heading}
-        className="relative w-full max-w-[420px] bg-canvas px-5 py-5"
+        className={`panel-sheet relative w-full max-w-[420px] bg-canvas px-5 py-5 ${closing ? "is-closing" : ""}`}
       >
         <h2 className="text-[15px] font-semibold">{heading}</h2>
         <p className="mt-2 text-[12.5px] text-muted">This cannot be undone except with the Undo toast.</p>
@@ -409,7 +420,8 @@ function DeleteCategoryDialog({
 export function CategoriesView() {
   const { data, actions } = useStore();
   const notify = useToast();
-  const [deleting, setDeleting] = useState<Category | null>(null);
+  const [deleting, setDeleting] = useState<DeleteTarget | null>(null);
+  const [shownDelete, setShownDelete] = useState<DeleteTarget | null>(null);
   const [name, setName] = useState("");
   const addBlocked = useRef(false);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -421,6 +433,11 @@ export function CategoriesView() {
     .filter((c) => !c.archived && !c.deletedAt)
     .sort((a, b) => a.order - b.order);
   const archived = data.categories.filter((c) => c.archived && !c.deletedAt);
+  const activeRows = useListExit(active);
+  const archivedRows = useListExit(archived);
+
+  const deletePresence = usePresence(!!deleting, MOTION_MS.base);
+  if (deleting && deleting !== shownDelete) setShownDelete(deleting);
 
   function add() {
     const attempt = resolveInlineSave(name, addBlocked.current);
@@ -452,7 +469,7 @@ export function CategoriesView() {
 
   function confirmDelete() {
     if (!deleting) return;
-    const id = deleting.id;
+    const id = deleting.cat.id;
     setDeleting(null);
     actions.deleteCategory(id);
     notify("Category deleted", "success", {
@@ -466,9 +483,9 @@ export function CategoriesView() {
 
   return (
     <div className="px-4 pb-8 pt-2 md:px-6">
-      {!hub.configured && <p className="mb-4 text-[12px] text-muted">Open LearnHarness on the laptop so it syncs.</p>}
+      {!hub.configured && <p className="page-block mb-4 text-[12px] text-muted">Open LearnHarness on the laptop so it syncs.</p>}
 
-      <div className="mb-4 border-b border-line">
+      <div className="page-block mb-4 border-b border-line">
         <input
           value={name}
           onChange={(e) => {
@@ -494,75 +511,79 @@ export function CategoriesView() {
         />
       </div>
 
-      {active.length === 0 ? (
-        <p className="py-6 text-[13px] text-muted">No categories yet. Add one above to start sorting your days.</p>
+      {activeRows.length === 0 ? (
+        <p className="page-block py-6 text-[13px] text-muted">No categories yet. Add one above to start sorting your days.</p>
       ) : (
-        <div>
-          {active.map((cat, i) => (
-            <CategoryRow
-              key={cat.id}
-              cat={cat}
-              index={i}
-              total={active.length}
-              expanded={expanded === cat.id}
-              onToggle={() => setExpanded(expanded === cat.id ? null : cat.id)}
-              dragging={dragId === cat.id}
-              onMove={(dir) => reorder(cat.id, i + dir)}
-              onDelete={() => setDeleting(cat)}
-              onArchive={() => archive(cat)}
-              subjects={subjects}
-              dragProps={{
-                draggable: expanded === cat.id,
-                onDragStart: (e) => {
-                  setDragId(cat.id);
-                  e.dataTransfer.effectAllowed = "move";
-                },
-                onDragOver: (e) => e.preventDefault(),
-                onDrop: (e) => {
-                  e.preventDefault();
-                  if (dragId && dragId !== cat.id) reorder(dragId, i);
-                  setDragId(null);
-                },
-                onDragEnd: () => setDragId(null),
-              }}
-            />
+        <div className="page-block">
+          {activeRows.map(({ item: cat, exiting }, i) => (
+            <div key={cat.id} className={`row-shell ${exiting ? "is-exiting" : ""}`}>
+              <CategoryRow
+                cat={cat}
+                index={i}
+                total={active.length}
+                expanded={expanded === cat.id}
+                onToggle={() => setExpanded(expanded === cat.id ? null : cat.id)}
+                dragging={dragId === cat.id}
+                onMove={(dir) => reorder(cat.id, i + dir)}
+                onDelete={() => setDeleting({ cat, count: countCategoryTasks(data, cat.id) })}
+                onArchive={() => archive(cat)}
+                subjects={subjects}
+                dragProps={{
+                  draggable: expanded === cat.id,
+                  onDragStart: (e) => {
+                    setDragId(cat.id);
+                    e.dataTransfer.effectAllowed = "move";
+                  },
+                  onDragOver: (e) => e.preventDefault(),
+                  onDrop: (e) => {
+                    e.preventDefault();
+                    if (dragId && dragId !== cat.id) reorder(dragId, i);
+                    setDragId(null);
+                  },
+                  onDragEnd: () => setDragId(null),
+                }}
+              />
+            </div>
           ))}
         </div>
       )}
 
-      {archived.length > 0 && (
-        <section className="mt-8">
+      {archivedRows.length > 0 && (
+        <section className="page-block mt-8">
           <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-faint">Archived</h3>
-          {archived.map((cat) => (
-            <div key={cat.id} className="flex min-h-11 items-center gap-2.5 border-b border-line">
-              <span
-                aria-hidden
-                className="h-[7px] w-[7px] shrink-0 rounded-full opacity-60"
-                style={{ backgroundColor: catColor(cat.color) }}
-              />
-              <span className="min-w-0 flex-1 truncate text-[14.5px] text-muted">{cat.name}</span>
-              <button
-                onClick={() => actions.archiveCategory(cat.id, false)}
-                className="min-h-11 px-2 text-[12px] text-muted"
-              >
-                Restore
-              </button>
-              <button
-                onClick={() => setDeleting(cat)}
-                aria-label={`Delete category: ${cat.name}`}
-                className="min-h-11 px-2 text-[12px] text-rose"
-              >
-                Delete
-              </button>
+          {archivedRows.map(({ item: cat, exiting }) => (
+            <div key={cat.id} className={`row-shell ${exiting ? "is-exiting" : ""}`}>
+              <div className="flex min-h-11 items-center gap-2.5 border-b border-line">
+                <span
+                  aria-hidden
+                  className="h-[7px] w-[7px] shrink-0 rounded-full opacity-60"
+                  style={{ backgroundColor: catColor(cat.color) }}
+                />
+                <span className="min-w-0 flex-1 truncate text-[14.5px] text-muted">{cat.name}</span>
+                <button
+                  onClick={() => actions.archiveCategory(cat.id, false)}
+                  className="ui-press min-h-11 px-2 text-[12px] text-muted"
+                >
+                  Restore
+                </button>
+                <button
+                  onClick={() => setDeleting({ cat, count: countCategoryTasks(data, cat.id) })}
+                  aria-label={`Delete category: ${cat.name}`}
+                  className="ui-press min-h-11 px-2 text-[12px] text-rose"
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           ))}
         </section>
       )}
 
-      {deleting && (
+      {deletePresence.mounted && shownDelete && (
         <DeleteCategoryDialog
-          cat={deleting}
-          count={countCategoryTasks(data, deleting.id)}
+          cat={shownDelete.cat}
+          count={shownDelete.count}
+          closing={deletePresence.closing}
           onCancel={() => setDeleting(null)}
           onConfirm={confirmDelete}
         />

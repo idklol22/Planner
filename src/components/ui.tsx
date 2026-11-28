@@ -11,7 +11,7 @@ const buttonStyles: Record<Variant, string> = {
 };
 
 const base =
-  "inline-flex min-h-11 items-center justify-center gap-2 px-2 text-[14px] transition-opacity active:opacity-70 disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-none focus-visible:underline focus-visible:underline-offset-4";
+  "ui-press inline-flex min-h-11 items-center justify-center gap-2 px-2 text-[14px] disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-none focus-visible:underline focus-visible:underline-offset-4";
 
 export function Button({
   variant = "secondary",
@@ -27,18 +27,23 @@ export function IconButton({
 }: ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button
-      className={`inline-flex h-11 w-11 shrink-0 items-center justify-center text-faint transition-opacity hover:text-ink disabled:opacity-40 focus-visible:outline-none focus-visible:underline ${className}`}
+      className={`ui-press inline-flex h-11 w-11 shrink-0 items-center justify-center text-faint hover:text-ink disabled:opacity-40 focus-visible:outline-none focus-visible:underline ${className}`}
       {...props}
     />
   );
 }
 
 export function Input({ className = "", ...props }: InputHTMLAttributes<HTMLInputElement>) {
+  // The underline is a sibling so it can grow on focus without animating a
+  // layout property. The input itself still mounts and focuses synchronously.
   return (
-    <input
-      className={`w-full border-b border-line bg-transparent px-1 py-2 text-[16px] text-ink placeholder:text-faint focus:outline-none ${className}`}
-      {...props}
-    />
+    <span className={`ui-input ${className}`}>
+      <input
+        className="w-full border-b border-line bg-transparent px-1 py-2 text-[16px] text-ink placeholder:text-faint focus:outline-none"
+        {...props}
+      />
+      <span aria-hidden className="ui-input-line" />
+    </span>
   );
 }
 
@@ -151,7 +156,7 @@ export function ProgressRing({
           fill="none"
           strokeDasharray={circumference}
           strokeDashoffset={circumference * (1 - ratio)}
-          style={{ transition: "stroke-dashoffset 0.5s cubic-bezier(0.2,0.7,0.2,1)" }}
+          style={{ transition: "stroke-dashoffset var(--motion-slow) var(--ease-out)" }}
         />
       </svg>
       {children && (
@@ -178,7 +183,7 @@ export function Segmented<T extends string>({
         <button
           key={option.value}
           onClick={() => onChange(option.value)}
-          className={`min-h-11 px-1 text-[12px] font-medium transition-colors ${
+          className={`ui-press min-h-11 px-1 text-[12px] font-medium transition-colors ${
             value === option.value
               ? "text-ink underline underline-offset-4"
               : "text-faint hover:text-muted"

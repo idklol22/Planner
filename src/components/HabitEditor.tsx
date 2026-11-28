@@ -3,6 +3,7 @@ import type { ISODate } from "../domain/dates";
 import type { Habit } from "../domain/model";
 import { activeCategories } from "../domain/tasks";
 import { useStore } from "../state/store";
+import { Collapse } from "./Collapse";
 
 // Monday first, values are JS weekdays (0 = Sunday).
 const DAYS: [string, number][] = [
@@ -24,11 +25,14 @@ export function HabitEditor({
   habit,
   categoryId,
   date,
+  closing = false,
   onClose,
 }: {
   habit?: Habit;
   categoryId?: string | null;
   date: ISODate;
+  /** Set by the owner while the sheet is animating down (usePresence). */
+  closing?: boolean;
   onClose: () => void;
 }) {
   const { data, actions } = useStore();
@@ -68,12 +72,12 @@ export function HabitEditor({
         aria-label="Close"
         onPointerDown={(e) => e.preventDefault()}
         onClick={onClose}
-        className="animate-fade absolute inset-0 cursor-default bg-scrim"
+        className={`panel-backdrop absolute inset-0 cursor-default bg-scrim ${closing ? "is-closing" : ""}`}
       />
       <div
         role="dialog"
         aria-label={habit ? "Edit habit" : "New habit"}
-        className="animate-sheet-up relative max-h-[92dvh] w-full max-w-[460px] overflow-y-auto overscroll-contain bg-canvas px-5 pb-[calc(20px+var(--safe-bottom))] pt-[calc(12px+var(--safe-top))] md:pb-5"
+        className={`panel-sheet relative max-h-[92dvh] w-full max-w-[460px] overflow-y-auto overscroll-contain bg-canvas px-5 pb-[calc(20px+var(--safe-bottom))] pt-[calc(12px+var(--safe-top))] md:pb-5 ${closing ? "is-closing" : ""}`}
       >
         <h2 className="mb-4 text-[15px] font-semibold tracking-tight">{habit ? "Edit habit" : "New habit"}</h2>
 
@@ -108,7 +112,7 @@ export function HabitEditor({
                 aria-pressed={on}
                 aria-label={DAY_NAMES[i]}
                 onClick={() => setDays((d) => (on ? d.filter((x) => x !== value) : [...d, value]))}
-                className={`flex h-11 flex-1 items-center justify-center border-b-2 text-[13px] font-semibold ${
+                className={`ui-press flex h-11 flex-1 items-center justify-center border-b-2 text-[13px] font-semibold ${
                   on ? "border-accent text-accent" : "border-line text-muted"
                 }`}
               >
@@ -134,7 +138,7 @@ export function HabitEditor({
                   key={String(f)}
                   type="button"
                   onClick={() => setForever(f)}
-                  className={`min-h-11 text-[12px] font-semibold ${
+                  className={`ui-press min-h-11 text-[12px] font-semibold ${
                     forever === f ? "text-accent underline underline-offset-4" : "text-muted"
                   }`}
                 >
@@ -144,15 +148,15 @@ export function HabitEditor({
             </div>
           </div>
         </div>
-        {!forever && (
+        <Collapse open={!forever}>
           <input
             type="date"
             value={end}
             min={start}
             onChange={(e) => e.target.value && setEnd(e.target.value)}
-            className={`${FIELD} animate-row mb-4`}
+            className={`${FIELD} mb-4`}
           />
-        )}
+        </Collapse>
 
         <div className="mt-2 flex items-center gap-4">
           {habit && (
@@ -162,19 +166,19 @@ export function HabitEditor({
                 onClose();
               }}
               aria-label="Archive habit"
-              className="min-h-11 text-[13px] text-rose"
+              className="ui-press min-h-11 text-[13px] text-rose"
             >
               Archive
             </button>
           )}
           <span className="flex-1" />
-          <button onClick={onClose} className="min-h-11 px-2 text-[13px] text-muted">
+          <button onClick={onClose} className="ui-press min-h-11 px-2 text-[13px] text-muted">
             Cancel
           </button>
           <button
             onClick={save}
             disabled={!valid}
-            className="min-h-11 px-2 text-[13px] font-semibold text-accent disabled:opacity-40"
+            className="ui-press min-h-11 px-2 text-[13px] font-semibold text-accent disabled:opacity-40"
           >
             {habit ? "Save" : "Add habit"}
           </button>

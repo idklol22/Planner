@@ -3,6 +3,7 @@ import { Cloud, Copy, KeyRound } from "lucide-react";
 import { encodeWidgetCode } from "../lib/widget";
 import { useSync } from "../state/sync";
 import { useToast } from "../state/toast";
+import { Collapse } from "./Collapse";
 import { Button, Input, Panel } from "./ui";
 
 const STEPS = [
@@ -48,7 +49,7 @@ export function WidgetSettings() {
   }
 
   return (
-    <Panel>
+    <Panel className="page-block">
       <div className="mb-5 flex items-start gap-3">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent">
           <KeyRound size={18} />
@@ -62,12 +63,12 @@ export function WidgetSettings() {
         </div>
       </div>
 
-      {!sync.configured && (
+      <Collapse open={!sync.configured}>
         <p className="mb-3 flex items-start gap-2 rounded-xl border border-line bg-ink/[0.03] px-3 py-2.5 text-[12px] leading-relaxed text-muted">
           <Cloud size={15} className="mt-0.5 shrink-0" />
           Set up cloud sync above before creating a widget code.
         </p>
-      )}
+      </Collapse>
 
       <div className="flex flex-wrap gap-2">
         <Button variant="primary" onClick={() => void createCode()} disabled={!sync.configured || !sync.client || busy}>
@@ -75,7 +76,7 @@ export function WidgetSettings() {
         </Button>
       </div>
 
-      {code && (
+      <Collapse open={!!code}>
         <div className="mt-4">
           <label htmlFor="widget-code" className="mb-2 block text-[11px] font-medium text-muted">
             Widget code
@@ -90,12 +91,12 @@ export function WidgetSettings() {
             Creating a new code stops the old one working. You will need to paste the new code into every widget.
           </p>
         </div>
-      )}
-      {error && (
+      </Collapse>
+      <Collapse open={!!error}>
         <p role="alert" className="mt-2 break-words text-[11.5px] leading-relaxed text-rose">
           {error}
         </p>
-      )}
+      </Collapse>
 
       <ol className="mt-5 space-y-2">
         {STEPS.map((step, index) => (

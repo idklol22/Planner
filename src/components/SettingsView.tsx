@@ -13,6 +13,7 @@ import { harnessLink, harnessStatus } from "../lib/harness-link";
 import { useStore } from "../state/store";
 import { useSync } from "../state/sync";
 import { useToast } from "../state/toast";
+import { Collapse } from "./Collapse";
 import { HealthSettings } from "./HealthSettings";
 import { ThemePicker } from "./ThemePicker";
 import { WidgetSettings } from "./WidgetSettings";
@@ -34,11 +35,12 @@ function ResetAll() {
   }
   return (
     <div className="mt-4 border-t border-line pt-3">
-      {!open ? (
-        <Button variant="danger" onClick={() => setOpen(true)}>
+      <Collapse open={!open}>
+        <Button variant="danger" className="justify-self-start" onClick={() => setOpen(true)}>
           Reset all data…
         </Button>
-      ) : (
+      </Collapse>
+      <Collapse open={open}>
         <div role="alertdialog" aria-label="Reset all data" className="space-y-2">
           <p className="text-xs leading-relaxed text-muted">
             This deletes every task, category, goal, habit, calorie entry and note on this device, plus the sync outbox,
@@ -60,7 +62,7 @@ function ResetAll() {
             </Button>
           </div>
         </div>
-      )}
+      </Collapse>
     </div>
   );
 }
@@ -135,7 +137,7 @@ function DesktopPanel() {
             className={`relative inline-flex h-7 w-11 shrink-0 items-center rounded-full p-0.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 ${enabled ? "bg-accent" : "bg-ink/10"}`}
           >
             <span
-              className={`inline-block h-[22px] w-[22px] rounded-full bg-surface-3 shadow-sm transition-transform ${enabled ? "translate-x-4" : "translate-x-0"}`}
+              className={`ui-switch-knob inline-block h-[22px] w-[22px] rounded-full bg-surface-3 shadow-sm ${enabled ? "translate-x-4" : "translate-x-0"}`}
             />
           </button>
           <span className="text-xs text-faint">{autostartLabel(enabled, busy)}</span>
@@ -185,7 +187,7 @@ export function SettingsView() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-5">
-      <Panel>
+      <Panel className="page-block">
         <div className="mb-4 flex items-start gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent">
             <Palette size={18} />
@@ -198,7 +200,7 @@ export function SettingsView() {
         <ThemePicker />
       </Panel>
 
-      <Panel>
+      <Panel className="page-block">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent">
             <Link2 size={16} />
@@ -210,7 +212,7 @@ export function SettingsView() {
         </div>
       </Panel>
 
-      <Panel>
+      <Panel className="page-block">
         <div className="mb-5 flex items-start gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent">
             <Cloud size={18} />
@@ -302,7 +304,7 @@ export function SettingsView() {
       <WidgetSettings />
       <HealthSettings />
 
-      <Panel>
+      <Panel className="page-block">
         <div className="mb-5 flex items-start gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber/15 text-amber">
             <Target size={18} />

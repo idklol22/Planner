@@ -4,6 +4,7 @@ import { todayISO } from "../domain/dates";
 import { isIOS } from "../native/planner-native";
 import { useHealth } from "../state/health";
 import { useToast } from "../state/toast";
+import { Collapse } from "./Collapse";
 import { Button, Panel } from "./ui";
 
 const SHORTCUT_URL = "planner://health?active=..&steps=..&exercise=..&sleep=..&hr=..";
@@ -35,7 +36,7 @@ export function HealthSettings() {
   }
 
   return (
-    <Panel>
+    <Panel className="page-block">
       <div className="mb-5 flex items-start gap-3">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent">
           <HeartPulse size={18} />
@@ -60,11 +61,11 @@ export function HealthSettings() {
           <RefreshCw size={15} /> {health.busy ? "Refreshing…" : "Refresh now"}
         </Button>
       </div>
-      {!isIOS() && (
+      <Collapse open={!isIOS()}>
         <p className="mt-2 text-[11.5px] leading-relaxed text-faint">
           Health reading is available in the iPhone app.
         </p>
-      )}
+      </Collapse>
 
       <p className="mt-4 text-[11.5px] text-muted" role="status">
         {health.connected ? "Connected · " : ""}
@@ -87,7 +88,7 @@ export function HealthSettings() {
         )}
       </div>
 
-      {health.error && (
+      <Collapse open={!!health.error}>
         <div className="mt-4 space-y-2" role="alert">
           <p className="break-words text-[11.5px] leading-relaxed text-rose">{health.error}</p>
           <p className="text-[11.5px] leading-relaxed text-muted">
@@ -104,7 +105,7 @@ export function HealthSettings() {
             </Button>
           </div>
         </div>
-      )}
+      </Collapse>
     </Panel>
   );
 }
