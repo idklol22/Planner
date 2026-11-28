@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AppShell } from "./components/AppShell";
 import { TaskPage } from "./components/task-page/TaskPage";
 import { taskIdFromHash } from "./components/task-page/route";
 import { useHandoff } from "./lib/handoff";
+import { MOTION_MS, usePresence } from "./lib/motion";
 import { DeeplinkProvider } from "./state/deeplink";
 import { HealthProvider } from "./state/health";
 import { StoreProvider, useStore } from "./state/store";
@@ -29,10 +30,20 @@ function Routes() {
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
+
+  // Keep the page mounted through its slide-out. Re-opening (a deep link, a
+  // different task, or Back during the exit) cancels the exit in usePresence.
+  const presence = usePresence(!!taskId, MOTION_MS.base);
+  const lastTaskId = useRef(taskId);
+  if (taskId) lastTaskId.current = taskId;
+  const shownId = taskId ?? lastTaskId.current;
+
   return (
     <>
       <AppShell />
-      {ready && taskId && <TaskPage taskId={taskId} />}
+      {ready && presence.mounted && shownId && (
+        <TaskPage key={shownId} taskId={shownId} closing={presence.closing} />
+      )}
     </>
   );
 }

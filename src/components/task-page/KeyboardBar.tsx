@@ -106,8 +106,12 @@ export function KeyboardBar({
   const styles = activeStyles();
 
   return (
-    <div className="keyboard-bar" style={{ bottom: keyboard, paddingBottom: keyboard ? 0 : "var(--safe-bottom)" }}>
-      <div className="keyboard-bar-row">
+    <div
+      className="keybar-anchor"
+      style={{ transform: keyboard ? `translateY(${-keyboard}px)` : undefined }}
+    >
+      <div className="keyboard-bar" style={{ paddingBottom: keyboard ? 0 : "var(--safe-bottom)" }}>
+        <div className="keyboard-bar-row">
         <BarButton
           label="Heading"
           pressed={type === "heading"}
@@ -172,6 +176,7 @@ export function KeyboardBar({
             Done
           </BarButton>
         )}
+        </div>
       </div>
     </div>
   );

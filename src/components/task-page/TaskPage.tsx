@@ -1,4 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+  type RefObject,
+} from "react";
 import { ArrowLeft, X } from "lucide-react";
 import { filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from "@blocknote/core/extensions";
 import { getDefaultReactSlashMenuItems, SuggestionMenuController, useCreateBlockNote } from "@blocknote/react";
@@ -11,6 +22,7 @@ import { TASK_KINDS, type Task } from "../../domain/model";
 import { parseDays, REPEAT_OPTIONS } from "../../domain/recurrence";
 import { activeCategories } from "../../domain/tasks";
 import { useKeyboardInset } from "../../lib/keyboard";
+import { MOTION_MS, prefersReducedMotion, usePresence } from "../../lib/motion";
 import { addPhoto, resolveFileUrl, scheduleUploads, setFileHubClient } from "../../lib/note-files";
 import { useStore } from "../../state/store";
 import { useSync } from "../../state/sync";
@@ -24,6 +36,7 @@ import { matchInlineMath, mathifyParsedBlocks } from "./math";
 import { goBack } from "./route";
 import { schema, type PlannerEditor } from "./schema";
 import { TASK_SLASH_TITLE, taskBlockProps, taskSlashAliases } from "./slash";
+import { canStartSwipeBack, shouldCommitSwipe, swipeBackProgress } from "./swipe";
 import { PLACEHOLDER_TITLE, planSync, type BlockState, type Snapshot, type SubtaskState } from "./sync";
 
 type AnyBlock = { id: string; type: string; props?: Record<string, unknown>; content?: unknown; children?: AnyBlock[] };
@@ -40,11 +53,17 @@ function plainText(content: unknown): string {
 /** 44px bar + a little breathing room; the bar adds the safe area itself. */
 const BAR_SPACE = 52;
 
-export function TaskPage({ taskId }: { taskId: string }) {
+export function TaskPage({ taskId, closing = false }: { taskId: string; closing?: boolean }) {
   const { data } = useStore();
   const task = data.tasks.find((t) => t.id === taskId && !t.deletedAt && !t.archivedAt);
   const keyboard = useKeyboardInset();
   const pageRef = useRef<HTMLDivElement>(null);
+
+  // Left-edge swipe: while held, the page follows the finger one to one.
+  const [swipe, setSwipe] = useState<{ x: number; opacity: number; snapping: boolean } | null>(null);
+  const swipeStart = useRef<{ id: number; x: number; y: number; time: number; active: boolean } | null>(null);
+  const snapTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(snapTimer.current), []);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -59,11 +78,102 @@ export function TaskPage({ taskId }: { taskId: string }) {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  /** A gesture that did not commit settles back with the same short spring. */
+  function snapBack() {
+    setSwipe({ x: 0, opacity: 1, snapping: true });
+    window.clearTimeout(snapTimer.current);
+    snapTimer.current = window.setTimeout(
+      () => setSwipe(null),
+      prefersReducedMotion() ? 0 : MOTION_MS.slow,
+    );
+  }
+
+  function onSwipeDown(e: ReactPointerEvent<HTMLDivElement>) {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    const target = e.target as Element | null;
+    const selection = window.getSelection();
+    const startable = canStartSwipeBack(e.clientX, window.innerWidth, {
+      selecting: !!selection && !selection.isCollapsed,
+      // Text selection and the controls on the page own their own gestures.
+      insideEditor: !!target?.closest?.(
+        ".planner-editor, .note-editor, button, input, textarea, select, a, [contenteditable]",
+      ),
+    });
+    if (!startable) return;
+    window.clearTimeout(snapTimer.current);
+    swipeStart.current = { id: e.pointerId, x: e.clientX, y: e.clientY, time: e.timeStamp, active: false };
+  }
+
+  function onSwipeMove(e: ReactPointerEvent<HTMLDivElement>) {
+    const start = swipeStart.current;
+    if (!start || start.id !== e.pointerId) return;
+    const dx = e.clientX - start.x;
+    const dy = e.clientY - start.y;
+    if (!start.active && Math.abs(dx) < 6) return;
+    // A selection made during the drag always wins over going back.
+    const selection = window.getSelection();
+    if (selection && !selection.isCollapsed) {
+      swipeStart.current = null;
+      if (start.active) snapBack();
+      return;
+    }
+    const progress = swipeBackProgress(dx, dy, window.innerWidth);
+    if (!progress) {
+      // Vertical: hand the gesture back to the page's own scrolling.
+      swipeStart.current = null;
+      if (start.active) snapBack();
+      return;
+    }
+    start.active = true;
+    setSwipe({ x: dx, opacity: 1 - progress * 0.12, snapping: false });
+  }
+
+  function onSwipeCancel(e: ReactPointerEvent<HTMLDivElement>) {
+    const start = swipeStart.current;
+    if (start?.id !== e.pointerId) return;
+    swipeStart.current = null;
+    if (start.active) snapBack();
+  }
+
+  function onSwipeEnd(e: ReactPointerEvent<HTMLDivElement>) {
+    const start = swipeStart.current;
+    if (!start || start.id !== e.pointerId) return;
+    swipeStart.current = null;
+    if (!start.active) return;
+    const dx = e.clientX - start.x;
+    const dy = e.clientY - start.y;
+    const velocityX = dx / Math.max(1, e.timeStamp - start.time);
+    if (shouldCommitSwipe(dx, dy, window.innerWidth, velocityX)) {
+      // Hold the current offset: App's slide-out starts from exactly here.
+      setSwipe({ x: dx, opacity: 1, snapping: false });
+      goBack();
+    } else {
+      snapBack();
+    }
+  }
+
+  const pageStyle = {
+    paddingBottom: keyboard ? BAR_SPACE + keyboard : `calc(${BAR_SPACE}px + var(--safe-bottom))`,
+    "--swipe-x": `${swipe?.x ?? 0}px`,
+    "--swipe-opacity": swipe?.opacity ?? 1,
+  } as CSSProperties;
+  const swipeClass = closing
+    ? ""
+    : swipe?.snapping
+      ? " is-snapping"
+      : swipe
+        ? " is-swiping"
+        : "";
+
   return (
     <div
       ref={pageRef}
-      className="task-page fixed inset-0 z-50 max-w-[100vw] overflow-x-hidden overflow-y-auto overscroll-contain bg-canvas"
-      style={{ paddingBottom: keyboard ? BAR_SPACE + keyboard : `calc(${BAR_SPACE}px + var(--safe-bottom))` }}
+      className={`task-page fixed inset-0 z-50 max-w-[100vw] overflow-x-hidden overflow-y-auto overscroll-contain bg-canvas${closing ? " task-page--closing" : ""}${swipeClass}`}
+      style={pageStyle}
+      onPointerDown={onSwipeDown}
+      onPointerMove={onSwipeMove}
+      onPointerUp={onSwipeEnd}
+      onPointerCancel={onSwipeCancel}
       // Keep the day page's single-key shortcuts (n, t, arrows) from firing underneath.
       onKeyDown={(e) => e.key !== "Escape" && e.nativeEvent.stopPropagation()}
     >
@@ -96,7 +206,9 @@ function withAfterBasic<T extends { group?: string }>(items: T[], extra: T): T[]
   return out;
 }
 
-function TaskDocument({
+/** Memoised so the swipe's per-frame state on the page shell never re-renders
+ *  the editor (which would move the cursor). */
+const TaskDocument = memo(function TaskDocument({
   task,
   keyboard,
   pageRef,
@@ -131,7 +243,40 @@ function TaskDocument({
   clientRef.current = sync.client;
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
-  const [viewer, setViewer] = useState<{ url: string; blockId: string } | null>(null);
+
+  // The viewer zooms from the tapped photo and zooms back on close. Keeping the
+  // last target in a ref lets the image stay on screen through its exit.
+  type Viewer = {
+    url: string;
+    blockId: string;
+    rect: { left: number; top: number; width: number; height: number };
+  };
+  const [viewer, setViewer] = useState<Viewer | null>(null);
+  const viewerPresence = usePresence(!!viewer, MOTION_MS.base);
+  const viewerRef = useRef<Viewer | null>(null);
+  if (viewer) viewerRef.current = viewer;
+  const shownViewer = viewer ?? viewerRef.current;
+  const viewerImageRef = useRef<HTMLImageElement>(null);
+  const [flip, setFlip] = useState<{ dx: number; dy: number; scale: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!viewerPresence.mounted || !shownViewer || flip) return;
+    if (prefersReducedMotion()) {
+      setFlip({ dx: 0, dy: 0, scale: 1 });
+      return;
+    }
+    const image = viewerImageRef.current;
+    if (!image) return;
+    const to = image.getBoundingClientRect();
+    const from = shownViewer.rect;
+    const scale = to.width > 0 ? Math.max(0.05, Math.min(1, from.width / to.width)) : 1;
+    setFlip({
+      dx: from.left + from.width / 2 - (to.left + to.width / 2),
+      dy: from.top + from.height / 2 - (to.top + to.height / 2),
+      scale,
+    });
+  }, [viewerPresence.mounted, shownViewer, flip]);
+
   const cameraInput = useRef<HTMLInputElement>(null);
   const photosInput = useRef<HTMLInputElement>(null);
   /** Block the cursor was in when a photo was chosen (the picker blurs the editor). */
@@ -382,7 +527,13 @@ function TaskDocument({
     const block = image?.closest('[data-content-type="image"]');
     const blockId = block?.closest("[data-id]")?.getAttribute("data-id");
     if (!image || !blockId) return;
-    setViewer({ url: image.currentSrc || image.src, blockId });
+    const rect = image.getBoundingClientRect();
+    setFlip(null);
+    setViewer({
+      url: image.currentSrc || image.src,
+      blockId,
+      rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+    });
   }
 
   function removeImage() {
@@ -604,12 +755,12 @@ function TaskDocument({
         onPhotos={() => openPicker(photosInput)}
       />
 
-      {viewer && (
+      {viewerPresence.mounted && shownViewer && (
         <div
           role="dialog"
           aria-modal="true"
           aria-label="Photo viewer"
-          className="photo-viewer"
+          className={`photo-viewer ${viewerPresence.closing ? "is-closing" : ""}`}
           onClick={() => setViewer(null)}
         >
           <button
@@ -621,9 +772,17 @@ function TaskDocument({
             <X size={22} />
           </button>
           <img
-            src={viewer.url}
+            ref={viewerImageRef}
+            src={shownViewer.url}
             alt="Note photo"
-            className="photo-viewer-image"
+            className={`photo-viewer-image ${flip ? "is-ready" : ""}`}
+            style={
+              {
+                "--photo-dx": `${flip?.dx ?? 0}px`,
+                "--photo-dy": `${flip?.dy ?? 0}px`,
+                "--photo-scale": flip?.scale ?? 1,
+              } as CSSProperties
+            }
             onClick={(event) => event.stopPropagation()}
           />
           <button type="button" onClick={removeImage} className="photo-viewer-remove">
@@ -633,4 +792,4 @@ function TaskDocument({
       )}
     </>
   );
-}
+});
