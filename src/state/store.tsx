@@ -40,9 +40,18 @@ import {
 import { tasksForItems, type NoteItem } from "../lib/absorb";
 import { buildHandoffMarkdown, NOTE_TASKS_EVENT } from "../lib/handoff";
 import { isTauri, storage } from "../storage";
-import type { LoadIssue } from "../storage/port";
+import { isSafetyCopyError, type LoadIssue, type LoadResult, type SaveBlockReason } from "../storage/port";
+
+export type { SaveBlockReason } from "../storage/port";
 
 type Mutator = (data: AppData) => AppData;
+
+/** Kept as a pure function so the wording can be checked without a DOM. */
+export function saveBlockedMessage(reason: SaveBlockReason): string {
+  return reason === "backup"
+    ? "Changes are not being saved because the original data could not be backed up (storage may be full)."
+    : "Saved data could not be read, so changes are not being saved. The original is left untouched while the app retries.";
+}
 
 /** The toast lives in the store so it can report a failed load on the very
  *  first render, before the app's toast provider (a child) is mounted. */
@@ -69,6 +78,23 @@ function RecoveryNotice({ issue }: { issue: LoadIssue }) {
         <button onClick={() => setOpen(false)} className="ui-press ml-2 text-faint hover:text-ink">
           Dismiss
         </button>
+      </div>
+    </div>
+  );
+}
+
+/** Unlike a one-off load report, this stays up until saving has resumed. It
+ *  has no dismiss button: the user must be able to see that edits are held. */
+function SaveBlockedNotice({ reason }: { reason: SaveBlockReason }) {
+  return (
+    <div
+      role="status"
+      aria-live="assertive"
+      className="pointer-events-none fixed left-1/2 top-[calc(12px+var(--safe-top))] z-[110] w-max max-w-[calc(100vw-32px)] -translate-x-1/2"
+    >
+      <div className="pointer-events-auto flex items-center gap-2.5 rounded-xl border border-rose/40 bg-surface-2/95 px-4 py-2.5 text-sm text-ink shadow-2xl shadow-black/50 backdrop-blur-xl">
+        <AlertCircle size={16} className="shrink-0 text-rose" />
+        <span>{saveBlockedMessage(reason)}</span>
       </div>
     </div>
   );
@@ -240,6 +266,7 @@ const StoreContext = createContext<StoreValue | null>(null);
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<AppData>(defaultData);
   const [loadIssue, setLoadIssue] = useState<LoadIssue | null>(null);
+  const [blockReason, setBlockReason] = useState<SaveBlockReason | null>(null);
   const [ready, setReady] = useState(false);
   const dataRef = useRef(data);
   dataRef.current = data;
@@ -250,24 +277,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let alive = true;
-    (storage.loadWithReport
+    const loading: Promise<LoadResult> = storage.loadWithReport
       ? storage.loadWithReport()
-      : storage.load().then((data) => ({ data, issue: null })))
+      : storage.load().then((data) => ({ data, issue: null }));
+    loading
       .then((loaded) => {
         if (!alive) return;
         if (loaded.data) setData(loaded.data);
         if (loaded.issue) setLoadIssue(loaded.issue);
+        if (loaded.readFailed) setBlockReason("read");
+        else if (loaded.blocked) setBlockReason("backup");
       })
       .catch(() => {
-        // A native read failure cannot be backed up here; still tell the user.
-        if (alive) {
-          setLoadIssue({
-            reason: "unreadable",
-            dropped: 0,
-            repairedSettings: [],
-            quarantinedKeys: [],
-          });
-        }
+        // Nothing was read and nothing was copied. Do not claim a backup: the
+        // only copy of the original may still be the one on disk.
+        if (alive) setBlockReason("read");
       })
       .finally(() => {
         if (alive) setReady(true);
@@ -279,7 +303,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (!ready) return;
+    // While a safety copy is missing, even a debounced autosave (including a
+    // sync-driven apply) must not replace the data key.
+    if (!ready || blockReason) return;
     saveTimer.current = setTimeout(() => {
       saveTimer.current = null;
       void storage.save(data).catch(() => {
@@ -290,7 +316,50 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current = null;
     };
-  }, [data, ready]);
+  }, [data, ready, blockReason]);
+
+  // Keep trying until saving can resume: copies may become writable, or a
+  // native read that failed at startup may succeed on a later attempt.
+  useEffect(() => {
+    if (!ready || !blockReason) return;
+    let cancelled = false;
+    const attempt = async () => {
+      if (blockReason === "read") {
+        const retry = storage.retryLoad ?? storage.loadWithReport;
+        if (!retry) return;
+        try {
+          const loaded = await retry.call(storage);
+          if (cancelled) return;
+          if (loaded.readFailed) return;
+          if (loaded.data) {
+            // The recovered store wins over defaults or edits made meanwhile.
+            dataRef.current = loaded.data;
+            setData(loaded.data);
+          }
+          if (loaded.issue) setLoadIssue(loaded.issue);
+          setBlockReason(loaded.blocked ? "backup" : null);
+        } catch {
+          // The read still throws: leave the notice up and try again.
+        }
+        return;
+      }
+      try {
+        // save() retries the pending copies and refuses to write if they are
+        // still missing. That also covers flush on background and reset.
+        await storage.save(dataRef.current);
+        if (!cancelled) setBlockReason(null);
+      } catch (error) {
+        if (cancelled) return;
+        if (isSafetyCopyError(error)) setBlockReason(error.reason === "read" ? "read" : "backup");
+      }
+    };
+    void attempt();
+    const timer = window.setInterval(() => void attempt(), 2_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [blockReason, ready]);
 
   const update = useCallback((mutator: Mutator) => {
     setData((prev) => mutator(prev));
@@ -841,7 +910,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   return (
     <StoreContext.Provider value={value}>
       {children}
-      {loadIssue && <RecoveryNotice issue={loadIssue} />}
+      {blockReason ? (
+        <SaveBlockedNotice reason={blockReason} />
+      ) : (
+        loadIssue && <RecoveryNotice issue={loadIssue} />
+      )}
     </StoreContext.Provider>
   );
 }

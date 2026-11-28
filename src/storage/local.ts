@@ -1,5 +1,5 @@
-import type { StorageAdapter } from "./port";
-import { recoverStored } from "./recovery";
+import { SafetyCopyError, type StorageAdapter } from "./port";
+import { recoverStored, retrySafetyCopies } from "./recovery";
 
 export const DATA_KEY = "todomate.data";
 export const HANDOFF_PREFIX = "todomate.handoff.";
@@ -20,7 +20,14 @@ export const localAdapter: StorageAdapter = {
     return read();
   },
 
+  async retryLoad() {
+    return read();
+  },
+
   async save(data) {
+    // Never let an autosave, flush or sync apply replace an original whose
+    // safety copy is still missing. The copy is retried on every save.
+    if (!retrySafetyCopies(localStorage)) throw new SafetyCopyError("backup");
     localStorage.setItem(DATA_KEY, JSON.stringify(data));
   },
 
