@@ -3,6 +3,8 @@
 
 import type { ISODate } from "../domain/dates";
 
+export type CalendarMode = "week" | "month";
+
 export type SwipeAxis = "x" | "y" | null;
 /** -1 = previous page, 1 = next page, 0 = stay on this page. */
 export type PageStep = -1 | 0 | 1;
@@ -10,6 +12,11 @@ export type PageStep = -1 | 0 | 1;
 export const PAGE_LOCK_PX = 8;
 export const PAGE_COMMIT_PX = 56;
 export const PAGE_MAX_PX = 160;
+/** A sloppy tap (a few pixels of finger travel) still counts as a tap. */
+export const TAP_SLOP_PX = 12;
+/** A deliberate mode swipe: well past a page-scroll twitch, mostly vertical. */
+export const MODE_SWIPE_PX = 48;
+export const MODE_SWIPE_RATIO = 1.5;
 
 export interface PageGestureInput {
   pointerType: string;
@@ -68,4 +75,73 @@ export function pageDirection(prev: readonly ISODate[], next: readonly ISODate[]
 
 export function selectedCellIndex(dates: readonly ISODate[], selected: ISODate): number {
   return dates.indexOf(selected);
+}
+
+/** A tap is a tap even when the finger drifted a few pixels on iOS. */
+export function isTapMovement(dx: number, dy: number): boolean {
+  return Math.hypot(dx, dy) <= TAP_SLOP_PX;
+}
+
+/** Only a real drag may swallow the click that follows it. A jittery tap, a
+ *  vertical page scroll and a keyboard activation must all keep their click. */
+export function shouldSuppressClick(axis: SwipeAxis, dx: number, dy: number): boolean {
+  return axis !== null && !isTapMovement(dx, dy);
+}
+
+export interface ModeSwipeInput {
+  startX: number;
+  startY: number;
+  x: number;
+  y: number;
+  /** True once this gesture has already toggled the mode. */
+  fired: boolean;
+}
+
+export interface ModeSwipeResult {
+  mode: CalendarMode | null;
+  fired: boolean;
+}
+
+/** Down opens the month, up returns to the week. Small or diagonal movement is
+ *  an ordinary scroll/tap and does nothing; the latch makes it once per gesture. */
+export function resolveModeSwipe(input: ModeSwipeInput): ModeSwipeResult {
+  const dx = input.x - input.startX;
+  const dy = input.y - input.startY;
+  if (
+    input.fired ||
+    Math.abs(dy) < MODE_SWIPE_PX ||
+    Math.abs(dy) < Math.abs(dx) * MODE_SWIPE_RATIO
+  ) {
+    return { mode: null, fired: input.fired };
+  }
+  return { mode: dy > 0 ? "month" : "week", fired: true };
+}
+
+export interface CalendarHeights {
+  week: number | null;
+  month: number | null;
+}
+
+/** An unmeasurable page must not get an inline height: the flow/stack layout is
+ *  already correct before measurement, so no failed read can leave it open. */
+export function validHeight(px: number | null | undefined): number | null {
+  if (typeof px !== "number" || !Number.isFinite(px) || px <= 0) return null;
+  return Math.ceil(px);
+}
+
+/** Only the active page's measured height drives the container. */
+export function activeHeight(mode: CalendarMode, heights: CalendarHeights): number | null {
+  return validHeight(mode === "week" ? heights.week : heights.month);
+}
+
+/** ResizeObserver jitter below a pixel must not restart the height transition. */
+export function heightDiffers(a: number | null, b: number | null): boolean {
+  if (a === b) return false;
+  if (a === null || b === null) return true;
+  return Math.abs(a - b) >= 1;
+}
+
+/** Exactly one page is in normal flow; the other is stacked out of the layout. */
+export function pageInFlow(mode: CalendarMode, page: CalendarMode): boolean {
+  return mode === page;
 }
