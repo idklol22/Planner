@@ -8,6 +8,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
+  type RefObject,
   type TouchEvent as ReactTouchEvent,
 } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
@@ -27,9 +28,21 @@ import {
 import { MOTION_MS, prefersReducedMotion } from "../lib/motion";
 import { useStore } from "../state/store";
 import { dayAriaLabel, dayMark } from "./calendarStatus";
-import { pageDirection, resolvePageGesture } from "./calendarMotion";
+import {
+  activeHeight,
+  heightDiffers,
+  pageDirection,
+  pageInFlow,
+  resolveModeSwipe,
+  resolvePageGesture,
+  shouldSuppressClick,
+  validHeight,
+  type CalendarHeights,
+  type CalendarMode,
+  type SwipeAxis,
+} from "./calendarMotion";
 
-export type CalendarMode = "week" | "month";
+export type { CalendarMode } from "./calendarMotion";
 
 const WEEK_TILES = 5;
 const MONTH_TILES = 4;
@@ -176,6 +189,7 @@ function CalendarPage({
   onModeChange,
   active,
   header,
+  measureRef,
 }: {
   mode: CalendarMode;
   dates: ISODate[];
@@ -185,16 +199,18 @@ function CalendarPage({
   onModeChange: (mode: CalendarMode) => void;
   active: boolean;
   header?: ReactNode;
+  measureRef: RefObject<HTMLDivElement | null>;
 }) {
   const [outgoing, setOutgoing] = useState<{ dates: ISODate[]; selected: ISODate; step: 1 | -1 } | null>(
     null,
   );
   const [drag, setDrag] = useState<Drag>({ dx: 0, phase: "idle" });
-  const gesture = useRef<{ id: number; x: number; y: number; axis: "x" | "y" | null; moved: boolean } | null>(
-    null,
-  );
+  const gesture = useRef<{ id: number; x: number; y: number; axis: SwipeAxis; moved: boolean } | null>(null);
   const suppressClick = useRef(false);
-  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const modeSwipe = useRef<{ start: { x: number; y: number } | null; fired: boolean }>({
+    start: null,
+    fired: false,
+  });
   const prev = useRef({ dates, selected });
   const settleTimer = useRef(0);
   const exitTimer = useRef(0);
@@ -251,21 +267,18 @@ function CalendarPage({
       pointerDown: true,
     });
     if (state.axis === "y") {
-      // Vertical scroll wins: let go and let the browser handle it.
-      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-        e.currentTarget.releasePointerCapture(e.pointerId);
-      }
+      // Vertical scroll wins: hand it back to the browser. Touch pointers are
+      // implicitly captured, so no explicit capture is ever taken or released
+      // here — that keeps the chevron's own tap out of this gesture's way.
       gesture.current = null;
+      suppressClick.current = shouldSuppressClick("y", e.clientX - g.x, e.clientY - g.y);
       setDrag({ dx: 0, phase: "idle" });
       return;
     }
     if (state.axis === "x") {
       g.axis = "x";
       g.moved = true;
-      suppressClick.current = true;
-      if (!e.currentTarget.hasPointerCapture(e.pointerId)) {
-        e.currentTarget.setPointerCapture(e.pointerId);
-      }
+      suppressClick.current = shouldSuppressClick("x", e.clientX - g.x, e.clientY - g.y);
       setDrag({ dx: state.dx, phase: "drag" });
     }
   }
@@ -274,9 +287,6 @@ function CalendarPage({
     const g = gesture.current;
     if (!g) return;
     gesture.current = null;
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-      e.currentTarget.releasePointerCapture(e.pointerId);
-    }
     const state = resolvePageGesture({
       pointerType: e.pointerType,
       startX: g.x,
@@ -286,13 +296,18 @@ function CalendarPage({
       axis: g.axis,
       pointerDown: false,
     });
-    if (g.moved && state.step !== 0) {
+    const dx = e.clientX - g.x;
+    const dy = e.clientY - g.y;
+    if (state.step !== 0) {
+      suppressClick.current = shouldSuppressClick(g.axis, dx, dy);
       // The selection changes now; the sliding layers are purely visual.
       setDrag({ dx: 0, phase: "idle" });
       onPaging(state.step);
     } else if (g.moved) {
+      suppressClick.current = shouldSuppressClick(g.axis, dx, dy);
       settle();
     } else {
+      suppressClick.current = false;
       setDrag({ dx: 0, phase: "idle" });
     }
   }
@@ -304,23 +319,58 @@ function CalendarPage({
   }
 
   function onClickCapture(e: ReactMouseEvent<HTMLDivElement>) {
-    if (!suppressClick.current) return;
+    // detail 0 means keyboard activation; never suppress that.
+    if (!suppressClick.current || e.detail === 0) return;
     suppressClick.current = false;
     e.preventDefault();
     e.stopPropagation();
   }
 
-  // The existing vertical swipe still toggles the view; touch-action: pan-y
-  // means the browser keeps scrolling at the same time.
-  function onTouchEnd(e: ReactTouchEvent<HTMLDivElement>) {
-    const start = touchStart.current;
-    touchStart.current = null;
-    if (!start || !active) return;
-    const dx = e.changedTouches[0].clientX - start.x;
-    const dy = e.changedTouches[0].clientY - start.y;
-    if (Math.abs(dy) > 45 && Math.abs(dy) > Math.abs(dx) * 1.5) {
-      onModeChange(dy > 0 ? "month" : "week");
+  function onTouchStart(e: ReactTouchEvent<HTMLDivElement>) {
+    if (!active || e.touches.length !== 1) {
+      modeSwipe.current.start = null;
+      return;
     }
+    modeSwipe.current = {
+      start: { x: e.touches[0].clientX, y: e.touches[0].clientY },
+      fired: false,
+    };
+    suppressClick.current = false;
+  }
+
+  // The vertical swipe toggles the view. Watch touch events, not pointer
+  // events: WebKit cancels the pointer stream as soon as it claims a pan-y
+  // scroll. Decide on the first sample that crosses the threshold so a later
+  // touchcancel cannot swallow the swipe; the latch keeps it to once per
+  // gesture even though every move and the end all reach this decision.
+  function checkModeSwipe(x: number, y: number) {
+    const swipe = modeSwipe.current;
+    if (!swipe.start || !active) return;
+    const result = resolveModeSwipe({
+      startX: swipe.start.x,
+      startY: swipe.start.y,
+      x,
+      y,
+      fired: swipe.fired,
+    });
+    swipe.fired = result.fired;
+    if (result.mode) onModeChange(result.mode);
+  }
+
+  function onTouchMove(e: ReactTouchEvent<HTMLDivElement>) {
+    if (e.touches.length !== 1) return;
+    checkModeSwipe(e.touches[0].clientX, e.touches[0].clientY);
+  }
+
+  function onTouchEnd(e: ReactTouchEvent<HTMLDivElement>) {
+    if (!e.changedTouches.length) return;
+    const touch = e.changedTouches[0];
+    checkModeSwipe(touch.clientX, touch.clientY);
+    modeSwipe.current.start = null;
+  }
+
+  function onTouchCancel() {
+    modeSwipe.current.start = null;
   }
 
   const rangeKey = `${dates[0]}|${dates[dates.length - 1]}`;
@@ -330,18 +380,17 @@ function CalendarPage({
   return (
     <div className="cal-page" data-active={active} aria-hidden={!active} inert={!active}>
       <div
+        ref={measureRef}
         className="cal-page-inner touch-pan-y"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerCancel}
         onClickCapture={onClickCapture}
-        onTouchStart={(e) => {
-          if (e.touches.length === 1) {
-            touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-          }
-        }}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
+        onTouchCancel={onTouchCancel}
       >
         {header}
         <div className="cal-grid-stage">
@@ -419,6 +468,60 @@ export function Calendar({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rangeKey, ruleSig, ready]);
 
+  // Both pages stay mounted, but only their measurements drive the container
+  // height. The CSS flow/stack rule is already correct without a measurement,
+  // so an invalid read can only remove the inline height, never leave it open.
+  const weekRef = useRef<HTMLDivElement>(null);
+  const monthRef = useRef<HTMLDivElement>(null);
+  const [heights, setHeights] = useState<CalendarHeights>({ week: null, month: null });
+
+  const measure = useCallback(() => {
+    const weekHeight = validHeight(weekRef.current?.getBoundingClientRect().height);
+    const monthHeight = validHeight(monthRef.current?.getBoundingClientRect().height);
+    setHeights((prev) =>
+      heightDiffers(prev.week, weekHeight) || heightDiffers(prev.month, monthHeight)
+        ? { week: weekHeight, month: monthHeight }
+        : prev,
+    );
+  }, []);
+
+  // No dependency list: every render (mode flip, month change, theme change)
+  // re-reads both pages after the DOM has settled.
+  useLayoutEffect(measure);
+
+  useEffect(() => {
+    const remeasure = () => measure();
+    window.addEventListener("resize", remeasure);
+    window.addEventListener("orientationchange", remeasure);
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(remeasure);
+    if (observer) {
+      if (weekRef.current) observer.observe(weekRef.current);
+      if (monthRef.current) observer.observe(monthRef.current);
+    }
+    let live = true;
+    document.fonts?.ready
+      .then(() => {
+        if (live) remeasure();
+      })
+      .catch(() => {});
+    // Theme changes that shift type or spacing resize the pages; watch the root
+    // too so a token-only change still triggers a synchronous re-measure.
+    const themes = typeof MutationObserver === "undefined" ? null : new MutationObserver(remeasure);
+    themes?.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme", "class", "style"],
+    });
+    return () => {
+      window.removeEventListener("resize", remeasure);
+      window.removeEventListener("orientationchange", remeasure);
+      observer?.disconnect();
+      themes?.disconnect();
+      live = false;
+    };
+  }, [measure]);
+
+  const height = activeHeight(mode, heights);
+
   function go(step: 1 | -1) {
     onSelect(week ? addDays(selected, 7 * step) : addMonths(selected, step));
   }
@@ -427,7 +530,12 @@ export function Calendar({
 
   return (
     <section aria-label="Calendar" className="select-none !px-1.5 !pb-0 !pt-1.5">
-      <div className="cal-pages" data-mode={mode}>
+      <div
+        className="cal-pages"
+        data-mode={mode}
+        data-measured={height !== null}
+        style={height === null ? undefined : { height }}
+      >
         <CalendarPage
           mode="week"
           dates={weekDatesList}
@@ -435,7 +543,8 @@ export function Calendar({
           onSelect={onSelect}
           onPaging={go}
           onModeChange={onModeChange}
-          active={week}
+          active={pageInFlow(mode, "week")}
+          measureRef={weekRef}
         />
         <CalendarPage
           mode="month"
@@ -444,16 +553,17 @@ export function Calendar({
           onSelect={onSelect}
           onPaging={go}
           onModeChange={onModeChange}
-          active={!week}
+          active={pageInFlow(mode, "month")}
+          measureRef={monthRef}
           header={
             <>
               <div className="flex items-center justify-between pb-1 pl-2">
                 <h2 className="text-[14px] font-semibold">{formatMonth(selected)}</h2>
                 <div className="flex">
-                  <button onClick={() => go(-1)} aria-label="Previous month" className={arrow}>
+                  <button type="button" onClick={() => go(-1)} aria-label="Previous month" className={arrow}>
                     <ChevronLeft size={18} />
                   </button>
-                  <button onClick={() => go(1)} aria-label="Next month" className={arrow}>
+                  <button type="button" onClick={() => go(1)} aria-label="Next month" className={arrow}>
                     <ChevronRight size={18} />
                   </button>
                 </div>
@@ -471,6 +581,7 @@ export function Calendar({
       </div>
 
       <button
+        type="button"
         onClick={() => onModeChange(week ? "month" : "week")}
         aria-label={week ? "Switch to month view" : "Switch to week view"}
         className="cal-press flex min-h-11 w-full items-center justify-center text-faint hover:text-ink"
