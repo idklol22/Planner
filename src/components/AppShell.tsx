@@ -156,7 +156,9 @@ export function AppShell() {
   }
 
   return (
-    <div className="h-dvh overflow-hidden" hidden={onTask}>
+    /* The task screen is an opaque overlay: keep the day painted so it shows under the slide,
+       and so its rows do not replay their entrance on the way back. */
+    <div className="h-dvh overflow-hidden" inert={onTask}>
       <main
         inert={!!page}
         className={`h-full overflow-y-auto overflow-x-hidden overscroll-contain ${

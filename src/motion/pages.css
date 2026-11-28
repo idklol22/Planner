@@ -16,8 +16,22 @@
 .page {
   /* `backwards` leaves no resting transform, so fixed children keep the
      viewport as their containing block once the push has finished. */
-  animation: page-push-in var(--motion) var(--ease-out) backwards;
+  animation:
+    page-push-in var(--motion) var(--ease-out) backwards,
+    page-cover var(--motion) linear;
   transition: transform var(--motion) var(--ease-spring);
+}
+/* While a page moves it is opaque, so the two screens never show through each other.
+   At rest it is see-through again and the theme background stays behind its header. */
+@keyframes page-cover {
+  from,
+  to {
+    background-color: var(--bg);
+  }
+}
+.page.is-dragging,
+.page.is-exiting {
+  background-color: var(--bg);
 }
 .page.is-dragging {
   animation: none;
@@ -30,12 +44,18 @@
   pointer-events: none;
 }
 
-/* The day screen underneath dims while a page is up. No transform here: this is
-   an ancestor of the fixed add bar, composer and popovers, and a resting
-   transform would re-anchor them to this scroll container on iOS. */
+/* The day screen fades away under an open page and comes back as the page is
+   dragged or popped off. No transform here: this is an ancestor of the fixed add
+   bar, composer and popovers, and a resting transform would re-anchor them on iOS. */
 .page-behind {
-  opacity: 0.55;
+  opacity: 0;
   transition: opacity var(--motion) var(--ease-out);
+}
+.page-behind:has(~ .page.is-dragging) {
+  opacity: 0.55;
+}
+.page-behind:has(~ .page.is-exiting) {
+  opacity: 1;
 }
 
 /* A short, staggered rise for the first few blocks of a page. */
