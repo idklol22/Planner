@@ -253,7 +253,10 @@ export class HubClient {
     return (text ? JSON.parse(text) : undefined) as T;
   }
 
-  /** Upsert rows; the hub ignores updates older than what it already has. */
+  /** Upsert rows; the hub ignores updates older than what it already has and
+   *  reports only how many ops it applied. `applied < ops.length` can mean a
+   *  lost LWW race or a repeat of a stored row; the engine reads the rows back
+   *  to tell those apart before acknowledging the batch. */
   push(ops: HubOp[]): Promise<PushResult> {
     return this.request<PushResult>("/ops", {
       method: "POST",
