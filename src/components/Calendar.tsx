@@ -207,7 +207,7 @@ function CalendarPage({
   const [drag, setDrag] = useState<Drag>({ dx: 0, phase: "idle" });
   const gesture = useRef<{ id: number; x: number; y: number; axis: SwipeAxis; moved: boolean } | null>(null);
   const suppressClick = useRef(false);
-  const modeSwipe = useRef<{ start: { x: number; y: number } | null; fired: boolean }>({
+  const modeSwipe = useRef<{ start: { x: number; y: number; scrollTop: number } | null; fired: boolean }>({
     start: null,
     fired: false,
   });
@@ -249,6 +249,8 @@ function CalendarPage({
 
   function onPointerDown(e: ReactPointerEvent<HTMLDivElement>) {
     if (!active || e.pointerType === "mouse") return;
+    // A second finger must not replace an in-flight paging gesture.
+    if (gesture.current) return;
     // A drag whose click never arrived must not swallow the next real tap.
     suppressClick.current = false;
     gesture.current = { id: e.pointerId, x: e.clientX, y: e.clientY, axis: null, moved: false };
@@ -285,7 +287,7 @@ function CalendarPage({
 
   function onPointerUp(e: ReactPointerEvent<HTMLDivElement>) {
     const g = gesture.current;
-    if (!g) return;
+    if (!g || g.id !== e.pointerId) return;
     gesture.current = null;
     const state = resolvePageGesture({
       pointerType: e.pointerType,
@@ -326,13 +328,23 @@ function CalendarPage({
     e.stopPropagation();
   }
 
+  /** The day list is the only scroller; its movement distinguishes a mode
+   *  swipe from an ordinary page scroll that happens to start on the calendar. */
+  function pageScrollTop(): number {
+    return measureRef.current?.closest("main")?.scrollTop ?? window.scrollY ?? 0;
+  }
+
   function onTouchStart(e: ReactTouchEvent<HTMLDivElement>) {
     if (!active || e.touches.length !== 1) {
       modeSwipe.current.start = null;
       return;
     }
     modeSwipe.current = {
-      start: { x: e.touches[0].clientX, y: e.touches[0].clientY },
+      start: {
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+        scrollTop: pageScrollTop(),
+      },
       fired: false,
     };
     suppressClick.current = false;
@@ -346,14 +358,17 @@ function CalendarPage({
   function checkModeSwipe(x: number, y: number) {
     const swipe = modeSwipe.current;
     if (!swipe.start || !active) return;
+    const scrolled = Math.abs(pageScrollTop() - swipe.start.scrollTop) > 1;
     const result = resolveModeSwipe({
       startX: swipe.start.x,
       startY: swipe.start.y,
       x,
       y,
       fired: swipe.fired,
+      scrolled,
     });
     swipe.fired = result.fired;
+    if (scrolled) swipe.start = null;
     if (result.mode) onModeChange(result.mode);
   }
 

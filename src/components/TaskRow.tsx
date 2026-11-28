@@ -81,9 +81,12 @@ export function TaskRow({
   }
 
   function undo(message: string) {
+    // Capture this action's snapshot now: a second action before the toast is
+    // tapped must not make Undo restore the wrong task.
+    const snapshot = actions.snapshotTaskChange();
     notify(message, "success", {
       label: "Undo",
-      run: actions.undoTaskChange,
+      run: () => actions.undoTaskChange(snapshot ?? undefined),
       durationMs: 5000,
     });
   }

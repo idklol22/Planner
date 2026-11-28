@@ -115,6 +115,9 @@ export function InlineAdd({
   // still saves its draft, with the date it was opened for.
   useEffect(
     () => () => {
+      // An empty draft has nothing to save. Skipping it also keeps StrictMode's
+      // simulated unmount/remount from closing a field the user just opened.
+      if (!draftRef.current.value.trim()) return;
       dispatchRef.current({ type: "commit", reason: "unmount" });
     },
     [],

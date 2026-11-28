@@ -20,6 +20,36 @@ const TITLES: Record<MenuPage, string> = {
   settings: "Settings",
 };
 
+/** Re-render at local midnight (and on resume) so "Today", habit ghosts and
+ *  the calendar's current-day mark follow the real day when the app stays open. */
+function useTodayTick(): void {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    let timer = 0;
+    let current = todayISO();
+    const schedule = () => {
+      window.clearTimeout(timer);
+      const now = new Date();
+      const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5);
+      timer = window.setTimeout(check, Math.max(1000, midnight.getTime() - now.getTime()));
+    };
+    function check() {
+      const next = todayISO();
+      if (next !== current) {
+        current = next;
+        setTick((n) => n + 1);
+      }
+      schedule();
+    }
+    schedule();
+    document.addEventListener("visibilitychange", check);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", check);
+    };
+  }, []);
+}
+
 function isTyping(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
   if (!el) return false;
@@ -97,6 +127,7 @@ function MenuPageView({
 }
 
 export function AppShell() {
+  useTodayTick();
   const { ready } = useStore();
   useThemeState(); // re-render the tree when the theme changes: category colours are re-lit per theme
   const onTask = useOnTaskRoute();
@@ -147,7 +178,7 @@ export function AppShell() {
 
   if (!ready) {
     return (
-      <div className="flex h-dvh flex-col items-center justify-center gap-3">
+      <div className="app-viewport flex flex-col items-center justify-center gap-3">
         <div className="animate-pulse">
           <TaskMark size={40} done />
         </div>
@@ -158,12 +189,12 @@ export function AppShell() {
   return (
     /* The task screen is an opaque overlay: keep the day painted so it shows under the slide,
        and so its rows do not replay their entrance on the way back. */
-    <div className="h-dvh overflow-hidden" inert={onTask}>
+    <div className="app-viewport overflow-hidden" inert={onTask}>
       <main
         inert={!!page}
         className={`h-full overflow-y-auto overflow-x-hidden overscroll-contain ${
           presence.mounted ? "page-behind" : ""
-        }`}
+        } ${edge.dragging ? "is-page-dragging" : ""} ${presence.closing ? "is-page-exiting" : ""}`}
       >
         <div className="animate-fade mx-auto flex min-h-full w-full max-w-[560px] flex-col lg:max-w-[1200px]">
           <DayView

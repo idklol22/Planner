@@ -78,6 +78,26 @@ export function commitDraft(state: DraftState, reason: InlineCommitReason): Draf
   return reduceDraft(state, { type: "commit", reason });
 }
 
+export interface OutsideTapDecision {
+  /** Save the open draft on this pointerdown. */
+  commit: boolean;
+  /** Blur a field iOS left focused after the tap. */
+  blur: boolean;
+  /** Swallow the click that follows, so a keyboard-dismissal tap does nothing else. */
+  suppress: boolean;
+}
+
+/**
+ * Decide what a document-level pointerdown outside the field does. With no
+ * field open the decision is the empty one: that also clears a stale
+ * suppression left by an outside touch-scroll (a drag produces no click), so
+ * the next real tap is never swallowed.
+ */
+export function outsideTapDecision(fieldOpen: boolean, keepTap: boolean): OutsideTapDecision {
+  if (!fieldOpen) return { commit: false, blur: false, suppress: false };
+  return { commit: true, blur: true, suppress: !keepTap };
+}
+
 /** The older, one-shot helper still used by the category and subtask fields. */
 export interface InlineSave {
   /** Trimmed text worth saving, or null when there is nothing to do. */

@@ -8,14 +8,15 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { todayISO } from "../domain/dates";
 import type { AppData } from "../domain/model";
 import type { HarnessNote } from "../lib/harness-types";
 import { isTauri } from "../storage";
 import { HubClient, type HubOp } from "../storage/hub";
-import { SyncController, type SyncStatus } from "../sync/controller";
+import { MIRROR_KEY, SyncController, type SyncStatus } from "../sync/controller";
 import { localCursorStore, CURSOR_KEY, LAST_SYNC_KEY } from "../sync/engine";
 import { emptyMirror, type Mirror } from "../sync/mapping";
-import { LocalOutbox } from "../sync/queue";
+import { LocalOutbox, OUTBOX_KEY } from "../sync/queue";
 import { useStore } from "./store";
 
 export const HUB_CONFIG_KEY = "planner.hub.v1";
@@ -91,7 +92,11 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     setConfigState((old) => {
       if (old.url !== clean.url) {
         try {
-          localStorage.removeItem(CURSOR_KEY);
+          // The old hub's queue, mirror and cursor must not be replayed into a
+          // different hub (they would overwrite matching rows with stale data).
+          for (const key of [CURSOR_KEY, LAST_SYNC_KEY, OUTBOX_KEY, MIRROR_KEY]) {
+            localStorage.removeItem(key);
+          }
         } catch {
           // ignore
         }
@@ -120,6 +125,8 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       storage: localStorage,
       outbox: new LocalOutbox(),
       cursorStore,
+      // Undated solved events belong to the device's day, not UTC's.
+      today: () => todayISO(),
       keepalive: (ops) => client.pushKeepalive(ops),
       letcode: {
         addDoneTask: (categoryId, title, date) => actionsRef.current.addDoneTask(categoryId, title, date),

@@ -20,7 +20,14 @@ export function ArchiveView() {
     return cat ? catColor(cat.color) : "var(--text-muted)";
   };
 
-  const undo = { label: "Undo", run: actions.undoTaskChange, durationMs: 5000 } as const;
+  function undo(message: string) {
+    const snapshot = actions.snapshotTaskChange();
+    notify(message, "success", {
+      label: "Undo",
+      run: () => actions.undoTaskChange(snapshot ?? undefined),
+      durationMs: 5000,
+    });
+  }
 
   return (
     <div className="px-4 pb-8 pt-2 md:px-6">
@@ -44,7 +51,7 @@ export function ArchiveView() {
                 <button
                   onClick={() => {
                     actions.restoreTask(task.id);
-                    notify("Task restored", "success", undo);
+                    undo("Task restored");
                   }}
                   aria-label={`Restore ${task.title}`}
                   className={`${ACTION} text-ink`}
@@ -54,7 +61,7 @@ export function ArchiveView() {
                 <button
                   onClick={() => {
                     actions.deleteTask(task.id);
-                    notify("Task deleted", "success", undo);
+                    undo("Task deleted");
                   }}
                   aria-label={`Delete ${task.title}`}
                   className={`${ACTION} text-rose`}

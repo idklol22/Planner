@@ -75,6 +75,13 @@ export function CalorieBar({ date }: { date: ISODate }) {
   /** An Enter (or a successful commit) must not be repeated by the blur that follows. */
   const blocked = useRef(false);
   const lastNav = useRef(0);
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
+  const dateRef = useRef(date);
+  dateRef.current = date;
+  const prevDate = useRef(date);
+  const draftRef = useRef({ kcal, protein });
+  draftRef.current = { kcal, protein };
 
   // Counts restart from wherever an interrupted count stopped; they ignore re-renders.
   const shownTotal = useCount(total);
@@ -95,6 +102,12 @@ export function CalorieBar({ date }: { date: ISODate }) {
   }
 
   useEffect(() => {
+    // A draft belongs to the day it was typed for: save it before the inputs
+    // are cleared, even when WKWebView never blurred them on the day change.
+    if (prevDate.current !== date) {
+      commitFor(prevDate.current, false);
+      prevDate.current = date;
+    }
     releaseFocus();
     setMode("idle");
     setKcal("");
@@ -128,26 +141,62 @@ export function CalorieBar({ date }: { date: ISODate }) {
   const proteinPct = proteinGoal > 0 ? Math.min(proteinTotal / proteinGoal, 1) : 0;
 
   /** Save at most one entry for the current draft. `close` is false for Enter,
-   *  which commits but leaves the row open for the next entry. */
-  function commit(close: boolean) {
-    const draft = [kcal, protein].filter(Boolean).join("|");
+   *  which commits but leaves the row open for the next entry. `targetDate` is
+   *  explicit so a day change still saves to the day the text was typed for. */
+  function commitFor(targetDate: ISODate, close: boolean) {
+    const { kcal: kText, protein: pText } = draftRef.current;
+    const draft = [kText, pText].filter(Boolean).join("|");
     const attempt = resolveInlineSave(draft, blocked.current);
     // Keep the block until the draft actually changes, so an Enter followed by
     // the keyboard's blur cannot add the same entry twice.
     blocked.current = attempt.blocked;
     if (attempt.value) {
-      const k = Number(kcal.replace(/,/g, ""));
-      const p = Number(protein);
+      const k = Number(kText.replace(/,/g, ""));
+      const p = Number(pText);
       const kcalValue = Number.isFinite(k) && k > 0 ? k : 0;
       const proteinValue = Number.isFinite(p) && p > 0 ? p : 0;
       if (kcalValue > 0 || proteinValue > 0) {
-        actions.addCalorie(date, kcalValue, proteinValue > 0 ? proteinValue : undefined);
+        actions.addCalorie(targetDate, kcalValue, proteinValue > 0 ? proteinValue : undefined);
       }
       setKcal("");
       setProtein("");
     }
     if (close) setMode("idle");
   }
+
+  function commit(close: boolean) {
+    commitFor(dateRef.current, close);
+  }
+
+  // iOS often does not blur a field when the user taps blank space above the
+  // keyboard. Commit on that pointerdown (and on backgrounding) instead of
+  // waiting for a blur that may never come. The listeners live here so they
+  // outlive the collapsed form; controls inside the form keep their own taps.
+  useEffect(() => {
+    const onDown = (e: PointerEvent) => {
+      if (!modeRef.current) return;
+      const el = e.target as Element | null;
+      if (el?.closest?.("[data-calorie-field], [data-calorie-keep-tap]")) return;
+      commitFor(dateRef.current, true);
+      releaseFocus();
+    };
+    const onExit = () => {
+      if (!modeRef.current) return;
+      commitFor(dateRef.current, true);
+      releaseFocus();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") onExit();
+    };
+    document.addEventListener("pointerdown", onDown, true);
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", onExit);
+    return () => {
+      document.removeEventListener("pointerdown", onDown, true);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", onExit);
+    };
+  }, []);
 
   /** Cancel must win over the blur a tap on it would otherwise cause. */
   function discard() {
@@ -198,6 +247,7 @@ export function CalorieBar({ date }: { date: ISODate }) {
         <button
           type="button"
           onClick={() => open("kcal")}
+          data-calorie-keep-tap
           onPointerDown={(e) => {
             if (mode === "add") e.preventDefault();
           }}
@@ -218,6 +268,7 @@ export function CalorieBar({ date }: { date: ISODate }) {
         <button
           type="button"
           onClick={() => open("protein")}
+          data-calorie-keep-tap
           onPointerDown={(e) => {
             if (mode === "add") e.preventDefault();
           }}
@@ -243,6 +294,7 @@ export function CalorieBar({ date }: { date: ISODate }) {
           <div className="flex items-center gap-3 py-1">
             <input
               ref={kcalRef}
+              data-calorie-field
               value={kcal}
               onChange={(e) => {
                 blocked.current = false;
@@ -258,6 +310,7 @@ export function CalorieBar({ date }: { date: ISODate }) {
             />
             <input
               ref={proteinRef}
+              data-calorie-field
               value={protein}
               onChange={(e) => {
                 blocked.current = false;
@@ -275,6 +328,7 @@ export function CalorieBar({ date }: { date: ISODate }) {
             />
             <button
               type="button"
+              data-calorie-keep-tap
               onPointerDown={(e) => e.preventDefault()}
               onClick={discard}
               className="cal-press min-h-11 shrink-0 px-1 text-[12px] text-faint hover:text-ink"
@@ -289,7 +343,11 @@ export function CalorieBar({ date }: { date: ISODate }) {
         <div className="cal-collapse" data-open={!list.closing}>
           <div className="cal-collapse-inner">
             {/* Tapping "Remove" must not blur the form first, which would close this list. */}
-            <ul onPointerDown={(e) => e.preventDefault()} onMouseDown={(e) => e.preventDefault()}>
+            <ul
+              data-calorie-keep-tap
+              onPointerDown={(e) => e.preventDefault()}
+              onMouseDown={(e) => e.preventDefault()}
+            >
               {rows.map((row) => (
                 <EntryRowView key={row.item.id} row={row} onRemove={actions.deleteCalorie} />
               ))}

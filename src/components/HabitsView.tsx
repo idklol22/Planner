@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import type { ISODate } from "../domain/dates";
 import { describeSchedule, partitionHabits } from "../domain/habits";
 import type { Habit } from "../domain/model";
@@ -44,7 +45,7 @@ export function HabitsView({ date }: { date: ISODate }) {
 
       <div className="page-block mb-5 flex">
         <button
-          onClick={() => setEditor({ id: ++editorSeq.current })}
+          onClick={() => flushSync(() => setEditor({ id: ++editorSeq.current }))}
           className="ui-press min-h-11 w-full text-left text-[14px] font-semibold text-accent sm:w-auto"
         >
           New habit

@@ -10,6 +10,7 @@ import {
   setAutostart,
 } from "../lib/autostart";
 import { harnessLink, harnessStatus } from "../lib/harness-link";
+import { useOutsideBlur } from "../lib/outsideBlur";
 import { useStore } from "../state/store";
 import { useSync } from "../state/sync";
 import { useToast } from "../state/toast";
@@ -153,6 +154,7 @@ function DesktopPanel() {
 }
 
 export function SettingsView() {
+  useOutsideBlur(true);
   const { data, isNative, actions } = useStore();
   const notify = useToast();
   const sync = useSync();

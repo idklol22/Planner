@@ -57,6 +57,14 @@
 .page-behind:has(~ .page.is-exiting) {
   opacity: 1;
 }
+/* The same states are also set as classes by AppShell: WKWebView before iOS
+   15.4 does not understand :has() and would leave the day page invisible. */
+.page-behind.is-page-dragging {
+  opacity: 0.55;
+}
+.page-behind.is-page-exiting {
+  opacity: 1;
+}
 
 /* A short, staggered rise for the first few blocks of a page. */
 @keyframes page-block-in {
@@ -109,6 +117,9 @@
 .row-shell.is-exiting {
   grid-template-rows: 0fr;
   opacity: 0;
+  /* Still hit-testable until it unmounts: never let a fading row take a tap
+     meant for the row that slid up into its place. */
+  pointer-events: none;
 }
 .collapse-inner,
 .row-shell > * {

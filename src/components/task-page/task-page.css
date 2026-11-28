@@ -23,7 +23,9 @@
 
 .planner-editor .bn-editor {
   padding-inline: 0;
-  font-size: 15.5px;
+  /* iOS zooms on focus when a contenteditable is under 16px, and does not zoom
+     back out — that would shift the fixed keyboard bar and sticky header. */
+  font-size: 16px;
   line-height: 1.55;
   color: var(--color-ink);
   background: var(--color-canvas);
@@ -117,6 +119,15 @@
 .planner-editor .tableWrapper {
   max-width: 100% !important;
   overflow-x: auto !important;
+}
+/* The page keeps pan-y for the edge-back gesture, but these blocks scroll
+   sideways themselves. Restore both axes inside them so a finger on a wide
+   code line, table or equation can still pan horizontally on iOS. */
+.planner-editor [data-content-type="codeBlock"] pre,
+.planner-editor [data-content-type="codeBlock"] code,
+.planner-editor .tableWrapper,
+.planner-editor .display-math {
+  touch-action: auto;
 }
 .planner-editor table {
   border-collapse: collapse;

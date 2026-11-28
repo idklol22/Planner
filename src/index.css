@@ -8,6 +8,17 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/* The iOS deployment target is 14, where dvh is unknown. The first declaration
+   keeps the single scroll container usable there; newer WebKit uses dvh. */
+.app-viewport {
+  height: 100vh;
+  height: 100dvh;
+}
+.habit-sheet {
+  max-height: 92vh;
+  max-height: 92dvh;
+}
+
 /* Sections are flat: spacing separates them, never a card or a shadow. These
    override the shared glass recipe in theme.css for every `.module` consumer. */
 .module {

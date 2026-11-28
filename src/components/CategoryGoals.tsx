@@ -1,6 +1,7 @@
 import { useRef, useState, type RefObject } from "react";
 import { achievedGoals, openGoals, reorderedIds } from "../domain/goals";
 import { MOTION_MS, usePresence } from "../lib/motion";
+import { useOutsideBlur } from "../lib/outsideBlur";
 import { MotionRow, useFlipRows, useMotionRows } from "../motion/dayMotion";
 import { useStore } from "../state/store";
 import { InlineAdd, type InlineController, type InlineState } from "./InlineAdd";
@@ -26,6 +27,7 @@ export function CategoryGoals({
   const shownDone = usePresence(showDone, MOTION_MS.base);
   const [editing, setEditing] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
+  useOutsideBlur(!!editing);
   const editValue = useRef("");
   const editCancelled = useRef(false);
   const open = openGoals(data.goals, categoryId);

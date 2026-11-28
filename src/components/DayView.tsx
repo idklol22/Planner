@@ -62,6 +62,7 @@ import {
   type InlineController,
   type InlineState,
 } from "./InlineAdd";
+import { outsideTapDecision } from "./inlineSave";
 
 export type MenuPage = "categories" | "habits" | "archive" | "settings";
 
@@ -612,13 +613,22 @@ export function DayView({
   // in that one tap. These listeners live here so they outlive the field.
   useEffect(() => {
     const onPointerDown = (e: PointerEvent) => {
-      if (!inlineRef.current) return;
       const el = e.target as Element | null;
-      if (el?.closest?.("[data-inline-add-field]")) return;
-      suppressClick.current = !el?.closest?.("[data-inline-add-keep-tap]");
+      if (el?.closest?.("[data-inline-add-field]")) {
+        suppressClick.current = false;
+        return;
+      }
+      const decision = outsideTapDecision(
+        !!inlineRef.current,
+        !!el?.closest?.("[data-inline-add-keep-tap]"),
+      );
+      // A drag that dismissed the field produces no click, leaving the old
+      // suppression set. Every fresh pointerdown clears it before deciding.
+      suppressClick.current = decision.suppress;
+      if (!decision.commit) return;
       inlineController.current?.commit("outside");
       const focused = document.activeElement as HTMLElement | null;
-      if (focused?.matches?.("[data-inline-add-field]")) focused.blur();
+      if (decision.blur && focused?.matches?.("[data-inline-add-field]")) focused.blur();
     };
     const onClickCapture = (e: MouseEvent) => {
       if (!suppressClick.current) return;

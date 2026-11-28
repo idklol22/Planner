@@ -137,14 +137,27 @@ describe("mode swipe", () => {
     expect(swipe(100, 200 + 8)).toEqual({ mode: null, fired: false });
   });
 
+  it("ignores a real page scroll even when it travels past the swipe threshold", () => {
+    expect(
+      resolveModeSwipe({
+        startX: 100,
+        startY: 200,
+        x: 100,
+        y: 200 + MODE_SWIPE_PX * 3,
+        fired: false,
+        scrolled: true,
+      }),
+    ).toEqual({ mode: null, fired: false });
+  });
+
   it("ignores diagonal movement that is mostly horizontal", () => {
     expect(MODE_SWIPE_RATIO).toBeGreaterThan(1);
     expect(swipe(100 + MODE_SWIPE_PX, 200 + MODE_SWIPE_PX)).toEqual({ mode: null, fired: false });
   });
 
   it("fires once per gesture and again on the next gesture", () => {
-    expect(swipe(100, 260, true)).toEqual({ mode: null, fired: true });
-    expect(swipe(100, 260, false)).toEqual({ mode: "month", fired: true });
+    expect(swipe(100, 200 + MODE_SWIPE_PX, true)).toEqual({ mode: null, fired: true });
+    expect(swipe(100, 200 + MODE_SWIPE_PX, false)).toEqual({ mode: "month", fired: true });
   });
 });
 

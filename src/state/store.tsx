@@ -28,6 +28,7 @@ import {
   type Task,
 } from "../domain/model";
 import { materializeOccurrences } from "../domain/recurrence";
+import { newerStamp } from "../domain/stamp";
 import {
   moveTasksToDay,
   moveUnfinishedToToday as moveUnfinishedToTodayDomain,
@@ -41,7 +42,19 @@ import { isTauri, storage } from "../storage";
 
 type Mutator = (data: AppData) => AppData;
 
-const nowISO = () => new Date().toISOString();
+/** Snapshot behind a single category-delete Undo toast. */
+export interface CategoryDeleteSnapshot {
+  before: AppData;
+  after: AppData;
+}
+
+// Millisecond timestamps collide on fast successive edits, and the outbox
+// drops equal-stamped writes. Keep local stamps strictly increasing.
+let lastStamp = "";
+const nowISO = () => {
+  lastStamp = newerStamp(new Date().toISOString(), lastStamp);
+  return lastStamp;
+};
 
 /** Patch one task and stamp updatedAt (needed for sync). */
 function mapTask(data: AppData, id: string, fn: (task: Task) => Task): AppData {
@@ -106,8 +119,10 @@ export interface Actions {
   /** Soft-delete a category with its tasks/goals/habits references cleaned up. */
   /** Cascade the deletion to all the category's tasks. */
   deleteCategory(id: string): void;
-  /** Restore the last category deletion (keeps any newer calories). */
-  undoDeleteCategory(): void;
+  /** Restore a category deletion. The toast's own snapshot wins over a newer action's. */
+  undoDeleteCategory(snapshot?: CategoryDeleteSnapshot): void;
+  /** Snapshot for this toast, captured right after the action that created it. */
+  snapshotCategoryDelete(): CategoryDeleteSnapshot | null;
 
   addTask(date: ISODate, title: string, categoryId?: string | null, habitId?: string | null): string;
   updateTask(id: string, patch: TaskPatch): void;
@@ -124,8 +139,10 @@ export interface Actions {
   archiveTask(id: string, archived?: boolean): void;
   /** Restore an archived task and its subtasks. */
   restoreTask(id: string): void;
-  /** Undo the last delete/archive/restore by restoring only the snapshotted tasks. */
-  undoTaskChange(): void;
+  /** Undo a delete/archive/restore by restoring only that action's tasks. */
+  undoTaskChange(snapshot?: Task[]): void;
+  /** Snapshot for this toast, captured right after the action that created it. */
+  snapshotTaskChange(): Task[] | null;
   /** Returns the new subtask id (empty string when nothing was created). */
   addSubtask(parentId: string, title: string): string;
   /** Create missing recurring occurrences for these days (idempotent). */
@@ -196,7 +213,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   /** Snapshot captured by the last task archive/delete/restore, consumed by undo. */
   const taskChangeSnapshot = useRef<Task[] | null>(null);
   /** Snapshot captured by the last `deleteCategory`, consumed by undo. */
-  const deleteSnapshot = useRef<{ before: AppData; after: AppData } | null>(null);
+  const deleteSnapshot = useRef<CategoryDeleteSnapshot | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -313,12 +330,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         deleteSnapshot.current = { before, after: next };
         update(() => next);
       },
-      undoDeleteCategory() {
-        const snapshot = deleteSnapshot.current;
-        if (!snapshot) return;
-        deleteSnapshot.current = null;
+      snapshotCategoryDelete() {
+        return deleteSnapshot.current;
+      },
+      undoDeleteCategory(snapshot) {
+        const use = snapshot ?? deleteSnapshot.current;
+        if (!use) return;
+        if (!snapshot || deleteSnapshot.current === use) deleteSnapshot.current = null;
         const stamp = nowISO();
-        update((d) => undoCategoryDelete(d, snapshot.before, snapshot.after, stamp));
+        update((d) => undoCategoryDelete(d, use.before, use.after, stamp));
       },
 
       addTask(date, title, categoryId = null, habitId = null) {
@@ -415,12 +435,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       restoreTask(id) {
         archiveTask(id, false);
       },
-      undoTaskChange() {
-        const snapshot = taskChangeSnapshot.current;
-        if (!snapshot) return;
-        taskChangeSnapshot.current = null;
+      snapshotTaskChange() {
+        return taskChangeSnapshot.current;
+      },
+      undoTaskChange(snapshot) {
+        const use = snapshot ?? taskChangeSnapshot.current;
+        if (!use) return;
+        if (!snapshot || taskChangeSnapshot.current === use) taskChangeSnapshot.current = null;
         const stamp = nowISO();
-        update((d) => ({ ...d, tasks: restoreTasks(d.tasks, snapshot, stamp) }));
+        update((d) => ({ ...d, tasks: restoreTasks(d.tasks, use, stamp) }));
       },
       deleteTask(id) {
         const stamp = nowISO();
@@ -506,14 +529,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         );
       },
       recordHandoff(taskId, handoff) {
-        update((d) => ({
-          ...d,
-          tasks: d.tasks.map((task) =>
-            task.id === taskId && task.note
-              ? { ...task, note: { ...task.note, handoff: { ...task.note.handoff, ...handoff } } }
-              : task,
-          ),
-        }));
+        // Stamp the task and note: without a newer updatedAt sync never sends
+        // the hand-off result, so another device sends the same note again.
+        update((d) =>
+          patchNote(d, taskId, (note) => ({
+            ...note,
+            handoff: { ...note.handoff, ...handoff },
+          })),
+        );
       },
       markNoteDone(taskId) {
         update((d) => {

@@ -15,7 +15,7 @@ export const PAGE_MAX_PX = 160;
 /** A sloppy tap (a few pixels of finger travel) still counts as a tap. */
 export const TAP_SLOP_PX = 12;
 /** A deliberate mode swipe: well past a page-scroll twitch, mostly vertical. */
-export const MODE_SWIPE_PX = 48;
+export const MODE_SWIPE_PX = 80;
 export const MODE_SWIPE_RATIO = 1.5;
 
 export interface PageGestureInput {
@@ -95,6 +95,8 @@ export interface ModeSwipeInput {
   y: number;
   /** True once this gesture has already toggled the mode. */
   fired: boolean;
+  /** True when the page actually scrolled during this touch: it is a scroll, not a swipe. */
+  scrolled?: boolean;
 }
 
 export interface ModeSwipeResult {
@@ -109,6 +111,7 @@ export function resolveModeSwipe(input: ModeSwipeInput): ModeSwipeResult {
   const dy = input.y - input.startY;
   if (
     input.fired ||
+    input.scrolled ||
     Math.abs(dy) < MODE_SWIPE_PX ||
     Math.abs(dy) < Math.abs(dx) * MODE_SWIPE_RATIO
   ) {

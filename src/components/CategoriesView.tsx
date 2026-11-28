@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type HTMLAttributes, type MouseEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { createPortal } from "react-dom";
 import { countCategoryTasks } from "../domain/categories";
 import { CATEGORY_COLORS, type Category } from "../domain/model";
 import { resolveSwipe, SWIPE_MAX_PX, type SwipeState } from "../domain/swipe";
 import { MOTION_MS, usePresence } from "../lib/motion";
+import { useOutsideBlur } from "../lib/outsideBlur";
 import type { HarnessSubject } from "../lib/harness-types";
 import { useStore } from "../state/store";
 import { useSync } from "../state/sync";
@@ -388,7 +390,9 @@ function DeleteCategoryDialog({
 
   const heading = count === 0 ? `Delete ${cat.name}?` : `Delete ${cat.name} and its ${count} ${count === 1 ? "task" : "tasks"}?`;
 
-  return (
+  // The menu page lives inside the blurred sheet: a fixed child there would be
+  // anchored to the sheet instead of the viewport on WKWebView.
+  return createPortal(
     <div
       className={`fixed inset-0 z-[70] flex items-center justify-center p-4 ${
         closing ? "pointer-events-none" : ""
@@ -417,11 +421,13 @@ function DeleteCategoryDialog({
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
 export function CategoriesView() {
+  useOutsideBlur(true);
   const { data, actions } = useStore();
   const notify = useToast();
   const [deleting, setDeleting] = useState<DeleteTarget | null>(null);
@@ -475,10 +481,13 @@ export function CategoriesView() {
     const id = deleting.cat.id;
     setDeleting(null);
     actions.deleteCategory(id);
+    // Hold this deletion's own snapshot: another delete before Undo is tapped
+    // must not make this toast restore that one instead.
+    const snapshot = actions.snapshotCategoryDelete();
     notify("Category deleted", "success", {
       label: "Undo",
       run: () => {
-        actions.undoDeleteCategory();
+        actions.undoDeleteCategory(snapshot ?? undefined);
         notify("Delete undone");
       },
     });

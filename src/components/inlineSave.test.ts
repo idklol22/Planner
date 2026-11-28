@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   commitDraft,
   emptyDraft,
+  outsideTapDecision,
   reduceDraft,
   resolveInlineSave,
   type DraftEvent,
@@ -139,6 +140,22 @@ describe("reduceDraft: every way a draft is saved", () => {
     );
     expect(result.save).toBe("Only once");
     expect(result.state.settled).toBe(true);
+  });
+});
+
+describe("outsideTapDecision", () => {
+  it("clears the click suppression when a touch-scroll already dismissed the field", () => {
+    // A drag outside the field produces no click. The next pointerdown must
+    // start clean or it would swallow the next real tap's click.
+    expect(outsideTapDecision(false, false)).toEqual({ commit: false, blur: false, suppress: false });
+  });
+
+  it("saves and swallows the click of a keyboard-dismissal tap", () => {
+    expect(outsideTapDecision(true, false)).toEqual({ commit: true, blur: true, suppress: true });
+  });
+
+  it("lets another '+' or 'Add goal' keep its click in the same tap", () => {
+    expect(outsideTapDecision(true, true)).toEqual({ commit: true, blur: true, suppress: false });
   });
 });
 

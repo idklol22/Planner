@@ -174,17 +174,24 @@ export function createIdbFileStore(): FileStore {
   }
   let opened: Promise<IDBDatabase> | null = null;
   const open = () => {
-    opened ??= new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, 1);
-      request.onupgradeneeded = () => {
-        const database = request.result;
-        if (!database.objectStoreNames.contains(STORE_NAME)) {
-          database.createObjectStore(STORE_NAME, { keyPath: "hash" });
-        }
-      };
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error ?? new Error("Photo storage failed."));
-    });
+    if (!opened) {
+      // A transient open failure must not poison every later get/put for the
+      // lifetime of the page: drop the rejected promise so the next call retries.
+      opened = new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, 1);
+        request.onupgradeneeded = () => {
+          const database = request.result;
+          if (!database.objectStoreNames.contains(STORE_NAME)) {
+            database.createObjectStore(STORE_NAME, { keyPath: "hash" });
+          }
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error ?? new Error("Photo storage failed."));
+      }).catch((error: unknown) => {
+        opened = null;
+        throw error;
+      });
+    }
     return opened;
   };
 

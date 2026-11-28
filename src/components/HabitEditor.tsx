@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { ISODate } from "../domain/dates";
 import type { Habit } from "../domain/model";
 import { activeCategories } from "../domain/tasks";
@@ -46,6 +47,13 @@ export function HabitEditor({
   // The owner keeps us mounted for the slide-down; a second tap during that
   // window must not save or archive the habit twice.
   const closed = useRef(false);
+  const titleRef = useRef<HTMLInputElement>(null);
+
+  // The owner mounts us synchronously from the "+" tap; focus in a layout
+  // effect so the iOS keyboard opens in that same gesture.
+  useLayoutEffect(() => {
+    if (!habit) titleRef.current?.focus({ preventScroll: true });
+  }, [habit]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -70,7 +78,8 @@ export function HabitEditor({
     onClose();
   }
 
-  return (
+  // A fixed child of the blurred sheet would be anchored to the sheet on iOS.
+  return createPortal(
     <div
       className={`fixed inset-0 z-[70] flex items-end justify-center md:items-center ${
         closing ? "pointer-events-none" : ""
@@ -85,13 +94,13 @@ export function HabitEditor({
       <div
         role="dialog"
         aria-label={habit ? "Edit habit" : "New habit"}
-        className={`panel-sheet relative max-h-[92dvh] w-full max-w-[460px] overflow-y-auto overscroll-contain bg-canvas px-5 pb-[calc(20px+var(--safe-bottom))] pt-[calc(12px+var(--safe-top))] md:pb-5 ${closing ? "is-closing" : ""}`}
+        className={`panel-sheet habit-sheet relative w-full max-w-[460px] overflow-y-auto overscroll-contain bg-canvas px-5 pb-[calc(20px+var(--safe-bottom))] pt-[calc(12px+var(--safe-top))] md:pb-5 ${closing ? "is-closing" : ""}`}
       >
         <h2 className="mb-4 text-[15px] font-semibold tracking-tight">{habit ? "Edit habit" : "New habit"}</h2>
 
         <label className={LABEL}>Habit</label>
         <input
-          autoFocus={!habit}
+          ref={titleRef}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && save()}
@@ -194,6 +203,7 @@ export function HabitEditor({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

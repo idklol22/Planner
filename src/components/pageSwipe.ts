@@ -67,6 +67,7 @@ export function resolveEdgeSwipe(input: EdgeSwipeInput): EdgeSwipeState {
 }
 
 interface Start {
+  id: number;
   x: number;
   y: number;
   at: number;
@@ -88,7 +89,9 @@ export function useEdgeBackSwipe({ enabled, onBack }: { enabled: boolean; onBack
     // A dialog's scrim is its sibling, so check the document as well.
     if ((e.target as Element).closest("input, textarea, select, [role='dialog'], [data-row-swipe]")) return;
     if (document.querySelector('[role="dialog"]')) return;
+    if (start.current) return; // a second finger must not replace the first one
     start.current = {
+      id: e.pointerId,
       x: e.clientX,
       y: e.clientY,
       at: performance.now(),
@@ -100,7 +103,7 @@ export function useEdgeBackSwipe({ enabled, onBack }: { enabled: boolean; onBack
 
   function onPointerMove(e: ReactPointerEvent<HTMLElement>) {
     const s = start.current;
-    if (!s) return;
+    if (!s || s.id !== e.pointerId) return;
     const state = resolveEdgeSwipe({
       width: s.width,
       startX: s.x,
@@ -129,6 +132,7 @@ export function useEdgeBackSwipe({ enabled, onBack }: { enabled: boolean; onBack
 
   function onPointerUp(e: ReactPointerEvent<HTMLElement>) {
     const s = start.current;
+    if (s && s.id !== e.pointerId) return;
     start.current = null;
     setDragging(false);
     if (!s) return;
@@ -146,7 +150,9 @@ export function useEdgeBackSwipe({ enabled, onBack }: { enabled: boolean; onBack
     if (state.commit) onBack();
   }
 
-  function onPointerCancel() {
+  function onPointerCancel(e: ReactPointerEvent<HTMLElement>) {
+    const s = start.current;
+    if (s && s.id !== e.pointerId) return;
     start.current = null;
     setDragging(false);
     setDx(0);

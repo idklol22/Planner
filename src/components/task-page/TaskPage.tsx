@@ -64,6 +64,13 @@ export function TaskPage({ taskId, closing = false }: { taskId: string; closing?
   const swipeStart = useRef<{ id: number; x: number; y: number; time: number; active: boolean } | null>(null);
   const snapTimer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(snapTimer.current), []);
+  // Reopening during the slide-out reuses this instance (same key). Drop the
+  // committed swipe offset or the page stays translated and dimmed for good.
+  useEffect(() => {
+    if (closing) return;
+    window.clearTimeout(snapTimer.current);
+    setSwipe(null);
+  }, [closing]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -90,6 +97,10 @@ export function TaskPage({ taskId, closing = false }: { taskId: string; closing?
 
   function onSwipeDown(e: ReactPointerEvent<HTMLDivElement>) {
     if (e.pointerType === "mouse" && e.button !== 0) return;
+    // The photo viewer is a modal above this page; a drag on its backdrop must
+    // not drag (or close) the page underneath.
+    if (document.querySelector('[role="dialog"]')) return;
+    if (swipeStart.current) return;
     const target = e.target as Element | null;
     const selection = window.getSelection();
     const startable = canStartSwipeBack(e.clientX, window.innerWidth, {
@@ -227,6 +238,10 @@ const TaskDocument = memo(function TaskDocument({
 }) {
   const { data, actions } = useStore();
   const [title, setTitle] = useState(task.title);
+  const titleRef = useRef(title);
+  titleRef.current = title;
+  const titleInputRef = useRef<HTMLTextAreaElement>(null);
+  const commitTitleRef = useRef<() => void>(() => {});
   const editorRef = useRef<PlannerEditor | null>(null);
   const subs = useMemo(
     () => data.tasks.filter((t) => t.parentId === task.id && !t.archivedAt),
@@ -331,29 +346,33 @@ const TaskDocument = memo(function TaskDocument({
     },
     [task.id],
   );
+  const saveNoteRef = useRef(saveNoteNow);
+  saveNoteRef.current = saveNoteNow;
+
+  /** Write the pending document now, once. Backgrounding, an exit and a direct
+   *  switch to another task all go through here instead of dropping the timer. */
+  const flushNote = useCallback(() => {
+    if (!pendingSave.current) return;
+    window.clearTimeout(saveTimer.current);
+    const editor = pendingSave.current;
+    pendingSave.current = null;
+    saveNoteRef.current(editor);
+  }, []);
 
   const persist = useCallback(
     (editor: PlannerEditor) => {
       window.clearTimeout(saveTimer.current);
       pendingSave.current = editor;
-      saveTimer.current = window.setTimeout(() => {
-        pendingSave.current = null;
-        saveNoteNow(editor);
-      }, 500);
+      saveTimer.current = window.setTimeout(flushNote, 500);
     },
-    [saveNoteNow],
+    [flushNote],
   );
 
-  // Leaving the page starts a 240ms slide-out, after which this component
-  // unmounts and clears the debounce. Flush once at the start of the exit so
-  // the last keystroke is not lost and nothing is saved twice.
+  // Leaving the page starts a 240ms slide-out; flush at its start so the last
+  // keystroke is not lost even if the unmount happens before the debounce.
   useEffect(() => {
-    if (!closing || !pendingSave.current) return;
-    window.clearTimeout(saveTimer.current);
-    const editor = pendingSave.current;
-    pendingSave.current = null;
-    saveNoteNow(editor);
-  }, [closing, saveNoteNow]);
+    if (closing) flushNote();
+  }, [closing, flushNote]);
 
   const runSync = useCallback((editor: PlannerEditor) => {
     const store = actionsRef.current;
@@ -468,7 +487,21 @@ const TaskDocument = memo(function TaskDocument({
     if (seeded.current) runSync(editor);
   }, [subs, editor, runSync]);
 
-  useEffect(() => () => window.clearTimeout(saveTimer.current), []);
+  // iOS suspends timers when the app is backgrounded or the web view is killed.
+  // Save the pending document on hide/pagehide, and on unmount when a deep link
+  // switches straight from one task to another (no `closing` frame in that case).
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") flushNote();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", flushNote);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", flushNote);
+      flushNote();
+    };
+  }, [flushNote]);
 
   function handleChange() {
     // `$...$` -> inline math node.
@@ -572,11 +605,46 @@ const TaskDocument = memo(function TaskDocument({
     persist(editor);
   }
 
+  const titleSaved = useRef(task.title);
   function commitTitle() {
-    const clean = title.trim();
-    if (!clean) setTitle(task.title);
-    else if (clean !== task.title) actions.updateTask(task.id, { title: clean });
+    const clean = titleRef.current.trim();
+    if (!clean) {
+      titleRef.current = task.title;
+      setTitle(task.title);
+    } else if (clean !== task.title && clean !== titleSaved.current) {
+      titleSaved.current = clean;
+      actions.updateTask(task.id, { title: clean });
+    }
   }
+  commitTitleRef.current = commitTitle;
+
+  // iOS does not always blur a textarea when the user taps empty space. Flush
+  // the title on any outside touch, on backgrounding and on the way out; the
+  // saved-value guard keeps the blur that follows from writing it twice.
+  useEffect(() => {
+    const flush = () => {
+      const input = titleInputRef.current;
+      if (document.activeElement === input) input?.blur(); // its onBlur commits
+      else commitTitleRef.current();
+    };
+    const onDown = (e: PointerEvent) => {
+      const el = e.target as Element | null;
+      if (el?.closest?.("textarea[aria-label='Task title']")) return;
+      if (document.activeElement === titleInputRef.current) flush();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
+    document.addEventListener("pointerdown", onDown, true);
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", flush);
+    return () => {
+      document.removeEventListener("pointerdown", onDown, true);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", flush);
+      commitTitleRef.current();
+    };
+  }, []);
 
   const category = data.categories.find((c) => c.id === task.categoryId);
   const color = category ? catColor(category.color) : "var(--color-accent)";
@@ -601,6 +669,7 @@ const TaskDocument = memo(function TaskDocument({
             />
           </div>
           <textarea
+            ref={titleInputRef}
             value={title}
             rows={1}
             placeholder="Untitled"
