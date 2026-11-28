@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 @import "./theme.css";
+@import "./motion/index.css";
 
 :root {
   --safe-top: env(safe-area-inset-top, 0px);
