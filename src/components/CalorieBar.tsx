@@ -20,7 +20,7 @@ function EntryRowView({
   row: EntryRow<CalorieEntry>;
   onRemove: (id: string) => void;
 }) {
-  const presence = usePresence(!row.leaving, MOTION_MS.fast);
+  const presence = usePresence(!row.leaving, MOTION_MS.base);
   if (!presence.mounted) return null;
   const e = row.item;
   return (
@@ -132,6 +132,9 @@ export function CalorieBar({ date }: { date: ISODate }) {
   function commit(close: boolean) {
     const draft = [kcal, protein].filter(Boolean).join("|");
     const attempt = resolveInlineSave(draft, blocked.current);
+    // Keep the block until the draft actually changes, so an Enter followed by
+    // the keyboard's blur cannot add the same entry twice.
+    blocked.current = attempt.blocked;
     if (attempt.value) {
       const k = Number(kcal.replace(/,/g, ""));
       const p = Number(protein);

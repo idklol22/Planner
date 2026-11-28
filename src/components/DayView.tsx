@@ -1,11 +1,13 @@
 import {
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import { createPortal } from "react-dom";
 import { Menu } from "lucide-react";
 import {
   addDays,
@@ -408,6 +410,8 @@ const SUGGESTIONS = ["Study", "Work", "Health", "Personal"];
 type EditorState = Habit | null;
 
 interface ComposerState {
+  /** A fresh id per open, so re-opening during the exit remounts a focused field. */
+  id: number;
   target?: ComposerTargetId;
 }
 
@@ -438,6 +442,13 @@ export function DayView({
     typeof window !== "undefined" && window.matchMedia?.("(min-width: 1024px)").matches ? "month" : "week",
   );
   const [editor, setEditor] = useState<EditorState>(null);
+  const editorKey = useRef(0);
+  const [shownEditor, setShownEditor] = useState<EditorState>(null);
+  const editorShown = usePresence(!!editor, MOTION_MS.base);
+  if (editor && editor !== shownEditor) setShownEditor(editor);
+  const [listMenuPos, setListMenuPos] = useState({ top: 0, left: 0 });
+  const listButton = useRef<HTMLButtonElement>(null);
+  const composerSeq = useRef(0);
   const mainShown = usePresence(mainMenu, MOTION_MS.fast);
   const optionsShown = usePresence(listMenu, MOTION_MS.fast);
   const lastSelected = useRef(selected);
@@ -454,6 +465,31 @@ export function DayView({
       // ignore
     }
   }, [prefs]);
+
+  // The Options popover lives in a portal (the sheet blurs, so a fixed child
+  // would otherwise be positioned against the sheet instead of the viewport).
+  useLayoutEffect(() => {
+    if (!listMenu) return;
+    const place = () => {
+      const rect = listButton.current?.getBoundingClientRect();
+      if (!rect) return;
+      setListMenuPos({
+        top: rect.bottom + 4,
+        left: Math.max(8, Math.min(window.innerWidth - 264, rect.right - 256)),
+      });
+    };
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [listMenu]);
+
+  function openComposer(target?: ComposerTargetId) {
+    setComposer({ id: ++composerSeq.current, target });
+  }
 
   // The docked add bar yields to any other text field on the page.
   useEffect(() => {
@@ -498,7 +534,7 @@ export function DayView({
   useEffect(() => {
     if (addSignal !== lastSignal.current) {
       lastSignal.current = addSignal;
-      setComposer({});
+      openComposer();
     }
   }, [addSignal]);
 
@@ -622,6 +658,7 @@ export function DayView({
               {hasCategories && (
                 <>
                   <button
+                    ref={listButton}
                     onClick={() => setListMenu((v) => !v)}
                     aria-expanded={listMenu}
                     aria-label="List menu"
@@ -630,53 +667,56 @@ export function DayView({
                   >
                     Options
                   </button>
-                  {optionsShown.mounted && (
-                    <>
-                      <button
-                        aria-label="Close list menu"
-                        className={`day-backdrop fixed inset-0 z-10 cursor-default ${optionsShown.closing ? "closing" : ""}`}
-                        onClick={() => setListMenu(false)}
-                      />
-                      <div
-                        className={`day-pop absolute right-0 top-full z-20 mt-1 w-64 origin-top-right border border-line bg-[var(--pop)] py-1 ${
-                          optionsShown.closing ? "closing" : ""
-                        }`}
-                      >
+                  {optionsShown.mounted &&
+                    createPortal(
+                      <>
                         <button
-                          onClick={() => setPrefs((p) => ({ ...p, showCompleted: !p.showCompleted }))}
-                          aria-pressed={prefs.showCompleted}
-                          className="day-press flex min-h-11 w-full items-center justify-between px-3 text-left text-[13px] hover:text-ink"
+                          aria-label="Close list menu"
+                          className={`day-backdrop fixed inset-0 z-10 cursor-default ${optionsShown.closing ? "closing" : ""}`}
+                          onClick={() => setListMenu(false)}
+                        />
+                        <div
+                          style={{ top: listMenuPos.top, left: listMenuPos.left }}
+                          className={`day-pop fixed z-20 w-64 origin-top-right border border-line bg-[var(--pop)] py-1 ${
+                            optionsShown.closing ? "closing" : ""
+                          }`}
                         >
-                          Show completed
-                          <span className="ml-3 text-[12px] text-faint">{prefs.showCompleted ? "On" : "Off"}</span>
-                        </button>
-                        {selected === today && (
+                          <button
+                            onClick={() => setPrefs((p) => ({ ...p, showCompleted: !p.showCompleted }))}
+                            aria-pressed={prefs.showCompleted}
+                            className="day-press flex min-h-11 w-full items-center justify-between px-3 text-left text-[13px] hover:text-ink"
+                          >
+                            Show completed
+                            <span className="ml-3 text-[12px] text-faint">{prefs.showCompleted ? "On" : "Off"}</span>
+                          </button>
+                          {selected === today && (
+                            <button
+                              onClick={() => {
+                                const n = actions.moveUnfinishedToTomorrow(selected);
+                                setListMenu(false);
+                                notify(
+                                  n ? `Moved ${n} task${n === 1 ? "" : "s"} to tomorrow` : "No unfinished tasks to move",
+                                  n ? "success" : "info",
+                                );
+                              }}
+                              className="day-press min-h-11 w-full px-3 text-left text-[13px] hover:text-ink"
+                            >
+                              Move unfinished to tomorrow
+                            </button>
+                          )}
                           <button
                             onClick={() => {
-                              const n = actions.moveUnfinishedToTomorrow(selected);
                               setListMenu(false);
-                              notify(
-                                n ? `Moved ${n} task${n === 1 ? "" : "s"} to tomorrow` : "No unfinished tasks to move",
-                                n ? "success" : "info",
-                              );
+                              onManageCategories();
                             }}
-                            className="day-press min-h-11 w-full px-3 text-left text-[13px] hover:text-ink"
+                            className="day-press min-h-11 w-full border-t border-line px-3 text-left text-[13px] hover:text-ink"
                           >
-                            Move unfinished to tomorrow
+                            Reorder categories
                           </button>
-                        )}
-                        <button
-                          onClick={() => {
-                            setListMenu(false);
-                            onManageCategories();
-                          }}
-                          className="day-press min-h-11 w-full border-t border-line px-3 text-left text-[13px] hover:text-ink"
-                        >
-                          Reorder categories
-                        </button>
-                      </div>
-                    </>
-                  )}
+                        </div>
+                      </>,
+                      document.body,
+                    )}
                 </>
               )}
             </div>
@@ -710,11 +750,14 @@ export function DayView({
             <DaySectionList
               visible={visible}
               selected={selected}
-              onAdd={(target) => setComposer({ target })}
+              onAdd={(target) => openComposer(target)}
               onOpenTask={(id) => {
                 window.location.hash = `#/task/${id}`;
               }}
-              onEditHabit={(habit) => setEditor(habit)}
+              onEditHabit={(habit) => {
+                editorKey.current += 1;
+                setEditor(habit);
+              }}
             />
           </div>
 
@@ -738,7 +781,7 @@ export function DayView({
             <button
               type="button"
               aria-label="Add a task"
-              onClick={() => setComposer({})}
+              onClick={() => openComposer()}
               className="add-task-button day-press"
             >
               Add a task
@@ -749,16 +792,19 @@ export function DayView({
 
       {composer && (
         <Composer
+          key={composer.id}
           date={selected}
           initialTarget={composer.target}
           onClose={() => setComposer(null)}
         />
       )}
 
-      {editor && (
+      {editorShown.mounted && shownEditor && (
         <HabitEditor
-          habit={editor}
+          key={editorKey.current}
+          habit={shownEditor}
           date={selected < today ? today : selected}
+          closing={editorShown.closing}
           onClose={() => setEditor(null)}
         />
       )}

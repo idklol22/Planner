@@ -233,6 +233,8 @@ function CalendarPage({
 
   function onPointerDown(e: ReactPointerEvent<HTMLDivElement>) {
     if (!active || e.pointerType === "mouse") return;
+    // A drag whose click never arrived must not swallow the next real tap.
+    suppressClick.current = false;
     gesture.current = { id: e.pointerId, x: e.clientX, y: e.clientY, axis: null, moved: false };
   }
 
@@ -297,6 +299,7 @@ function CalendarPage({
 
   function onPointerCancel() {
     gesture.current = null;
+    suppressClick.current = false;
     settle();
   }
 

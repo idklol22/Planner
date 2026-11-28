@@ -85,7 +85,9 @@ export function useEdgeBackSwipe({ enabled, onBack }: { enabled: boolean; onBack
     if (!enabled || e.pointerType === "mouse") return;
     if (e.clientX > EDGE_ZONE_PX) return;
     // Never steal a gesture from text fields, dialogs or an existing row swipe.
+    // A dialog's scrim is its sibling, so check the document as well.
     if ((e.target as Element).closest("input, textarea, select, [role='dialog'], [data-row-swipe]")) return;
+    if (document.querySelector('[role="dialog"]')) return;
     start.current = {
       x: e.clientX,
       y: e.clientY,

@@ -389,7 +389,11 @@ function DeleteCategoryDialog({
   const heading = count === 0 ? `Delete ${cat.name}?` : `Delete ${cat.name} and its ${count} ${count === 1 ? "task" : "tasks"}?`;
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+    <div
+      className={`fixed inset-0 z-[70] flex items-center justify-center p-4 ${
+        closing ? "pointer-events-none" : ""
+      }`}
+    >
       <button
         aria-label="Cancel"
         onPointerDown={(e) => e.preventDefault()}
@@ -441,11 +445,10 @@ export function CategoriesView() {
 
   function add() {
     const attempt = resolveInlineSave(name, addBlocked.current);
+    addBlocked.current = attempt.blocked;
     if (!attempt.value) return;
-    addBlocked.current = true;
     const id = actions.addCategory(attempt.value);
     setName("");
-    addBlocked.current = false;
     setExpanded(id);
   }
 

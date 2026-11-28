@@ -181,6 +181,7 @@ export function Composer({
             {savedTick > 0 && <span key={savedTick} aria-hidden className="composer-saved">Saved</span>}
             <input
               ref={inputRef}
+              autoFocus
               value={value}
               aria-label={placeholder}
               placeholder={placeholder}

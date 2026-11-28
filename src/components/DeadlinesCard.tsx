@@ -39,7 +39,8 @@ export function DeadlinesCard({ date }: { date: ISODate }) {
   }, [date, configured, mirror, data.categories]);
 
   // The block rises in when deadlines appear and settles away when they leave.
-  const presence = usePresence(groups.length > 0, MOTION_MS.base);
+  // The closing animation uses --motion-fast; hold the block for exactly that.
+  const presence = usePresence(groups.length > 0, MOTION_MS.fast);
   if (!presence.mounted) return null;
 
   const subjectName = (id: string) => mirror.subjects.find((s) => s.id === id)?.name ?? "";

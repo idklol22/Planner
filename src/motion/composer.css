@@ -18,6 +18,7 @@
 }
 .composer-root.is-closing .composer-backdrop {
   animation: composer-backdrop-out var(--motion) var(--ease-in) forwards;
+  pointer-events: none;
 }
 .composer-root.is-closing .composer-panel {
   animation: composer-panel-out var(--motion) var(--ease-in) forwards;
@@ -130,6 +131,8 @@
    page, so the fixed keyboard bar keeps working on iOS. */
 .task-page {
   animation: task-page-in var(--motion) var(--ease-out);
+  /* The edge swipe locks to x in JS; let the browser keep vertical scrolling. */
+  touch-action: pan-y;
 }
 .task-page--closing {
   animation: task-page-out var(--motion) var(--ease-in) forwards;

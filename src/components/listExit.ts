@@ -35,6 +35,8 @@ export function useListExit<T extends { id: string }>(items: T[], exitMs = MOTIO
   latest.current = items;
   const previous = useRef(items);
   const [exiting, setExiting] = useState<ExitingEntry<T>[]>([]);
+  const timers = useRef<number[]>([]);
+  useEffect(() => () => timers.current.forEach((timer) => window.clearTimeout(timer)), []);
 
   useEffect(() => {
     const before = previous.current;
@@ -51,9 +53,11 @@ export function useListExit<T extends { id: string }>(items: T[], exitMs = MOTIO
       ...current.filter((entry) => !gone.some((g) => g.item.id === entry.item.id)),
       ...gone,
     ]);
-    window.setTimeout(() => {
-      setExiting((current) => current.filter((entry) => !gone.some((g) => g.item.id === entry.item.id)));
-    }, prefersReducedMotion() ? 0 : exitMs);
+    timers.current.push(
+      window.setTimeout(() => {
+        setExiting((current) => current.filter((entry) => !gone.some((g) => g.item.id === entry.item.id)));
+      }, prefersReducedMotion() ? 0 : exitMs),
+    );
   }, [key, exitMs]);
 
   return mergeExiting(latest.current, exiting);

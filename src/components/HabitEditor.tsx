@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ISODate } from "../domain/dates";
 import type { Habit } from "../domain/model";
 import { activeCategories } from "../domain/tasks";
@@ -43,6 +43,9 @@ export function HabitEditor({
   const [end, setEnd] = useState(habit?.endDate ?? date);
   const [days, setDays] = useState<number[]>(habit?.weekdays ?? []);
   const categories = activeCategories(data.categories);
+  // The owner keeps us mounted for the slide-down; a second tap during that
+  // window must not save or archive the habit twice.
+  const closed = useRef(false);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -53,7 +56,8 @@ export function HabitEditor({
   const valid = title.trim().length > 0 && (forever || end >= start);
 
   function save() {
-    if (!valid) return;
+    if (closed.current || !valid) return;
+    closed.current = true;
     const input = {
       title: title.trim(),
       categoryId: cat || null,
@@ -67,7 +71,11 @@ export function HabitEditor({
   }
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center md:items-center">
+    <div
+      className={`fixed inset-0 z-[70] flex items-end justify-center md:items-center ${
+        closing ? "pointer-events-none" : ""
+      }`}
+    >
       <button
         aria-label="Close"
         onPointerDown={(e) => e.preventDefault()}
@@ -162,6 +170,8 @@ export function HabitEditor({
           {habit && (
             <button
               onClick={() => {
+                if (closed.current) return;
+                closed.current = true;
                 actions.archiveHabit(habit.id, true);
                 onClose();
               }}

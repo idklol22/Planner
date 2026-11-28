@@ -74,11 +74,10 @@ function SheetBody({
 
   function addSubtask() {
     const attempt = resolveInlineSave(subTitle, subBlocked.current);
+    subBlocked.current = attempt.blocked;
     if (!attempt.value) return;
-    subBlocked.current = true;
     actions.addSubtask(task.id, attempt.value);
     setSubTitle("");
-    subBlocked.current = false;
   }
 
   function setRepeat(value: string) {
@@ -283,7 +282,7 @@ function SheetBody({
               </div>
               <div>
                 {subs.map((sub) => (
-                  <div key={sub.id} className="animate-row flex min-h-11 items-center gap-3 border-b border-line px-1 py-1.5">
+                  <div key={sub.id} className="flex min-h-11 items-center gap-3 border-b border-line px-1 py-1.5">
                     <TaskCheck
                       checked={sub.done}
                       color={color}

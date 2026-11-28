@@ -27,13 +27,15 @@
   animation: none;
   transform: translateX(100%);
   transition: transform var(--motion) var(--ease-in);
+  pointer-events: none;
 }
 
-/* The day screen underneath shifts a little and dims while a page is up. */
+/* The day screen underneath dims while a page is up. No transform here: this is
+   an ancestor of the fixed add bar, composer and popovers, and a resting
+   transform would re-anchor them to this scroll container on iOS. */
 .page-behind {
-  transform: translateX(-16px);
   opacity: 0.55;
-  transition: transform var(--motion) var(--ease-out), opacity var(--motion) var(--ease-out);
+  transition: opacity var(--motion) var(--ease-out);
 }
 
 /* A short, staggered rise for the first few blocks of a page. */
@@ -128,6 +130,7 @@
   animation: none;
   opacity: 0;
   transition: opacity var(--motion) var(--ease-in);
+  pointer-events: none;
 }
 .panel-sheet {
   animation: panel-rise var(--motion) var(--ease-out) backwards;
@@ -136,6 +139,7 @@
   animation: none;
   transform: translateY(100%);
   transition: transform var(--motion) var(--ease-in);
+  pointer-events: none;
 }
 /* The task inspector is a side panel on wide screens, so it enters sideways. */
 @media (min-width: 768px) {
@@ -181,6 +185,7 @@
   opacity: 0;
   transform: translateY(-8px);
   transition: opacity var(--motion) var(--ease-in), transform var(--motion) var(--ease-in);
+  pointer-events: none;
 }
 
 /* ── Shared controls ─────────────────────────────────────────────────── */

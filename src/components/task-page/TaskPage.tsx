@@ -124,7 +124,13 @@ export function TaskPage({ taskId, closing = false }: { taskId: string; closing?
       if (start.active) snapBack();
       return;
     }
-    start.active = true;
+    if (!start.active) {
+      start.active = true;
+      // Lock the horizontal gesture to this element so a stray pointercancel
+      // cannot leave the page half-dragged. touch-action: pan-y keeps scrolling.
+      if (!e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    }
     setSwipe({ x: dx, opacity: 1 - progress * 0.12, snapping: false });
   }
 
@@ -190,7 +196,7 @@ export function TaskPage({ taskId, closing = false }: { taskId: string; closing?
         </div>
       </div>
       {task ? (
-        <TaskDocument key={task.id} task={task} keyboard={keyboard} pageRef={pageRef} />
+        <TaskDocument key={task.id} task={task} keyboard={keyboard} pageRef={pageRef} closing={closing} />
       ) : (
         <div className="mx-auto max-w-[720px] px-4 pt-16 text-muted">This task no longer exists.</div>
       )}
@@ -212,10 +218,12 @@ const TaskDocument = memo(function TaskDocument({
   task,
   keyboard,
   pageRef,
+  closing,
 }: {
   task: Task;
   keyboard: number;
   pageRef: RefObject<HTMLDivElement | null>;
+  closing: boolean;
 }) {
   const { data, actions } = useStore();
   const [title, setTitle] = useState(task.title);
@@ -236,6 +244,7 @@ const TaskDocument = memo(function TaskDocument({
   /** Changes we pushed that the store has not reflected yet. */
   const optimistic = useRef(new Map<string, SubtaskState>());
   const saveTimer = useRef<number | undefined>(undefined);
+  const pendingSave = useRef<PlannerEditor | null>(null);
 
   const notify = useToast();
   const sync = useSync();
@@ -315,16 +324,36 @@ const TaskDocument = memo(function TaskDocument({
     return () => window.removeEventListener("keydown", onKey, true);
   }, [viewer]);
 
-  const persist = useCallback(
+  const saveNoteNow = useCallback(
     (editor: PlannerEditor) => {
-      window.clearTimeout(saveTimer.current);
-      saveTimer.current = window.setTimeout(() => {
-        const blocks = editor.document;
-        actionsRef.current.updateNoteBlocks(task.id, blocks as unknown[], blocksToMarkdown(blocks));
-      }, 500);
+      const blocks = editor.document;
+      actionsRef.current.updateNoteBlocks(task.id, blocks as unknown[], blocksToMarkdown(blocks));
     },
     [task.id],
   );
+
+  const persist = useCallback(
+    (editor: PlannerEditor) => {
+      window.clearTimeout(saveTimer.current);
+      pendingSave.current = editor;
+      saveTimer.current = window.setTimeout(() => {
+        pendingSave.current = null;
+        saveNoteNow(editor);
+      }, 500);
+    },
+    [saveNoteNow],
+  );
+
+  // Leaving the page starts a 240ms slide-out, after which this component
+  // unmounts and clears the debounce. Flush once at the start of the exit so
+  // the last keystroke is not lost and nothing is saved twice.
+  useEffect(() => {
+    if (!closing || !pendingSave.current) return;
+    window.clearTimeout(saveTimer.current);
+    const editor = pendingSave.current;
+    pendingSave.current = null;
+    saveNoteNow(editor);
+  }, [closing, saveNoteNow]);
 
   const runSync = useCallback((editor: PlannerEditor) => {
     const store = actionsRef.current;

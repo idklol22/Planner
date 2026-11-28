@@ -158,7 +158,7 @@ export function AppShell() {
   return (
     <div className="h-dvh overflow-hidden" hidden={onTask}>
       <main
-        inert={presence.mounted}
+        inert={!!page}
         className={`h-full overflow-y-auto overflow-x-hidden overscroll-contain ${
           presence.mounted ? "page-behind" : ""
         }`}

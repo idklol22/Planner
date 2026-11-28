@@ -92,7 +92,7 @@ export function useEntryRows<T extends { id: string }>(items: T[], signature: st
     setRows((prev) => mergeEntryRows(prev, items));
     const timer = window.setTimeout(
       () => setRows(items.map((item) => ({ item, leaving: false }))),
-      prefersReducedMotion() ? 0 : MOTION_MS.fast,
+      prefersReducedMotion() ? 0 : MOTION_MS.base,
     );
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps

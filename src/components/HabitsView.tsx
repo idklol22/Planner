@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { ISODate } from "../domain/dates";
 import { describeSchedule, partitionHabits } from "../domain/habits";
 import type { Habit } from "../domain/model";
@@ -13,8 +13,9 @@ const ACTION = "ui-press min-h-11 px-2 text-[12px] text-muted";
 /** Full-screen habits setup page: create, edit, archive and restore habits. */
 export function HabitsView({ date }: { date: ISODate }) {
   const { data, actions } = useStore();
-  const [editor, setEditor] = useState<{ habit?: Habit } | null>(null);
-  const [shownEditor, setShownEditor] = useState<{ habit?: Habit } | null>(null);
+  const [editor, setEditor] = useState<{ habit?: Habit; id: number } | null>(null);
+  const [shownEditor, setShownEditor] = useState<{ habit?: Habit; id: number } | null>(null);
+  const editorSeq = useRef(0);
   const { active, archived } = partitionHabits(data.habits);
   const activeRows = useListExit(active);
   const archivedRows = useListExit(archived);
@@ -43,7 +44,7 @@ export function HabitsView({ date }: { date: ISODate }) {
 
       <div className="page-block mb-5 flex">
         <button
-          onClick={() => setEditor({})}
+          onClick={() => setEditor({ id: ++editorSeq.current })}
           className="ui-press min-h-11 w-full text-left text-[14px] font-semibold text-accent sm:w-auto"
         >
           New habit
@@ -71,7 +72,11 @@ export function HabitsView({ date }: { date: ISODate }) {
                   <span className="block truncate text-[15px] font-semibold">{habit.title}</span>
                   <span className="block truncate text-[12px] text-faint">{detail(habit)}</span>
                 </span>
-                <button onClick={() => setEditor({ habit })} aria-label={`Edit ${habit.title}`} className={ACTION}>
+                <button
+                  onClick={() => setEditor({ habit, id: ++editorSeq.current })}
+                  aria-label={`Edit ${habit.title}`}
+                  className={ACTION}
+                >
                   Edit
                 </button>
                 <button
@@ -117,7 +122,7 @@ export function HabitsView({ date }: { date: ISODate }) {
 
       {editorPresence.mounted && shownEditor && (
         <HabitEditor
-          key={shownEditor.habit?.id ?? "new"}
+          key={shownEditor.id}
           habit={shownEditor.habit}
           date={date}
           closing={editorPresence.closing}

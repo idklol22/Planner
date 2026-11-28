@@ -306,10 +306,8 @@ html[data-theme="contrast"] .sheet {
   color: var(--color-muted);
   font-size: 13px;
 }
-.composer-kind-option[aria-pressed="true"] {
-  background: var(--surface-raised);
-  color: var(--color-ink);
-}
+/* The pressed look comes from the sliding thumb in composer.css; no background
+   here so the two definitions cannot disagree. */
 .composer-kind-option:disabled {
   cursor: not-allowed;
   opacity: 0.35;
@@ -428,14 +426,9 @@ html[data-theme="contrast"] .sheet {
 }
 
 /* ── Motion ───────────────────────────────────────────────────────────── */
-@keyframes sheet-up {
-  from {
-    transform: translateY(100%);
-  }
-  to {
-    transform: translateY(0);
-  }
-}
+/* The per-area files in src/motion/ own every gesture. Only the app-wide
+   one-shot fade remains here; leaving `both` on it would keep a compositing
+   layer around every fixed overlay in the day screen. */
 @keyframes fade-in {
   from {
     opacity: 0;
@@ -444,61 +437,8 @@ html[data-theme="contrast"] .sheet {
     opacity: 1;
   }
 }
-@keyframes drawer-in {
-  from {
-    transform: translateX(100%);
-  }
-  to {
-    transform: translateX(0);
-  }
-}
-@keyframes row-in {
-  from {
-    opacity: 0;
-    transform: translateY(-6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-@keyframes week-next {
-  from {
-    opacity: 0;
-    transform: translateX(18px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-@keyframes week-prev {
-  from {
-    opacity: 0;
-    transform: translateX(-18px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-.animate-sheet-up {
-  animation: sheet-up 0.34s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-}
 .animate-fade {
-  animation: fade-in 0.25s ease both;
-}
-.animate-drawer {
-  animation: drawer-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-}
-.animate-row {
-  animation: row-in 0.22s ease both;
-}
-.slide-next {
-  animation: week-next 0.26s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-}
-.slide-prev {
-  animation: week-prev 0.26s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: fade-in var(--motion) var(--ease-out);
 }
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -507,47 +447,6 @@ html[data-theme="contrast"] .sheet {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
-}
-
-/* ── Motion ───────────────────────────────────────────────────────────── */
-@keyframes rise {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-@keyframes slide-left {
-  from {
-    opacity: 0;
-    transform: translateX(24px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-@keyframes toast-in {
-  from {
-    opacity: 0;
-    transform: translateY(-10px) scale(0.97);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-.animate-rise {
-  animation: rise 0.4s cubic-bezier(0.2, 0.7, 0.2, 1) both;
-}
-.animate-slide {
-  animation: slide-left 0.28s cubic-bezier(0.2, 0.7, 0.2, 1) both;
-}
-.animate-toast {
-  animation: toast-in 0.25s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
 /* ── Markdown + LaTeX preview ─────────────────────────────────────────── */
@@ -640,26 +539,4 @@ html[data-theme="contrast"] .sheet {
   color: var(--text);
 }
 
-.sheet-panel {
-  animation: sheet-up 0.34s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-}
-@media (min-width: 768px) {
-  .sheet-panel {
-    animation: drawer-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-  }
-}
-
-/* Small popover: scales in from its anchor corner. */
-@keyframes pop-in {
-  from {
-    opacity: 0;
-    transform: scale(0.94) translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
-}
-.animate-pop {
-  animation: pop-in 0.16s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-}
+/* Popovers now use day-pop-in / composer-list-in in their own motion files. */
