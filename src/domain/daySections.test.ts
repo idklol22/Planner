@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { INBOX_KEY, partitionDaySections, sectionKey, visibleDaySections } from "./daySections";
+import {
+  daySlideDirection,
+  INBOX_KEY,
+  mergeMotionRows,
+  partitionDaySections,
+  sectionKey,
+  visibleDaySections,
+} from "./daySections";
 import { makeCategory, makeGoal, makeHabit, makeTask } from "./model";
 import type { DaySectionRow } from "./daySections";
 
@@ -52,5 +59,57 @@ describe("partitionDaySections", () => {
     expect(visible.empty).toEqual([]);
     // The aliases are metadata, not extra rows: array equality still works.
     expect(visible).toEqual([withTask]);
+  });
+});
+
+describe("daySlideDirection", () => {
+  it("is null for the first render and for the same day", () => {
+    expect(daySlideDirection(null, DATE)).toBeNull();
+    expect(daySlideDirection(DATE, DATE)).toBeNull();
+  });
+
+  it("matches the direction of the date change", () => {
+    expect(daySlideDirection(DATE, "2026-01-16")).toBe("next");
+    expect(daySlideDirection(DATE, "2026-01-14")).toBe("prev");
+  });
+});
+
+describe("mergeMotionRows", () => {
+  const item = (id: string) => ({ id });
+
+  it("marks only brand-new rows as entering", () => {
+    const rows = mergeMotionRows([item("a"), item("b")], [], [], new Set(["b"]));
+    expect(rows).toEqual([
+      { item: item("a"), present: true, entering: false },
+      { item: item("b"), present: true, entering: true },
+    ]);
+  });
+
+  it("keeps a removed row in its old slot while it leaves", () => {
+    const rows = mergeMotionRows(
+      [item("a"), item("c")],
+      [item("b")],
+      ["a", "b", "c"],
+      new Set(),
+    );
+    expect(rows.map((r) => [r.item.id, r.present])).toEqual([
+      ["a", true],
+      ["b", false],
+      ["c", true],
+    ]);
+  });
+
+  it("puts a removed first row before the survivors", () => {
+    const rows = mergeMotionRows([item("b")], [item("a")], ["a", "b"], new Set());
+    expect(rows.map((r) => r.item.id)).toEqual(["a", "b"]);
+    expect(rows[0].present).toBe(false);
+  });
+
+  it("drops the stale copy once the live row is back", () => {
+    const rows = mergeMotionRows([item("b"), item("a")], [item("a")], ["a", "b"], new Set(["a"]));
+    expect(rows.map((r) => [r.item.id, r.present, r.entering])).toEqual([
+      ["b", true, false],
+      ["a", true, true],
+    ]);
   });
 });

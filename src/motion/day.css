@@ -1,1 +1,217 @@
-/* Motion owned by the day area. */
+/* Motion owned by the day area: the list, its rows, the completion mark and
+   the day's popovers. Only transform/opacity animate, plus a short 0fr↔1fr
+   height collapse where a row needs to open or close its space. Timings come
+   from src/motion/index.css; the global reduced-motion rule caps them all. */
+
+/* ── Rows: open their space, then close it ──────────────────────────────── */
+@keyframes day-row-open {
+  from {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+  to {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+}
+@keyframes day-row-close {
+  from {
+    grid-template-rows: 1fr;
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transform: translateX(-28px);
+  }
+}
+.day-slot {
+  display: grid;
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.day-slot > .day-slot-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+.day-slot.enter {
+  animation: day-row-open var(--motion) var(--ease-out) both;
+}
+.day-slot.leave {
+  animation: day-row-close var(--motion) var(--ease-in) both;
+  pointer-events: none;
+}
+
+/* ── Changing the selected day ─────────────────────────────────────────── */
+/* Later days arrive from the right, earlier days from the left. The sheet and
+   the docked add bar are outside this wrapper and stay completely still. */
+@keyframes day-list-from-right {
+  from {
+    opacity: 0;
+    transform: translateX(22px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes day-list-from-left {
+  from {
+    opacity: 0;
+    transform: translateX(-22px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+/* `backwards` (not `both`) means no transform is left behind once the slide
+   finishes: a permanent transform on an ancestor would re-anchor fixed children. */
+.day-list-next {
+  animation: day-list-from-right var(--motion) var(--ease-out) backwards;
+}
+.day-list-prev {
+  animation: day-list-from-left var(--motion) var(--ease-out) backwards;
+}
+
+/* Headers and the "Nothing planned" line arrive quietly — opacity only, so a
+   fixed backdrop inside a header still covers the whole viewport on iOS. */
+@keyframes day-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.day-fade-in {
+  animation: day-fade var(--motion) var(--ease-out) backwards;
+}
+
+/* ── Popovers: scale/fade from their button, in and out ────────────────── */
+@keyframes day-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+@keyframes day-pop-out {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.96) translateY(-3px);
+  }
+}
+.day-pop {
+  transform-origin: top right;
+  animation: day-pop-in var(--motion-fast) var(--ease-out) both;
+}
+.day-pop.closing {
+  animation: day-pop-out var(--motion-fast) var(--ease-in) both;
+}
+@keyframes day-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes day-backdrop-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+.day-backdrop {
+  animation: day-backdrop-in var(--motion-fast) var(--ease-out) both;
+}
+.day-backdrop.closing {
+  animation: day-backdrop-out var(--motion-fast) var(--ease-in) both;
+}
+
+/* ── Completion mark: press, fill, draw the tick ───────────────────────── */
+.task-mark.day-mark {
+  transition: transform var(--motion-fast) var(--ease-out);
+}
+.mark-btn:active .task-mark.day-mark {
+  transform: scale(0.88);
+  transition-duration: 0ms;
+}
+.task-mark.day-mark .task-mark-disk.day-disk {
+  opacity: 0;
+  transform: scale(0.55);
+  transition:
+    opacity var(--motion-fast) var(--ease-out),
+    transform var(--motion-fast) var(--ease-out);
+}
+.task-mark.day-mark.on .task-mark-disk.day-disk {
+  opacity: 1;
+  transform: scale(1);
+}
+.task-mark.day-mark .task-mark-ring {
+  transition: stroke var(--motion-fast) var(--ease-out);
+}
+.task-mark.day-mark .task-mark-tick.day-tick {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  opacity: 0;
+  transition:
+    stroke-dashoffset var(--motion-fast) var(--ease-out),
+    opacity var(--motion-fast) var(--ease-out);
+}
+.task-mark.day-mark.on .task-mark-tick.day-tick {
+  stroke-dashoffset: 0;
+  opacity: 1;
+}
+
+/* The strike sweeps across instead of appearing all at once. */
+.day-title-wrap {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+.day-title-wrap .task-title.done {
+  text-decoration: none;
+}
+.day-strike {
+  position: absolute;
+  top: 52%;
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: var(--color-faint);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform var(--motion-fast) var(--ease-out);
+  pointer-events: none;
+}
+.day-strike.on {
+  transform: scaleX(1);
+}
+
+/* ── Press feedback: instant while the finger is down ──────────────────── */
+.day-press {
+  transition:
+    transform var(--motion-fast) var(--ease-out),
+    opacity var(--motion-fast) var(--ease-out);
+}
+.day-press:active {
+  transform: scale(0.97);
+  opacity: 0.85;
+  transition-duration: 0ms;
+}

@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   resolveSwipe,
+  rubberBand,
   SWIPE_COMMIT_PX,
   SWIPE_LOCK_PX,
   SWIPE_MAX_PX,
+  SWIPE_RUBBER_PX,
   type SwipeInput,
 } from "./swipe";
 
@@ -146,5 +148,35 @@ describe("resolveSwipe", () => {
     // the clamped display value is not the commit threshold: both still commit
     expect(release(START_X - 200)).toMatchObject({ dx: -SWIPE_MAX_PX, action: "delete" });
     expect(release(START_X + 200)).toMatchObject({ dx: SWIPE_MAX_PX, action: "archive" });
+  });
+});
+
+describe("rubberBand", () => {
+  it("follows the finger 1:1 up to the limit", () => {
+    expect(rubberBand(0)).toBe(0);
+    expect(rubberBand(80)).toBe(80);
+    expect(rubberBand(-80)).toBe(-80);
+    expect(rubberBand(SWIPE_MAX_PX)).toBe(SWIPE_MAX_PX);
+    expect(rubberBand(-SWIPE_MAX_PX)).toBe(-SWIPE_MAX_PX);
+  });
+
+  it("resists past the limit but stays monotonic and bounded", () => {
+    const a = rubberBand(SWIPE_MAX_PX + 1);
+    const b = rubberBand(SWIPE_MAX_PX + 80);
+    const c = rubberBand(SWIPE_MAX_PX + 800);
+    expect(a).toBeGreaterThan(SWIPE_MAX_PX);
+    expect(b).toBeGreaterThan(a);
+    expect(c).toBeGreaterThan(b);
+    expect(c).toBeLessThan(SWIPE_MAX_PX + SWIPE_RUBBER_PX);
+    // symmetric, so archiving and deleting feel identical
+    expect(rubberBand(-200)).toBe(-rubberBand(200));
+  });
+
+  it("accepts a custom limit and extra travel", () => {
+    expect(rubberBand(40, 40, 10)).toBe(40);
+    expect(rubberBand(50, 40, 10)).toBeGreaterThan(40);
+    expect(rubberBand(50, 40, 10)).toBeLessThan(50);
+    expect(rubberBand(1000, 40, 10)).toBeGreaterThan(rubberBand(50, 40, 10));
+    expect(rubberBand(1000, 40, 10)).toBeLessThan(50);
   });
 });

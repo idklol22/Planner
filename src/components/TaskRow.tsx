@@ -10,7 +10,14 @@ import { createPortal } from "react-dom";
 import { MoreHorizontal } from "lucide-react";
 import { addDays } from "../domain/dates";
 import type { Task } from "../domain/model";
-import { resolveSwipe, type SwipeState } from "../domain/swipe";
+import {
+  resolveSwipe,
+  rubberBand,
+  SWIPE_COMMIT_PX,
+  SWIPE_MAX_PX,
+  type SwipeState,
+} from "../domain/swipe";
+import { MOTION_MS, usePresence } from "../lib/motion";
 import { subtaskProgress } from "../domain/tasks";
 import { useStore } from "../state/store";
 import { useToast } from "../state/toast";
@@ -37,13 +44,16 @@ export function TaskRow({
   const popover = useRef<HTMLDivElement>(null);
   const [popoverPos, setPopoverPos] = useState({ top: 0, left: 0 });
   const [swipe, setSwipe] = useState<SwipeState>(REST);
+  /** Raw, rubber-banded offset of the finger while dragging. */
+  const [rubber, setRubber] = useState(0);
   const [dragging, setDragging] = useState(false);
+  const shown = usePresence(menu, MOTION_MS.fast);
   const start = useRef<{ x: number; y: number } | null>(null);
   const axis = useRef<"x" | "y" | null>(null);
   /** The gesture moved the row sideways, so the click it may end with is not a tap. */
   const swiped = useRef(false);
 
-  // The menu is portalled to <body>: `animate-row` leaves a permanent transform on the row,
+  // The menu is portalled to <body>: the row keeps a translate transform for swipes,
   // which would size the fixed catcher to the row, trap the popover in the row's stacking
   // context, and let `main`'s overflow clip it. Measure the real popover before paint so the
   // right-aligned position is exact and it flips above the button when there's no room below.
@@ -87,6 +97,7 @@ export function TaskRow({
     if ((e.target as Element).closest("input,textarea,select")) return;
     start.current = { x: e.clientX, y: e.clientY };
     axis.current = null;
+    setRubber(0);
     setSwipe(
       resolveSwipe({
         pointerType: e.pointerType,
@@ -106,6 +117,7 @@ export function TaskRow({
     start.current = null;
     axis.current = null;
     setDragging(false);
+    setRubber(0);
     setSwipe(REST);
   }
 
@@ -136,6 +148,7 @@ export function TaskRow({
       }
       start.current = null;
       setDragging(false);
+      setRubber(0);
       setSwipe(REST);
       return;
     }
@@ -145,6 +158,8 @@ export function TaskRow({
       swiped.current = true;
       e.currentTarget.setPointerCapture(e.pointerId);
     }
+    // 1:1 until the limit, then resistance; the commit still uses the resolver.
+    setRubber(rubberBand(e.clientX - from.x));
     setSwipe(next);
   }
 
@@ -155,6 +170,7 @@ export function TaskRow({
     start.current = null;
     axis.current = null;
     setDragging(false);
+    setRubber(0);
     setSwipe(REST);
     if (e.currentTarget.hasPointerCapture(e.pointerId)) {
       e.currentTarget.releasePointerCapture(e.pointerId);
@@ -177,8 +193,9 @@ export function TaskRow({
     }
   }
 
-  const underlayWidth = Math.min(Math.abs(swipe.dx), 120);
-  const underlayOpacity = Math.min(1, Math.abs(swipe.dx) / 96);
+  const displayDx = dragging ? rubber : swipe.dx;
+  const underlayWidth = Math.min(Math.abs(displayDx), SWIPE_MAX_PX);
+  const underlayOpacity = Math.min(1, Math.abs(displayDx) / SWIPE_COMMIT_PX);
 
   return (
     <div
@@ -210,8 +227,8 @@ export function TaskRow({
       <div
         className="relative z-10 flex w-full min-w-0 flex-1 items-center gap-1.5"
         style={{
-          transform: `translateX(${swipe.dx}px)`,
-          transition: dragging ? "none" : "transform 180ms ease-out",
+          transform: `translateX(${displayDx}px)`,
+          transition: dragging ? "none" : "transform var(--motion) var(--ease-spring)",
         }}
       >
         <TaskCheck
@@ -222,10 +239,13 @@ export function TaskRow({
         />
         <button
           onClick={() => onOpen(task.id)}
-          className="flex min-w-0 flex-1 items-center gap-2 py-1.5 text-left focus-visible:ring-2 focus-visible:ring-accent"
+          className="day-press flex min-w-0 flex-1 items-center gap-2 py-1.5 text-left focus-visible:ring-2 focus-visible:ring-accent"
         >
           <span className="min-w-0 flex-1 truncate text-[14.5px] leading-snug">
-            <span className={`task-title ${task.done ? "done" : ""}`}>{task.title}</span>
+            <span className="day-title-wrap">
+              <span className={`task-title ${task.done ? "done" : ""}`}>{task.title}</span>
+              <span aria-hidden className={`day-strike ${task.done ? "on" : ""}`} />
+            </span>
           </span>
           <span className="flex shrink-0 items-center gap-2.5 text-[12px] text-faint">
             {task.time && <span className="tabular-nums">{task.time}</span>}
@@ -244,18 +264,18 @@ export function TaskRow({
           aria-label={`More options for ${task.title}`}
           aria-expanded={menu}
           aria-haspopup="menu"
-          className={`flex h-11 w-11 shrink-0 items-center justify-center text-faint transition-colors hover:text-ink focus-visible:ring-2 focus-visible:ring-accent ${
+          className={`day-press flex h-11 w-11 shrink-0 items-center justify-center text-faint transition-colors hover:text-ink focus-visible:ring-2 focus-visible:ring-accent ${
             menu ? "text-ink" : ""
           }`}
         >
           <MoreHorizontal size={18} />
         </button>
-        {menu &&
+        {shown.mounted &&
           createPortal(
             <>
               <button
                 aria-label="Close menu"
-                className="fixed inset-0 z-10 cursor-default"
+                className={`day-backdrop fixed inset-0 z-10 cursor-default ${shown.closing ? "closing" : ""}`}
                 onClick={() => setMenu(false)}
                 onKeyDown={onMenuKeyDown}
               />
@@ -264,7 +284,9 @@ export function TaskRow({
                 role="menu"
                 onKeyDown={onMenuKeyDown}
                 style={{ top: popoverPos.top, left: popoverPos.left }}
-                className="animate-pop fixed z-20 w-48 origin-top-right overflow-hidden border border-line bg-[var(--pop)] py-1"
+                className={`day-pop fixed z-20 w-48 origin-top-right overflow-hidden border border-line bg-[var(--pop)] py-1 ${
+                  shown.closing ? "closing" : ""
+                }`}
               >
                 <button
                   role="menuitem"
@@ -272,7 +294,7 @@ export function TaskRow({
                     actions.moveTaskToDay(task.id, addDays(task.date, 1));
                     setMenu(false);
                   }}
-                  className="flex min-h-11 w-full items-center px-3 text-left text-[13px] hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
+                  className="day-press flex min-h-11 w-full items-center px-3 text-left text-[13px] hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
                 >
                   Move to tomorrow
                 </button>
@@ -283,7 +305,7 @@ export function TaskRow({
                     undo("Task archived");
                     setMenu(false);
                   }}
-                  className="flex min-h-11 w-full items-center px-3 text-left text-[13px] hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
+                  className="day-press flex min-h-11 w-full items-center px-3 text-left text-[13px] hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
                 >
                   Archive
                 </button>
@@ -294,7 +316,7 @@ export function TaskRow({
                     undo("Task deleted");
                     setMenu(false);
                   }}
-                  className="flex min-h-11 w-full items-center px-3 text-left text-[13px] text-rose focus-visible:ring-2 focus-visible:ring-accent"
+                  className="day-press flex min-h-11 w-full items-center px-3 text-left text-[13px] text-rose focus-visible:ring-2 focus-visible:ring-accent"
                 >
                   Delete
                 </button>

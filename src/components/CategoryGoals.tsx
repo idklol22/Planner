@@ -1,5 +1,7 @@
 import { useRef, useState } from "react";
 import { achievedGoals, openGoals, reorderedIds } from "../domain/goals";
+import { MOTION_MS, usePresence } from "../lib/motion";
+import { MotionRow, useFlipRows, useMotionRows } from "../motion/dayMotion";
 import { useStore } from "../state/store";
 import { TaskMark } from "./TaskMark";
 
@@ -8,12 +10,17 @@ import { TaskMark } from "./TaskMark";
 export function CategoryGoals({ categoryId, color }: { categoryId: string; color: string }) {
   const { data, actions } = useStore();
   const [showDone, setShowDone] = useState(false);
+  const shownDone = usePresence(showDone, MOTION_MS.base);
   const [editing, setEditing] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const editValue = useRef("");
   const editCancelled = useRef(false);
   const open = openGoals(data.goals, categoryId);
   const done = achievedGoals(data.goals, categoryId);
+  const openRows = useMotionRows(open);
+  const doneRows = useMotionRows(done);
+  const flipOpen = useFlipRows(open.map((g) => g.id));
+  const flipDone = useFlipRows(done.map((g) => g.id));
 
   function saveEdit() {
     const text = editValue.current.trim();
@@ -22,14 +29,14 @@ export function CategoryGoals({ categoryId, color }: { categoryId: string; color
   }
 
   const row = (g: (typeof open)[number], i: number, isOpen: boolean) => (
-    <li key={g.id} className="group flex min-h-11 items-center gap-1.5">
+    <div className="group flex min-h-11 items-center gap-1.5">
       <button
         type="button"
         role="checkbox"
         aria-checked={!isOpen}
         aria-label={isOpen ? `Mark goal achieved: ${g.title}` : `Mark goal not achieved: ${g.title}`}
         onClick={() => (isOpen ? actions.achieveGoal(g.id) : actions.unachieveGoal(g.id))}
-        className="flex h-11 w-11 shrink-0 items-center justify-center"
+        className="day-press flex h-11 w-11 shrink-0 items-center justify-center"
       >
         <TaskMark color={color} done={!isOpen} size={18} />
       </button>
@@ -72,9 +79,12 @@ export function CategoryGoals({ categoryId, color }: { categoryId: string; color
             setEditDraft(g.title);
             editCancelled.current = false;
           }}
-          className={`min-w-0 flex-1 truncate py-2 text-left text-[13px] ${isOpen ? "text-ink" : "text-faint line-through"}`}
+          className={`day-press min-w-0 flex-1 py-2 text-left text-[13px] ${isOpen ? "text-ink" : "text-faint"}`}
         >
-          {g.title}
+          <span className="day-title-wrap">
+            <span>{g.title}</span>
+            <span aria-hidden className={`day-strike ${isOpen ? "" : "on"}`} />
+          </span>
         </button>
       )}
       {isOpen && open.length > 1 && (
@@ -84,7 +94,7 @@ export function CategoryGoals({ categoryId, color }: { categoryId: string; color
             aria-label="Move goal up"
             disabled={i === 0}
             onClick={() => actions.reorderGoals(reorderedIds(open, g.id, i - 1))}
-            className="h-11 px-1.5 text-[12px] text-faint hover:text-ink disabled:opacity-30"
+            className="day-press h-11 px-1.5 text-[12px] text-faint hover:text-ink disabled:opacity-30"
           >
             Up
           </button>
@@ -93,7 +103,7 @@ export function CategoryGoals({ categoryId, color }: { categoryId: string; color
             aria-label="Move goal down"
             disabled={i === open.length - 1}
             onClick={() => actions.reorderGoals(reorderedIds(open, g.id, i + 1))}
-            className="h-11 px-1.5 text-[12px] text-faint hover:text-ink disabled:opacity-30"
+            className="day-press h-11 px-1.5 text-[12px] text-faint hover:text-ink disabled:opacity-30"
           >
             Down
           </button>
@@ -103,29 +113,63 @@ export function CategoryGoals({ categoryId, color }: { categoryId: string; color
         type="button"
         aria-label={`Delete goal: ${g.title}`}
         onClick={() => actions.deleteGoal(g.id)}
-        className="h-11 shrink-0 px-1.5 text-[12px] text-faint opacity-0 transition-opacity hover:text-ink focus:opacity-100 group-hover:opacity-100"
+        className="day-press h-11 shrink-0 px-1.5 text-[12px] text-faint opacity-0 transition-opacity hover:text-ink focus:opacity-100 group-hover:opacity-100"
       >
         Remove
       </button>
-    </li>
+    </div>
   );
 
   if (open.length === 0 && done.length === 0) return null;
 
   return (
     <div aria-label="Goals" className="mb-1">
-      {open.length > 0 && <ul>{open.map((g, i) => row(g, i, true))}</ul>}
+      {open.length > 0 && (
+        <ul>
+          {openRows.rows.map(({ item: g, present, entering }, i) => (
+            <MotionRow
+              as="li"
+              key={g.id}
+              present={present}
+              entering={entering}
+              exitMs={openRows.exitMs}
+              innerRef={flipOpen(g.id)}
+              onExited={() => openRows.drop(g.id)}
+            >
+              {row(g, i, true)}
+            </MotionRow>
+          ))}
+        </ul>
+      )}
       {done.length > 0 && (
         <>
           <button
             type="button"
             aria-expanded={showDone}
             onClick={() => setShowDone((v) => !v)}
-            className="min-h-11 text-[12px] text-muted hover:text-ink"
+            className="day-press min-h-11 text-[12px] text-muted hover:text-ink"
           >
             {showDone ? "Hide" : "Show"} achieved ({done.length})
           </button>
-          {showDone && <ul>{done.map((g, i) => row(g, i, false))}</ul>}
+          {shownDone.mounted && (
+            <MotionRow present={showDone}>
+              <ul>
+                {doneRows.rows.map(({ item: g, present, entering }, i) => (
+                  <MotionRow
+                    as="li"
+                    key={g.id}
+                    present={present}
+                    entering={entering}
+                    exitMs={doneRows.exitMs}
+                    innerRef={flipDone(g.id)}
+                    onExited={() => doneRows.drop(g.id)}
+                  >
+                    {row(g, i, false)}
+                  </MotionRow>
+                ))}
+              </ul>
+            </MotionRow>
+          )}
         </>
       )}
     </div>
