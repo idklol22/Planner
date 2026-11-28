@@ -41,6 +41,9 @@ function EntryRowView({
             </span>
           )}
           <button
+            data-calorie-keep-tap
+            onPointerDown={(e) => e.preventDefault()}
+            onMouseDown={(e) => e.preventDefault()}
             type="button"
             onClick={() => onRemove(e.id)}
             aria-label={`Delete entry at ${entryTimeLabel(e)}`}
@@ -174,14 +177,14 @@ export function CalorieBar({ date }: { date: ISODate }) {
   // outlive the collapsed form; controls inside the form keep their own taps.
   useEffect(() => {
     const onDown = (e: PointerEvent) => {
-      if (!modeRef.current) return;
+      if (modeRef.current !== "add") return;
       const el = e.target as Element | null;
       if (el?.closest?.("[data-calorie-field], [data-calorie-keep-tap]")) return;
       commitFor(dateRef.current, true);
       releaseFocus();
     };
     const onExit = () => {
-      if (!modeRef.current) return;
+      if (modeRef.current !== "add") return;
       commitFor(dateRef.current, true);
       releaseFocus();
     };
@@ -342,12 +345,7 @@ export function CalorieBar({ date }: { date: ISODate }) {
       {list.mounted && (
         <div className="cal-collapse" data-open={!list.closing}>
           <div className="cal-collapse-inner">
-            {/* Tapping "Remove" must not blur the form first, which would close this list. */}
-            <ul
-              data-calorie-keep-tap
-              onPointerDown={(e) => e.preventDefault()}
-              onMouseDown={(e) => e.preventDefault()}
-            >
+            <ul>
               {rows.map((row) => (
                 <EntryRowView key={row.item.id} row={row} onRemove={actions.deleteCalorie} />
               ))}
