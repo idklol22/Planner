@@ -1,14 +1,58 @@
 import { useEffect, useRef, useState, type FocusEvent, type KeyboardEvent } from "react";
 import { dayKcal, dayProtein, entriesForDay, entryTimeLabel } from "../domain/calories";
 import type { ISODate } from "../domain/dates";
+import type { CalorieEntry } from "../domain/model";
 import { healthLine } from "../lib/health";
+import { prefersReducedMotion, MOTION_MS, usePresence } from "../lib/motion";
 import { useNavCommand } from "../state/deeplink";
 import { useHealth } from "../state/health";
 import { useStore } from "../state/store";
+import { useCount, useEntryRows, type EntryRow } from "./calorieMotion";
 import { resolveInlineSave } from "./inlineSave";
 
 const fmt = (n: number) => n.toLocaleString("en-US");
 type Field = "kcal" | "protein";
+
+function EntryRowView({
+  row,
+  onRemove,
+}: {
+  row: EntryRow<CalorieEntry>;
+  onRemove: (id: string) => void;
+}) {
+  const presence = usePresence(!row.leaving, MOTION_MS.fast);
+  if (!presence.mounted) return null;
+  const e = row.item;
+  return (
+    <li className="cal-collapse cal-entry" data-open={!presence.closing}>
+      <div className="cal-collapse-inner">
+        <div className="flex min-h-11 items-center gap-3 border-b border-line">
+          <span className="min-w-0 flex-1 truncate text-[12.5px] tabular-nums text-muted">
+            {entryTimeLabel(e)}
+          </span>
+          {e.kcal > 0 && (
+            <span className="shrink-0 text-[13px] font-semibold tabular-nums">
+              {fmt(e.kcal)} kcal
+            </span>
+          )}
+          {e.protein !== undefined && e.protein > 0 && (
+            <span className="shrink-0 text-[13px] tabular-nums text-muted">
+              {fmt(e.protein)} g
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => onRemove(e.id)}
+            aria-label={`Delete entry at ${entryTimeLabel(e)}`}
+            className="cal-press min-h-11 shrink-0 px-1 text-[12px] text-faint hover:text-ink"
+          >
+            Remove
+          </button>
+        </div>
+      </div>
+    </li>
+  );
+}
 
 /** Two flat meters side by side; one shared input row opens under them, then the
  *  day's entries. No tiles, icons or separate "+" button. */
@@ -32,7 +76,26 @@ export function CalorieBar({ date }: { date: ISODate }) {
   const blocked = useRef(false);
   const lastNav = useRef(0);
 
+  // Counts restart from wherever an interrupted count stopped; they ignore re-renders.
+  const shownTotal = useCount(total);
+  const shownProtein = useCount(proteinTotal, 1);
+
+  const entrySig = entries.map((e) => `${e.id}:${e.kcal}:${e.protein ?? ""}`).join("|");
+  const rows = useEntryRows(entries, entrySig);
+  const list = usePresence(mode === "add" && entries.length > 0, MOTION_MS.base);
+
+  /** The inputs stay mounted while collapsed, so leaving the form must dismiss
+   *  the keyboard explicitly. The blur is blocked from committing a draft. */
+  function releaseFocus() {
+    const active = document.activeElement;
+    if (active === kcalRef.current || active === proteinRef.current) {
+      blocked.current = true;
+      (active as HTMLElement).blur();
+    }
+  }
+
   useEffect(() => {
+    releaseFocus();
     setMode("idle");
     setKcal("");
     setProtein("");
@@ -54,7 +117,10 @@ export function CalorieBar({ date }: { date: ISODate }) {
     if (mode !== "add") return;
     const ref = field === "protein" ? proteinRef : kcalRef;
     ref.current?.focus();
-    ref.current?.scrollIntoView?.({ block: "center", behavior: "smooth" });
+    ref.current?.scrollIntoView?.({
+      block: "center",
+      behavior: prefersReducedMotion() ? "auto" : "smooth",
+    });
   }, [mode, field]);
 
   const pct = goal > 0 ? Math.min(total / goal, 1) : 0;
@@ -83,6 +149,7 @@ export function CalorieBar({ date }: { date: ISODate }) {
   /** Cancel must win over the blur a tap on it would otherwise cause. */
   function discard() {
     blocked.current = true;
+    releaseFocus();
     setKcal("");
     setProtein("");
     setMode("idle");
@@ -90,7 +157,7 @@ export function CalorieBar({ date }: { date: ISODate }) {
 
   function open(next: Field) {
     if (mode === "add") {
-      // The form is already mounted (the pointer-down guard kept focus in it).
+      // The form stays mounted, so switching fields can focus inside the same tap.
       (next === "protein" ? proteinRef : kcalRef).current?.focus();
     } else {
       blocked.current = false;
@@ -99,6 +166,9 @@ export function CalorieBar({ date }: { date: ISODate }) {
     }
     setField(next);
     setMode("add");
+    // The inputs are always in the DOM (the row only collapses), so the keyboard
+    // still opens for this gesture instead of waiting for an animation frame.
+    (next === "protein" ? proteinRef : kcalRef).current?.focus();
   }
 
   /** Moving between the two inputs is not leaving the form: no save, no close. */
@@ -129,16 +199,16 @@ export function CalorieBar({ date }: { date: ISODate }) {
             if (mode === "add") e.preventDefault();
           }}
           aria-label="Log calories"
-          className="min-h-11 min-w-0 flex-1 text-left"
+          className="cal-press min-h-11 min-w-0 flex-1 text-left"
         >
           <span className="block truncate text-[15px] font-semibold tabular-nums">
-            {fmt(total)}
+            {fmt(shownTotal)}
             <span className="text-[13px] font-normal text-faint">{` / ${fmt(goal)} kcal`}</span>
           </span>
           <span aria-hidden className="mt-1 block h-[2px] w-full bg-line">
             <span
-              className={`block h-full transition-[width,background-color] duration-500 ease-out ${over ? "bg-amber" : "bg-muted"}`}
-              style={{ width: `${pct * 100}%` }}
+              className={`cal-meter-fill block h-full w-full origin-left ${over ? "bg-amber" : "bg-muted"}`}
+              style={{ transform: `scaleX(${pct})` }}
             />
           </span>
         </button>
@@ -149,94 +219,80 @@ export function CalorieBar({ date }: { date: ISODate }) {
             if (mode === "add") e.preventDefault();
           }}
           aria-label="Log protein"
-          className="min-h-11 min-w-0 flex-1 text-left"
+          className="cal-press min-h-11 min-w-0 flex-1 text-left"
         >
           <span className="block truncate text-[15px] font-semibold tabular-nums">
             {proteinGoal > 0
-              ? `${fmt(proteinTotal)} / ${fmt(proteinGoal)} g protein`
-              : `${fmt(proteinTotal)} g protein`}
+              ? `${fmt(shownProtein)} / ${fmt(proteinGoal)} g protein`
+              : `${fmt(shownProtein)} g protein`}
           </span>
           <span aria-hidden className="mt-1 block h-[2px] w-full bg-line">
             <span
-              className="block h-full bg-muted transition-[width] duration-500 ease-out"
-              style={{ width: `${proteinPct * 100}%` }}
+              className="cal-meter-fill block h-full w-full origin-left bg-muted"
+              style={{ transform: `scaleX(${proteinPct})` }}
             />
           </span>
         </button>
       </div>
 
-      {mode === "add" && (
-        <div className="animate-row flex items-center gap-3 py-1">
-          <input
-            ref={kcalRef}
-            value={kcal}
-            onChange={(e) => {
-              blocked.current = false;
-              setKcal(e.target.value.replace(/[^\d,]/g, ""));
-            }}
-            onBlur={leaving}
-            onKeyDown={onKeyDown}
-            inputMode="numeric"
-            placeholder="kcal"
-            aria-label="kcal"
-            className="h-11 min-w-0 flex-1 border-b border-line-2 bg-transparent text-[16px] font-semibold tabular-nums !outline-none placeholder:font-normal placeholder:text-faint focus:border-ink"
-          />
-          <input
-            ref={proteinRef}
-            value={protein}
-            onChange={(e) => {
-              blocked.current = false;
-              const clean = e.target.value.replace(/[^\d.]/g, "");
-              const [whole, ...fraction] = clean.split(".");
-              setProtein(fraction.length ? `${whole}.${fraction.join("")}` : whole);
-            }}
-            onBlur={leaving}
-            onKeyDown={onKeyDown}
-            inputMode="decimal"
-            placeholder="protein g"
-            aria-label="protein g"
-            className="h-11 min-w-0 flex-1 border-b border-line-2 bg-transparent text-[16px] font-semibold tabular-nums !outline-none placeholder:font-normal placeholder:text-faint focus:border-ink"
-          />
-          <button
-            type="button"
-            onPointerDown={(e) => e.preventDefault()}
-            onClick={discard}
-            className="min-h-11 shrink-0 px-1 text-[12px] text-faint hover:text-ink"
-          >
-            Cancel
-          </button>
+      <div className="cal-collapse" data-open={mode === "add"}>
+        <div className="cal-collapse-inner">
+          <div className="flex items-center gap-3 py-1">
+            <input
+              ref={kcalRef}
+              value={kcal}
+              onChange={(e) => {
+                blocked.current = false;
+                setKcal(e.target.value.replace(/[^\d,]/g, ""));
+              }}
+              onBlur={leaving}
+              onKeyDown={onKeyDown}
+              inputMode="numeric"
+              placeholder="kcal"
+              aria-label="kcal"
+              tabIndex={mode === "add" ? 0 : -1}
+              className="h-11 min-w-0 flex-1 border-b border-line-2 bg-transparent text-[16px] font-semibold tabular-nums !outline-none placeholder:font-normal placeholder:text-faint focus:border-ink"
+            />
+            <input
+              ref={proteinRef}
+              value={protein}
+              onChange={(e) => {
+                blocked.current = false;
+                const clean = e.target.value.replace(/[^\d.]/g, "");
+                const [whole, ...fraction] = clean.split(".");
+                setProtein(fraction.length ? `${whole}.${fraction.join("")}` : whole);
+              }}
+              onBlur={leaving}
+              onKeyDown={onKeyDown}
+              inputMode="decimal"
+              placeholder="protein g"
+              aria-label="protein g"
+              tabIndex={mode === "add" ? 0 : -1}
+              className="h-11 min-w-0 flex-1 border-b border-line-2 bg-transparent text-[16px] font-semibold tabular-nums !outline-none placeholder:font-normal placeholder:text-faint focus:border-ink"
+            />
+            <button
+              type="button"
+              onPointerDown={(e) => e.preventDefault()}
+              onClick={discard}
+              className="cal-press min-h-11 shrink-0 px-1 text-[12px] text-faint hover:text-ink"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
-      )}
+      </div>
 
-      {mode === "add" && entries.length > 0 && (
-        // Tapping "Remove" must not blur the form first, which would close this list.
-        <ul className="animate-row" onPointerDown={(e) => e.preventDefault()} onMouseDown={(e) => e.preventDefault()}>
-          {entries.map((e) => (
-            <li key={e.id} className="flex min-h-11 items-center gap-3 border-b border-line">
-              <span className="min-w-0 flex-1 truncate text-[12.5px] tabular-nums text-muted">
-                {entryTimeLabel(e)}
-              </span>
-              {e.kcal > 0 && (
-                <span className="shrink-0 text-[13px] font-semibold tabular-nums">
-                  {fmt(e.kcal)} kcal
-                </span>
-              )}
-              {e.protein !== undefined && e.protein > 0 && (
-                <span className="shrink-0 text-[13px] tabular-nums text-muted">
-                  {fmt(e.protein)} g
-                </span>
-              )}
-              <button
-                type="button"
-                onClick={() => actions.deleteCalorie(e.id)}
-                aria-label={`Delete entry at ${entryTimeLabel(e)}`}
-                className="min-h-11 shrink-0 px-1 text-[12px] text-faint hover:text-ink"
-              >
-                Remove
-              </button>
-            </li>
-          ))}
-        </ul>
+      {list.mounted && (
+        <div className="cal-collapse" data-open={!list.closing}>
+          <div className="cal-collapse-inner">
+            {/* Tapping "Remove" must not blur the form first, which would close this list. */}
+            <ul onPointerDown={(e) => e.preventDefault()} onMouseDown={(e) => e.preventDefault()}>
+              {rows.map((row) => (
+                <EntryRowView key={row.item.id} row={row} onRemove={actions.deleteCalorie} />
+              ))}
+            </ul>
+          </div>
+        </div>
       )}
 
       {burnedLine && (
