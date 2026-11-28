@@ -43,9 +43,20 @@
   pointer-events: none;
 }
 
+/* ── Inline add row ─────────────────────────────────────────────────────── */
+/* Opacity only: the field is mounted and focused synchronously from the "+"
+   tap, so a transform or fill-mode here would delay the iOS keyboard. */
+@keyframes day-inline-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.inline-add-row {
+  animation: day-inline-in var(--motion-fast) var(--ease-out) backwards;
+}
+
 /* ── Changing the selected day ─────────────────────────────────────────── */
-/* Later days arrive from the right, earlier days from the left. The sheet and
-   the docked add bar are outside this wrapper and stay completely still. */
+/* Later days arrive from the right, earlier days from the left. The sheet is
+   outside this wrapper and stays completely still. */
 @keyframes day-list-from-right {
   from {
     opacity: 0;

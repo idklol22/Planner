@@ -1,13 +1,26 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type RefObject } from "react";
 import { achievedGoals, openGoals, reorderedIds } from "../domain/goals";
 import { MOTION_MS, usePresence } from "../lib/motion";
 import { MotionRow, useFlipRows, useMotionRows } from "../motion/dayMotion";
 import { useStore } from "../state/store";
+import { InlineAdd, type InlineController, type InlineState } from "./InlineAdd";
 import { TaskMark } from "./TaskMark";
 
 /** Persistent goals of one category, independent of the selected day.
- *  Takes no space until there is a goal; new goals come from the one composer. */
-export function CategoryGoals({ categoryId, color }: { categoryId: string; color: string }) {
+ *  Takes no space until there is a goal or the goals popover opens a field. */
+export function CategoryGoals({
+  categoryId,
+  color,
+  inline,
+  controllerRef,
+  onCloseInline,
+}: {
+  categoryId: string;
+  color: string;
+  inline: InlineState | null;
+  controllerRef: RefObject<InlineController | null>;
+  onCloseInline: () => void;
+}) {
   const { data, actions } = useStore();
   const [showDone, setShowDone] = useState(false);
   const shownDone = usePresence(showDone, MOTION_MS.base);
@@ -21,6 +34,7 @@ export function CategoryGoals({ categoryId, color }: { categoryId: string; color
   const doneRows = useMotionRows(done);
   const flipOpen = useFlipRows(open.map((g) => g.id));
   const flipDone = useFlipRows(done.map((g) => g.id));
+  const goalField = inline?.kind === "goal" && inline.target === categoryId ? inline : null;
 
   function saveEdit() {
     const text = editValue.current.trim();
@@ -120,7 +134,7 @@ export function CategoryGoals({ categoryId, color }: { categoryId: string; color
     </div>
   );
 
-  if (open.length === 0 && done.length === 0) return null;
+  if (open.length === 0 && done.length === 0 && !goalField) return null;
 
   return (
     <div aria-label="Goals" className="mb-1">
@@ -171,6 +185,17 @@ export function CategoryGoals({ categoryId, color }: { categoryId: string; color
             </MotionRow>
           )}
         </>
+      )}
+      {goalField && (
+        <InlineAdd
+          key={goalField.id}
+          date={goalField.date}
+          target={categoryId}
+          kind="goal"
+          placeholder="New goal"
+          onClose={onCloseInline}
+          controllerRef={controllerRef}
+        />
       )}
     </div>
   );

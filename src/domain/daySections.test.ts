@@ -26,30 +26,35 @@ function row(category: typeof home | null, tasks = 0, ghosts = 0): DaySectionRow
 }
 
 describe("partitionDaySections", () => {
-  it("keeps sections with tasks or ghosts as full blocks, in order", () => {
-    const visible = partitionDaySections([row(home, 1), row(health, 0, 1), row(work)], []);
-    expect(visible.map((r) => r.section.category?.name)).toEqual(["Home", "Health"]);
-    expect(visible.empty).toEqual([]);
+  it("keeps every active category, including completely empty ones, in order", () => {
+    const rows = [row(home, 1), row(health), row(work, 0, 1)];
+    const visible = partitionDaySections(rows, []);
+    expect(visible.map((r) => r.section.category?.name)).toEqual(["Home", "Health", "Work"]);
+    expect(visible[1].section.tasks).toEqual([]);
+    expect(visible[1].ghosts).toEqual([]);
   });
 
-  it("counts open and achieved goals as content, but not deleted goals", () => {
-    const open = { ...makeGoal(health.id, "Read", 0) };
-    const achieved = { ...makeGoal(work.id, "Run", 0), achievedAt: "2026-01-14T10:00:00Z" };
-    const deleted = { ...makeGoal(home.id, "Gone", 0), deletedAt: "2026-01-14T10:00:00Z" };
-    const visible = partitionDaySections([row(home), row(health), row(work)], [deleted, open, achieved]);
-    expect(visible.map((r) => r.section.category?.name)).toEqual(["Health", "Work"]);
-  });
-
-  it("no longer promotes a section just because an old inline input id is passed", () => {
+  it("no longer hides a category just because its goals are gone or an old inline id is passed", () => {
     const visible = partitionDaySections([row(home), row(health)], [], health.id);
-    expect(visible).toEqual([]);
+    expect(visible.map((r) => sectionKey(r.section))).toEqual([home.id, health.id]);
   });
 
-  it("never lists Inbox as an empty category, but keeps an occupied Inbox", () => {
-    expect(partitionDaySections([row(null), row(home)], [])).toEqual([]);
+  it("keeps a category that has a live or achieved goal, even when empty", () => {
+    const open = makeGoal(health.id, "Read", 0);
+    const achieved = { ...makeGoal(work.id, "Run", 0), achievedAt: "2026-01-14T10:00:00Z" };
+    const visible = partitionDaySections([row(home), row(health), row(work)], [open, achieved]);
+    expect(visible).toHaveLength(3);
+  });
 
-    const inboxFull = partitionDaySections([row(null, 1, 1)], []);
-    expect(inboxFull.map((r) => sectionKey(r.section))).toEqual([INBOX_KEY]);
+  it("shows Inbox with tasks or ghosts, alongside categories", () => {
+    const visible = partitionDaySections([row(null, 1, 1), row(home)], []);
+    expect(visible.map((r) => sectionKey(r.section))).toEqual([INBOX_KEY, home.id]);
+  });
+
+  it("hides an empty Inbox when there are categories, but shows it when there are none", () => {
+    expect(partitionDaySections([row(null), row(home)], [])).toEqual([row(home)]);
+    const alone = partitionDaySections([row(null)], []);
+    expect(alone.map((r) => sectionKey(r.section))).toEqual([INBOX_KEY]);
   });
 
   it("keeps the old filled alias and an always-empty empty alias", () => {
@@ -58,7 +63,7 @@ describe("partitionDaySections", () => {
     expect(visible.filled).toBe(visible);
     expect(visible.empty).toEqual([]);
     // The aliases are metadata, not extra rows: array equality still works.
-    expect(visible).toEqual([withTask]);
+    expect(visible).toEqual([withTask, row(health)]);
   });
 });
 

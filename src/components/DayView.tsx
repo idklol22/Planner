@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -6,8 +7,9 @@ import {
   useState,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
+  type RefObject,
 } from "react";
-import { createPortal } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import { Menu } from "lucide-react";
 import {
   addDays,
@@ -21,7 +23,13 @@ import { ghostsFor } from "../domain/habits";
 import { type Habit } from "../domain/model";
 import { CATEGORY_COLORS } from "../domain/palette";
 import { catColor } from "../theme/store";
-import { sectionsForDay, tasksForDay, unfinishedTopLevelOn, type Section } from "../domain/tasks";
+import {
+  activeCategories,
+  sectionsForDay,
+  tasksForDay,
+  unfinishedTopLevelOn,
+  type Section,
+} from "../domain/tasks";
 import {
   resolveSwipe,
   rubberBand,
@@ -35,6 +43,7 @@ import {
   sectionKey,
   type DaySectionRow,
 } from "../domain/daySections";
+import { useKeyboardInset } from "../lib/keyboard";
 import { MOTION_MS, usePresence } from "../lib/motion";
 import { MotionRow, useFlipRows, useMotionRows } from "../motion/dayMotion";
 import { useStore } from "../state/store";
@@ -47,7 +56,12 @@ import { HabitEditor } from "./HabitEditor";
 import { CategoryGoals } from "./CategoryGoals";
 import { WeekSummaryCard } from "./Summaries";
 import { TaskRow } from "./TaskRow";
-import { Composer, type ComposerTargetId } from "./Composer";
+import {
+  InlineAdd,
+  type InlineAddKind,
+  type InlineController,
+  type InlineState,
+} from "./InlineAdd";
 
 export type MenuPage = "categories" | "habits" | "archive" | "settings";
 
@@ -71,14 +85,6 @@ function loadPrefs(): Prefs {
     // ignore: fall back to defaults
   }
   return { showCompleted: true };
-}
-
-function isTextField(target: EventTarget | null): boolean {
-  const el = target as HTMLElement | null;
-  return (
-    !!el &&
-    (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable)
-  );
 }
 
 /** A habit suggestion for the day: faded row with a dashed mark. Tap to make it a task. */
@@ -115,23 +121,47 @@ function GhostRow({
 
 const SWIPE_REST: SwipeState = { axis: null, dx: 0, action: null, settled: false };
 
-/** One quiet header: colour dot, name, count; swipe left to archive. Tapping the
- *  name opens the composer with this list preselected. */
+/** One quiet, flat header: colour dot, name, count and a "+" at the right.
+ *  Tapping the name opens a goals popover; swiping left still archives. */
 function CategoryHeader({
   name,
   color,
   count,
   canArchive,
-  onAdd,
+  onAddTask,
+  onAddGoal,
   onArchive,
 }: {
   name: string;
   color: string;
   count: string | null;
   canArchive: boolean;
-  onAdd: () => void;
+  onAddTask: () => void;
+  onAddGoal: () => void;
   onArchive: () => void;
 }) {
+  const [menu, setMenu] = useState(false);
+  const menuShown = usePresence(menu, MOTION_MS.fast);
+  const nameButton = useRef<HTMLButtonElement>(null);
+  const popover = useRef<HTMLDivElement>(null);
+  const [popoverPos, setPopoverPos] = useState({ top: 0, left: 0 });
+
+  // The popover is portalled to <body>: the header keeps a swipe transform and
+  // the sheet blurs, either of which would re-anchor a fixed child on iOS.
+  useLayoutEffect(() => {
+    if (!menu) return;
+    const rect = nameButton.current?.getBoundingClientRect();
+    const el = popover.current;
+    if (!rect || !el) return;
+    const width = el.offsetWidth;
+    const gap = 4;
+    const edge = 8;
+    setPopoverPos({
+      top: rect.bottom + gap,
+      left: Math.max(edge, Math.min(rect.left, window.innerWidth - width - edge)),
+    });
+  }, [menu]);
+
   const [swipe, setSwipe] = useState<SwipeState>(SWIPE_REST);
   const [rubber, setRubber] = useState(0);
   const [dragging, setDragging] = useState(false);
@@ -241,6 +271,7 @@ function CategoryHeader({
   const opacity = Math.min(1, Math.abs(displayDx) / SWIPE_COMMIT_PX);
 
   return (
+    <>
     <div
       className="module-head day-fade-in relative touch-pan-y"
       onPointerDown={onPointerDown}
@@ -273,36 +304,104 @@ function CategoryHeader({
         }}
       >
         <span aria-hidden className="h-[7px] w-[7px] shrink-0 rounded-full" style={{ backgroundColor: color }} />
-        <button
-          type="button"
-          onClick={onAdd}
-          aria-label={`Add task to ${name}`}
-          className="day-press min-h-11 min-w-0 truncate text-left text-[13px] font-semibold text-muted"
-        >
-          {name}
-        </button>
+        {canArchive ? (
+          <button
+            ref={nameButton}
+            type="button"
+            onClick={() => setMenu((v) => !v)}
+            aria-expanded={menu}
+            aria-haspopup="menu"
+            className="day-press min-h-11 min-w-0 truncate text-left text-[13px] font-semibold text-muted"
+          >
+            {name}
+          </button>
+        ) : (
+          <span className="min-w-0 truncate text-[13px] font-semibold text-muted">{name}</span>
+        )}
         {count && <span className="shrink-0 text-[12px] tabular-nums text-faint">{count}</span>}
         <span className="flex-1" />
+        <button
+          type="button"
+          onClick={onAddTask}
+          aria-label={`Add task to ${name}`}
+          data-inline-add-keep-tap
+          className="day-press inline-add-trigger flex h-11 w-11 shrink-0 items-center justify-center text-[20px] leading-none text-muted hover:text-ink"
+        >
+          <span aria-hidden>+</span>
+        </button>
       </div>
     </div>
+      {canArchive &&
+        menuShown.mounted &&
+        createPortal(
+          <>
+            <button
+              aria-label={`Close ${name} menu`}
+              className={`day-backdrop fixed inset-0 z-10 cursor-default ${menuShown.closing ? "closing" : ""}`}
+              onClick={() => setMenu(false)}
+            />
+            <div
+              ref={popover}
+              role="menu"
+              style={{ top: popoverPos.top, left: popoverPos.left }}
+              className={`day-pop fixed z-20 w-48 origin-top-left border border-line bg-[var(--pop)] py-1 ${
+                menuShown.closing ? "closing" : ""
+              }`}
+            >
+              <button
+                role="menuitem"
+                aria-label={`Add goal to ${name}`}
+                data-inline-add-keep-tap
+                onClick={() => {
+                  setMenu(false);
+                  onAddGoal();
+                }}
+                className="day-press flex min-h-11 w-full px-3 text-left text-[13px] text-ink hover:text-accent"
+              >
+                Add goal
+              </button>
+              <button
+                role="menuitem"
+                onClick={() => {
+                  setMenu(false);
+                  onArchive();
+                }}
+                className="day-press flex min-h-11 w-full px-3 text-left text-[13px] text-ink hover:text-accent"
+              >
+                Archive
+              </button>
+            </div>
+          </>,
+          document.body,
+        )}
+    </>
   );
+}
+
+interface SectionShare {
+  inline: InlineState | null;
+  controllerRef: RefObject<InlineController | null>;
+  onAdd: (target: string | null, kind: InlineAddKind) => void;
+  onCloseInline: () => void;
+  onOpenTask: (id: string) => void;
+  onEditHabit: (habit: Habit) => void;
 }
 
 function CategorySection({
   section,
   ghosts,
   date,
+  inline,
+  controllerRef,
   onAdd,
+  onCloseInline,
   onOpenTask,
   onEditHabit,
 }: {
   section: Section;
   ghosts: Habit[];
   date: ISODate;
-  onAdd: (target: ComposerTargetId) => void;
-  onOpenTask: (id: string) => void;
-  onEditHabit: (habit: Habit) => void;
-}) {
+} & SectionShare) {
   const { actions } = useStore();
   const notify = useToast();
   const taskRows = useMotionRows(section.tasks);
@@ -310,9 +409,11 @@ function CategorySection({
   const cat = section.category;
   const color = cat ? catColor(cat.color) : "var(--accent)";
   const name = cat?.name ?? "Inbox";
+  const target = cat?.id ?? null;
   const count = section.tasks.length
     ? `${section.tasks.filter((t) => t.done).length}/${section.tasks.length}`
     : null;
+  const taskField = inline?.kind === "task" && inline.target === target ? inline : null;
 
   function archiveCategory() {
     if (!cat) return;
@@ -331,10 +432,19 @@ function CategorySection({
         color={color}
         count={count}
         canArchive={!!cat}
-        onAdd={() => onAdd(cat?.id ?? null)}
+        onAddTask={() => onAdd(target, "task")}
+        onAddGoal={() => cat && onAdd(cat.id, "goal")}
         onArchive={archiveCategory}
       />
-      {cat && <CategoryGoals categoryId={cat.id} color={color} />}
+      {cat && (
+        <CategoryGoals
+          categoryId={cat.id}
+          color={color}
+          inline={inline}
+          controllerRef={controllerRef}
+          onCloseInline={onCloseInline}
+        />
+      )}
       <div>
         {taskRows.rows.map(({ item: task, present, entering }) => (
           <MotionRow
@@ -357,6 +467,17 @@ function CategorySection({
             onEdit={() => onEditHabit(habit)}
           />
         ))}
+        {taskField && (
+          <InlineAdd
+            key={taskField.id}
+            date={taskField.date}
+            target={target}
+            kind="task"
+            placeholder="New task"
+            onClose={onCloseInline}
+            controllerRef={controllerRef}
+          />
+        )}
       </div>
     </section>
   );
@@ -368,16 +489,11 @@ function CategorySection({
 function DaySectionList({
   visible,
   selected,
-  onAdd,
-  onOpenTask,
-  onEditHabit,
+  ...share
 }: {
   visible: readonly DaySectionRow[];
   selected: ISODate;
-  onAdd: (target: ComposerTargetId) => void;
-  onOpenTask: (id: string) => void;
-  onEditHabit: (habit: Habit) => void;
-}) {
+} & SectionShare) {
   const items = visible.map((row) => ({ id: sectionKey(row.section), ...row }));
   const sections = useMotionRows(items);
 
@@ -391,14 +507,7 @@ function DaySectionList({
           exitMs={sections.exitMs}
           onExited={() => sections.drop(item.id)}
         >
-          <CategorySection
-            section={item.section}
-            ghosts={item.ghosts}
-            date={selected}
-            onAdd={onAdd}
-            onOpenTask={onOpenTask}
-            onEditHabit={onEditHabit}
-          />
+          <CategorySection section={item.section} ghosts={item.ghosts} date={selected} {...share} />
         </MotionRow>
       ))}
     </div>
@@ -408,12 +517,6 @@ function DaySectionList({
 const SUGGESTIONS = ["Study", "Work", "Health", "Personal"];
 
 type EditorState = Habit | null;
-
-interface ComposerState {
-  /** A fresh id per open, so re-opening during the exit remounts a focused field. */
-  id: number;
-  target?: ComposerTargetId;
-}
 
 export function DayView({
   selected,
@@ -434,8 +537,13 @@ export function DayView({
   const { data, actions } = useStore();
   const notify = useToast();
   const [prefs, setPrefs] = useState<Prefs>(loadPrefs);
-  const [composer, setComposer] = useState<ComposerState | null>(null);
-  const [typing, setTyping] = useState(false);
+  const [inline, setInline] = useState<InlineState | null>(null);
+  const inlineRef = useRef(inline);
+  inlineRef.current = inline;
+  const inlineController = useRef<InlineController | null>(null);
+  const suppressClick = useRef(false);
+  const inlineSeq = useRef(0);
+  const keyboard = useKeyboardInset();
   const [listMenu, setListMenu] = useState(false);
   const [mainMenu, setMainMenu] = useState(false);
   const [mode, setMode] = useState<CalendarMode>(() =>
@@ -448,7 +556,6 @@ export function DayView({
   if (editor && editor !== shownEditor) setShownEditor(editor);
   const [listMenuPos, setListMenuPos] = useState({ top: 0, left: 0 });
   const listButton = useRef<HTMLButtonElement>(null);
-  const composerSeq = useRef(0);
   const mainShown = usePresence(mainMenu, MOTION_MS.fast);
   const optionsShown = usePresence(listMenu, MOTION_MS.fast);
   const lastSelected = useRef(selected);
@@ -487,19 +594,43 @@ export function DayView({
     };
   }, [listMenu]);
 
-  function openComposer(target?: ComposerTargetId) {
-    setComposer({ id: ++composerSeq.current, target });
+  const closeInline = useCallback(() => setInline(null), []);
+
+  /** Open a field inside the very tap that triggered it. flushSync mounts the
+   *  row now; InlineAdd focuses in its layout effect, before iOS yields. */
+  function openInline(target: string | null, kind: InlineAddKind) {
+    // Switching lists saves the old draft to the day it was typed for.
+    inlineController.current?.commit("switch");
+    flushSync(() => {
+      setInline({ id: ++inlineSeq.current, date: selected, target, kind });
+    });
   }
 
-  // The docked add bar yields to any other text field on the page.
+  // A tap above the keyboard should only dismiss it: save, then swallow the
+  // click so nothing under the finger fires. Controls marked
+  // `data-inline-add-keep-tap` (other "+" buttons and "Add goal") still work
+  // in that one tap. These listeners live here so they outlive the field.
   useEffect(() => {
-    const onFocusIn = (e: FocusEvent) => setTyping(isTextField(e.target));
-    const onFocusOut = () => setTyping(false);
-    document.addEventListener("focusin", onFocusIn, true);
-    document.addEventListener("focusout", onFocusOut, true);
+    const onPointerDown = (e: PointerEvent) => {
+      if (!inlineRef.current) return;
+      const el = e.target as Element | null;
+      if (el?.closest?.("[data-inline-add-field]")) return;
+      suppressClick.current = !el?.closest?.("[data-inline-add-keep-tap]");
+      inlineController.current?.commit("outside");
+      const focused = document.activeElement as HTMLElement | null;
+      if (focused?.matches?.("[data-inline-add-field]")) focused.blur();
+    };
+    const onClickCapture = (e: MouseEvent) => {
+      if (!suppressClick.current) return;
+      suppressClick.current = false;
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    document.addEventListener("click", onClickCapture, true);
     return () => {
-      document.removeEventListener("focusin", onFocusIn, true);
-      document.removeEventListener("focusout", onFocusOut, true);
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      document.removeEventListener("click", onClickCapture, true);
     };
   }, []);
 
@@ -516,10 +647,10 @@ export function DayView({
       ghosts.filter((h) =>
         s.category ? h.categoryId === s.category.id : !h.categoryId || !live.has(h.categoryId),
       );
-    const withInbox =
-      !base.some((s) => !s.category) && ghosts.some((h) => !h.categoryId || !live.has(h.categoryId))
-        ? [...base, { category: null, tasks: [] } as Section]
-        : base;
+    const looseGhosts = ghosts.some((h) => !h.categoryId || !live.has(h.categoryId));
+    const needsInbox =
+      !base.some((s) => !s.category) && (looseGhosts || !base.some((s) => s.category));
+    const withInbox = needsInbox ? [...base, { category: null, tasks: [] } as Section] : base;
     const rows: DaySectionRow[] = withInbox.map((section) => ({ section, ghosts: forSection(section) }));
     return partitionDaySections(rows, data.goals);
   }, [data.tasks, data.categories, data.habits, data.goals, selected, today, prefs.showCompleted]);
@@ -529,18 +660,27 @@ export function DayView({
   const canMoveAllToToday = selected < today && unfinishedTopLevelOn(data.tasks, selected).length > 0;
   const hasCategories = data.categories.some((c) => !c.archived && !c.deletedAt);
 
-  // `n` (or a nav signal) opens the composer, reusing the last list.
+  // `n` (or a nav signal) opens the field of the first category, or Inbox.
   const lastSignal = useRef(addSignal);
   useEffect(() => {
-    if (addSignal !== lastSignal.current) {
-      lastSignal.current = addSignal;
-      openComposer();
-    }
+    if (addSignal === lastSignal.current) return;
+    lastSignal.current = addSignal;
+    openInline(activeCategories(data.categories)[0]?.id ?? null, "task");
   }, [addSignal]);
 
-  useEffect(() => setComposer(null), [selected]);
+  // A day change saves to the day the text was typed for: the field carries
+  // its own frozen date, and InlineAdd's unmount cleanup is a last safety net.
   useEffect(() => {
-    if (!active) setComposer(null);
+    if (!inlineRef.current) return;
+    inlineController.current?.commit("day-change");
+    setInline(null);
+  }, [selected]);
+
+  // Covering the day with a task document or a menu page saves the draft.
+  useEffect(() => {
+    if (active || !inlineRef.current) return;
+    inlineController.current?.commit("navigation");
+    setInline(null);
   }, [active]);
 
   const rel =
@@ -552,7 +692,6 @@ export function DayView({
           ? "Yesterday"
           : fromISODate(selected).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
   const showWeekSummary = fromISODate(selected).getDay() === 0;
-  const showBar = active && !composer && !typing;
 
   function moveAllToToday() {
     const { moved, undo } = actions.moveUnfinishedToToday(selected);
@@ -626,7 +765,14 @@ export function DayView({
       </div>
 
       <div className="sheet mt-2 flex-1">
-        <div className="mx-auto w-full max-w-[560px] px-3 pb-[calc(104px+var(--safe-bottom))] pt-3 md:px-6 lg:max-w-[1200px] lg:px-8">
+        <div
+          className="mx-auto w-full max-w-[560px] px-3 pb-[calc(104px+var(--safe-bottom))] pt-3 md:px-6 lg:max-w-[1200px] lg:px-8"
+          style={
+            inline
+              ? { paddingBottom: `calc(${keyboard + 104}px + var(--safe-bottom))` }
+              : undefined
+          }
+        >
           <div
             key={selected}
             className={
@@ -750,7 +896,10 @@ export function DayView({
             <DaySectionList
               visible={visible}
               selected={selected}
-              onAdd={(target) => openComposer(target)}
+              inline={inline}
+              controllerRef={inlineController}
+              onAdd={openInline}
+              onCloseInline={closeInline}
               onOpenTask={(id) => {
                 window.location.hash = `#/task/${id}`;
               }}
@@ -774,30 +923,6 @@ export function DayView({
           </div>
         </div>
       </div>
-
-      {showBar && (
-        <div className="add-dock">
-          <div className="add-dock-inner">
-            <button
-              type="button"
-              aria-label="Add a task"
-              onClick={() => openComposer()}
-              className="add-task-button day-press"
-            >
-              Add a task
-            </button>
-          </div>
-        </div>
-      )}
-
-      {composer && (
-        <Composer
-          key={composer.id}
-          date={selected}
-          initialTarget={composer.target}
-          onClose={() => setComposer(null)}
-        />
-      )}
 
       {editorShown.mounted && shownEditor && (
         <HabitEditor
