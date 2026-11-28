@@ -25,6 +25,7 @@ import {
 } from "../storage/hub";
 import { parseNoteItems, type NoteItem } from "../lib/absorb";
 import type { HarnessNote } from "../lib/harness-types";
+import type { ConflictRecord, ConflictStore } from "./conflicts";
 import { SyncEngine, type CursorStore } from "./engine";
 import { keepaliveBatch, KEEPALIVE_MAX_BYTES, KEEPALIVE_MAX_OPS } from "./flush";
 import {
@@ -79,6 +80,10 @@ export interface SyncControllerOptions {
   getLocalHealth?(id: string): HealthRow | null;
   /** Apply a pulled health row to the local health day store. */
   applyRemoteHealth?(row: HealthRow): void;
+  /** Safety copies for rows the hub refused to store. */
+  conflicts?: ConflictStore;
+  /** At most one call per sync when an edit was not saved. */
+  onConflicts?(records: ConflictRecord[]): void;
 }
 
 export interface SyncStatus {
@@ -140,6 +145,8 @@ export class SyncController {
       applyRemote: (table, row) => this.applyRemote(table, row),
       cursorStore: o.cursorStore,
       outbox: o.outbox,
+      conflicts: o.conflicts,
+      onConflicts: o.onConflicts,
     });
     this.status.pending = o.outbox.size();
   }

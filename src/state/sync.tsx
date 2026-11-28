@@ -8,12 +8,19 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { AlertCircle } from "lucide-react";
 import { todayISO } from "../domain/dates";
 import type { AppData } from "../domain/model";
 import type { HarnessNote } from "../lib/harness-types";
 import { isTauri } from "../storage";
 import { HubClient, type HubOp } from "../storage/hub";
 import { MIRROR_KEY, SyncController, type SyncStatus } from "../sync/controller";
+import {
+  CONFLICTS_KEY,
+  describeConflicts,
+  type ConflictRecord,
+  LocalConflictStore,
+} from "../sync/conflicts";
 import { localCursorStore, CURSOR_KEY, LAST_SYNC_KEY } from "../sync/engine";
 import { applyRemoteHealthRow, getLocalHealthRow } from "../sync/health-apply";
 import { emptyMirror, type Mirror } from "../sync/mapping";
@@ -70,6 +77,52 @@ export interface SyncContextValue {
 
 const IDLE: SyncStatus = { syncing: false, lastSyncedAt: null, error: null, pending: 0 };
 
+interface ConflictNotice {
+  id: number;
+  message: string;
+}
+
+/** SyncProvider sits above ToastProvider in App, so its conflict notice uses
+ *  the same toast styling directly (like the store's recovery notice). */
+function SyncConflictNotice({
+  notice,
+  onDismiss,
+}: {
+  notice: ConflictNotice | null;
+  onDismiss(): void;
+}) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!notice) return;
+    setOpen(true);
+    const timer = window.setTimeout(() => setOpen(false), 8_000);
+    return () => window.clearTimeout(timer);
+  }, [notice?.id]);
+  if (!notice || !open) return null;
+  return (
+    <div
+      role="alert"
+      aria-live="assertive"
+      className="pointer-events-none fixed left-1/2 top-[calc(12px+var(--safe-top))] z-[110] w-max max-w-[calc(100vw-32px)] -translate-x-1/2"
+    >
+      <div className="pointer-events-auto flex items-start gap-2.5 rounded-xl border border-line-2 bg-surface-2/95 px-4 py-2.5 text-sm text-ink shadow-2xl shadow-black/50 backdrop-blur-xl">
+        <AlertCircle size={16} className="mt-0.5 shrink-0 text-rose" />
+        <span>{notice.message}</span>
+        <button
+          onClick={() => {
+            setOpen(false);
+            onDismiss();
+          }}
+          className="ui-press ml-2 shrink-0 text-faint hover:text-ink"
+          aria-label="Dismiss"
+        >
+          Dismiss
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const SyncContext = createContext<SyncContextValue | null>(null);
 
 export function SyncProvider({ children }: { children: ReactNode }) {
@@ -77,10 +130,16 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const [config, setConfigState] = useState<HubConfig>(() => loadHubConfig());
   const [status, setStatus] = useState<SyncStatus>(IDLE);
   const [mirror, setMirror] = useState<Mirror>(emptyMirror);
+  const [conflictNotice, setConflictNotice] = useState<ConflictNotice | null>(null);
   const controllerRef = useRef<SyncController | null>(null);
   const prevDataRef = useRef<AppData | null>(null);
   const actionsRef = useRef(actions);
   actionsRef.current = actions;
+
+  const onConflicts = useCallback((records: ConflictRecord[]) => {
+    if (records.length === 0) return;
+    setConflictNotice({ id: Date.now() + Math.random(), message: describeConflicts(records) });
+  }, []);
 
   const configured = isHubConfigured(config);
   const client = useMemo(
@@ -95,7 +154,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         try {
           // The old hub's queue, mirror and cursor must not be replayed into a
           // different hub (they would overwrite matching rows with stale data).
-          for (const key of [CURSOR_KEY, LAST_SYNC_KEY, OUTBOX_KEY, MIRROR_KEY]) {
+          for (const key of [CURSOR_KEY, LAST_SYNC_KEY, OUTBOX_KEY, MIRROR_KEY, CONFLICTS_KEY]) {
             localStorage.removeItem(key);
           }
         } catch {
@@ -125,6 +184,8 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       apply: applyData,
       storage: localStorage,
       outbox: new LocalOutbox(),
+      conflicts: new LocalConflictStore(),
+      onConflicts,
       cursorStore,
       // Undated solved events belong to the device's day, not UTC's.
       today: () => todayISO(),
@@ -173,7 +234,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       controller.stop();
       if (controllerRef.current === controller) controllerRef.current = null;
     };
-  }, [client, ready, getData, applyData]);
+  }, [client, ready, getData, applyData, onConflicts]);
 
   // Local edits -> outbox -> debounced push.
   const pushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -293,7 +354,15 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     [config, configured, setConfig, status, mirror, syncNow, flush, testConnection, sendNote, enqueue, client],
   );
 
-  return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;
+  return (
+    <SyncContext.Provider value={value}>
+      {children}
+      <SyncConflictNotice
+        notice={conflictNotice}
+        onDismiss={() => setConflictNotice(null)}
+      />
+    </SyncContext.Provider>
+  );
 }
 
 export function useSync(): SyncContextValue {
