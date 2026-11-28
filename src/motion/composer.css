@@ -1,1 +1,235 @@
-/* Motion owned by the composer area. */
+/* Motion owned by the composer area: the add panel, the note screen, the
+   keyboard bar and the photo viewer. Only transform/opacity move here; every
+   duration comes from the shared tokens in index.css (reduced motion is
+   handled globally there). */
+
+/* ── Add panel ────────────────────────────────────────────────────────────
+   The root is a plain, untransformed box so its fixed children stay fixed on
+   iOS. The anchor follows the keyboard with a transform, never a layout move. */
+.composer-anchor {
+  bottom: var(--safe-bottom);
+  transition: transform var(--motion-fast) var(--ease-out);
+}
+.composer-backdrop {
+  animation: composer-backdrop-in var(--motion) var(--ease-out);
+}
+.composer-panel {
+  animation: composer-panel-in var(--motion) var(--ease-out);
+}
+.composer-root.is-closing .composer-backdrop {
+  animation: composer-backdrop-out var(--motion) var(--ease-in) forwards;
+}
+.composer-root.is-closing .composer-panel {
+  animation: composer-panel-out var(--motion) var(--ease-in) forwards;
+  pointer-events: none;
+}
+@keyframes composer-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes composer-backdrop-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes composer-panel-in {
+  from { opacity: 0; transform: translateY(calc(100% + var(--safe-bottom))); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes composer-panel-out {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(calc(100% + var(--safe-bottom))); }
+}
+
+/* List chooser: a small scale/fade in and the same out, anchored to its corner. */
+.composer-list {
+  transform-origin: bottom left;
+  animation: composer-list-in var(--motion-fast) var(--ease-out);
+}
+.composer-list.is-closing {
+  animation: composer-list-out var(--motion-fast) var(--ease-in) forwards;
+  pointer-events: none;
+}
+@keyframes composer-list-in {
+  from { opacity: 0; transform: scale(0.94) translateY(4px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes composer-list-out {
+  from { opacity: 1; transform: scale(1) translateY(0); }
+  to { opacity: 0; transform: scale(0.94) translateY(4px); }
+}
+
+/* Every tappable control in the panel gets the same quick press feedback. */
+.composer-target,
+.composer-list-item {
+  transition: opacity var(--motion-fast) var(--ease-out), transform var(--motion-fast) var(--ease-out);
+}
+.composer-target:active,
+.composer-list-item:active {
+  opacity: 0.7;
+  transform: scale(0.97);
+}
+
+/* Task | Goal: one thumb that slides between the two equal-width options. */
+.composer-kind {
+  position: relative;
+  isolation: isolate;
+}
+.composer-kind-option {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 0;
+  transition: color var(--motion-fast) var(--ease-out), opacity var(--motion-fast) var(--ease-out), transform var(--motion-fast) var(--ease-out);
+}
+.composer-kind-option:active:not(:disabled) {
+  opacity: 0.7;
+  transform: scale(0.97);
+}
+.composer-kind .composer-kind-option[aria-pressed="true"] {
+  background: transparent;
+  color: var(--color-ink);
+}
+.composer-kind-thumb {
+  position: absolute;
+  z-index: 0;
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  width: calc((100% - 6px) / 2);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  pointer-events: none;
+  transform: translateX(var(--thumb-x, 0px));
+  transition: transform var(--motion) var(--ease-spring);
+}
+.composer-kind[data-kind="goal"] {
+  --thumb-x: calc(100% + 2px);
+}
+
+/* Confirmation after Enter. CSS owns its lifetime, so no JS timer and no
+   cancelled save: the cue simply replays on the next Enter. */
+.composer-inner {
+  position: relative;
+}
+.composer-saved {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  color: var(--color-accent);
+  font-size: 12px;
+  pointer-events: none;
+  animation: composer-saved var(--motion-slow) var(--ease-out) forwards;
+}
+@keyframes composer-saved {
+  0% { opacity: 0; transform: translateY(4px) scale(0.97); }
+  30% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-4px) scale(1); }
+}
+
+/* ── Note screen ──────────────────────────────────────────────────────────
+   Enter has no fill mode: once it ends there is no transform left on the
+   page, so the fixed keyboard bar keeps working on iOS. */
+.task-page {
+  animation: task-page-in var(--motion) var(--ease-out);
+}
+.task-page--closing {
+  animation: task-page-out var(--motion) var(--ease-in) forwards;
+  pointer-events: none;
+}
+@keyframes task-page-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+@keyframes task-page-out {
+  from { transform: translateX(var(--swipe-x, 0px)); }
+  to { transform: translateX(100%); }
+}
+
+/* Edge swipe: follows the finger while held, then springs back or commits. */
+.task-page.is-swiping {
+  transform: translateX(var(--swipe-x, 0px));
+  opacity: var(--swipe-opacity, 1);
+}
+.task-page.is-snapping {
+  transform: translateX(0);
+  opacity: 1;
+  transition: transform var(--motion-slow) var(--ease-spring), opacity var(--motion-slow) var(--ease-out);
+}
+
+/* ── Keyboard bar ─────────────────────────────────────────────────────────
+   The anchor is fixed at the bottom; only its transform follows the keyboard. */
+.keybar-anchor {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  transition: transform var(--motion-fast) var(--ease-out);
+}
+.keybar-anchor .keyboard-bar {
+  position: static;
+}
+.bar-button {
+  transition: color var(--motion-fast) var(--ease-out), opacity var(--motion-fast) var(--ease-out), transform var(--motion-fast) var(--ease-out);
+}
+.bar-button:active:not(:disabled) {
+  opacity: 0.7;
+  transform: scale(0.97);
+}
+
+/* ── Photos ───────────────────────────────────────────────────────────────
+   A newly mounted image block fades up; no fill mode, so no resting transform. */
+.planner-editor [data-content-type="image"] {
+  animation: photo-in var(--motion) var(--ease-out);
+}
+@keyframes photo-in {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.photo-viewer {
+  animation: viewer-backdrop-in var(--motion) var(--ease-out);
+}
+.photo-viewer.is-closing {
+  animation: viewer-backdrop-out var(--motion) var(--ease-in) forwards;
+  pointer-events: none;
+}
+@keyframes viewer-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes viewer-backdrop-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+.photo-viewer-image {
+  opacity: 0;
+}
+.photo-viewer-image.is-ready {
+  animation: photo-zoom-in var(--motion) var(--ease-out) forwards;
+}
+.photo-viewer.is-closing .photo-viewer-image.is-ready {
+  animation: photo-zoom-out var(--motion) var(--ease-in) forwards;
+}
+@keyframes photo-zoom-in {
+  from {
+    opacity: 0;
+    transform: translate(var(--photo-dx, 0px), var(--photo-dy, 0px)) scale(var(--photo-scale, 1));
+  }
+  to { opacity: 1; transform: translate(0, 0) scale(1); }
+}
+@keyframes photo-zoom-out {
+  from { opacity: 1; transform: translate(0, 0) scale(1); }
+  to {
+    opacity: 0;
+    transform: translate(var(--photo-dx, 0px), var(--photo-dy, 0px)) scale(var(--photo-scale, 1));
+  }
+}
+.photo-viewer-close,
+.photo-viewer-remove {
+  transition: opacity var(--motion-fast) var(--ease-out), transform var(--motion-fast) var(--ease-out);
+}
+.photo-viewer-close:active,
+.photo-viewer-remove:active {
+  opacity: 0.7;
+  transform: scale(0.97);
+}

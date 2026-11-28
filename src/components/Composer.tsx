@@ -9,6 +9,7 @@ import { INBOX_KEY } from "../domain/daySections";
 import type { ISODate } from "../domain/dates";
 import { activeCategories } from "../domain/tasks";
 import { useKeyboardInset } from "../lib/keyboard";
+import { MOTION_MS, usePresence } from "../lib/motion";
 import { useStore } from "../state/store";
 import { catColor } from "../theme/store";
 
@@ -42,6 +43,7 @@ export function lastComposerTarget(): ComposerTargetId {
  * The single add surface: a text field pinned above the keyboard, with a list
  * chooser and a task/goal switch underneath it. Enter saves and stays open;
  * Done (blur) or the backdrop saves once and closes; Escape discards.
+ * DayView unmounts us on `onClose`, so the closing motion is played here first.
  */
 export function Composer({
   date,
@@ -66,9 +68,21 @@ export function Composer({
   const [value, setValue] = useState("");
   const valueRef = useRef("");
   const [listOpen, setListOpen] = useState(false);
+  const [open, setOpen] = useState(true);
+  const [savedTick, setSavedTick] = useState(0);
   const closed = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+
+  // The exit is owned here: DayView only unmounts us once the panel is down.
+  const presence = usePresence(open, MOTION_MS.base);
+  const list = usePresence(listOpen, MOTION_MS.fast);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  useEffect(() => {
+    if (!presence.mounted) onCloseRef.current();
+  }, [presence.mounted]);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -104,7 +118,11 @@ export function Composer({
   function addNext() {
     if (closed.current) return;
     const clean = valueRef.current.trim();
-    if (clean) save(clean);
+    if (clean) {
+      save(clean);
+      // A fresh key replays the cue even when Enter is held down.
+      setSavedTick((n) => n + 1);
+    }
     valueRef.current = "";
     setValue("");
     inputRef.current?.focus();
@@ -115,13 +133,15 @@ export function Composer({
     if (closed.current) return;
     closed.current = true;
     save(valueRef.current);
-    onClose();
+    setListOpen(false);
+    setOpen(false);
   }
 
   function cancel() {
     if (closed.current) return;
     closed.current = true;
-    onClose();
+    setListOpen(false);
+    setOpen(false);
   }
 
   function onInputKeyDown(e: ReactKeyboardEvent<HTMLInputElement>) {
@@ -136,7 +156,7 @@ export function Composer({
   }
 
   return (
-    <>
+    <div className={`composer-root ${presence.closing ? "is-closing" : ""}`}>
       <button
         type="button"
         aria-label="Close composer"
@@ -147,101 +167,114 @@ export function Composer({
         onClick={finish}
       />
       <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Add an item"
-        className="composer-panel fixed inset-x-0 z-50"
-        style={{ bottom: keyboard ? `${keyboard}px` : undefined }}
+        className="composer-anchor fixed inset-x-0 z-50"
+        style={{ transform: keyboard ? `translateY(${-keyboard}px)` : undefined }}
       >
-        <div className="composer-inner">
-          <input
-            ref={inputRef}
-            value={value}
-            aria-label={placeholder}
-            placeholder={placeholder}
-            enterKeyHint="done"
-            onChange={(e) => {
-              valueRef.current = e.target.value;
-              setValue(e.target.value);
-            }}
-            onKeyDown={onInputKeyDown}
-            onBlur={(e) => {
-              // Tabbing inside the panel is not "Done": keep the draft and the panel.
-              if (panelRef.current?.contains(e.relatedTarget as Node | null)) return;
-              finish();
-            }}
-            className="composer-input"
-          />
-          <div className="composer-controls">
-            <div className="relative min-w-0 flex-1">
-              <button
-                type="button"
-                aria-label="Choose list"
-                aria-expanded={listOpen}
-                onPointerDown={keepFocus} onMouseDown={keepFocus}
-                onClick={() => setListOpen((v) => !v)}
-                className="composer-target"
-              >
-                <span aria-hidden className="h-[8px] w-[8px] shrink-0 rounded-full" style={{ backgroundColor: targetColor }} />
-                <span className="min-w-0 truncate">{targetName}</span>
-              </button>
-              {listOpen && (
-                <div
-                  role="listbox"
+        <div
+          ref={panelRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Add an item"
+          className="composer-panel"
+        >
+          <div className="composer-inner">
+            {savedTick > 0 && <span key={savedTick} aria-hidden className="composer-saved">Saved</span>}
+            <input
+              ref={inputRef}
+              value={value}
+              aria-label={placeholder}
+              placeholder={placeholder}
+              enterKeyHint="done"
+              onChange={(e) => {
+                valueRef.current = e.target.value;
+                setValue(e.target.value);
+              }}
+              onKeyDown={onInputKeyDown}
+              onBlur={(e) => {
+                // Tabbing inside the panel is not "Done": keep the draft and the panel.
+                if (panelRef.current?.contains(e.relatedTarget as Node | null)) return;
+                finish();
+              }}
+              className="composer-input"
+            />
+            <div className="composer-controls">
+              <div className="relative min-w-0 flex-1">
+                <button
+                  type="button"
                   aria-label="Choose list"
-                  className="composer-list animate-pop"
+                  aria-expanded={listOpen}
                   onPointerDown={keepFocus} onMouseDown={keepFocus}
+                  onClick={() => setListOpen((v) => !v)}
+                  className="composer-target"
                 >
-                  <button
-                    type="button"
-                    role="option"
-                    aria-selected={target === null}
-                    onClick={() => {
-                      setTarget(null);
-                      setListOpen(false);
-                    }}
-                    className="composer-list-item"
+                  <span aria-hidden className="h-[8px] w-[8px] shrink-0 rounded-full" style={{ backgroundColor: targetColor }} />
+                  <span className="min-w-0 truncate">{targetName}</span>
+                </button>
+                {list.mounted && (
+                  <div
+                    role="listbox"
+                    aria-label="Choose list"
+                    className={`composer-list ${list.closing ? "is-closing" : ""}`}
+                    onPointerDown={keepFocus} onMouseDown={keepFocus}
                   >
-                    <span aria-hidden className="h-[8px] w-[8px] shrink-0 rounded-full" style={{ backgroundColor: "var(--accent)" }} />
-                    Inbox
-                  </button>
-                  {cats.map((c) => (
                     <button
-                      key={c.id}
                       type="button"
                       role="option"
-                      aria-selected={target === c.id}
+                      aria-selected={target === null}
                       onClick={() => {
-                        setTarget(c.id);
+                        setTarget(null);
                         setListOpen(false);
                       }}
                       className="composer-list-item"
                     >
-                      <span aria-hidden className="h-[8px] w-[8px] shrink-0 rounded-full" style={{ backgroundColor: catColor(c.color) }} />
-                      <span className="min-w-0 truncate">{c.name}</span>
+                      <span aria-hidden className="h-[8px] w-[8px] shrink-0 rounded-full" style={{ backgroundColor: "var(--accent)" }} />
+                      Inbox
                     </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="composer-kind" role="group" aria-label="Item type" onPointerDown={keepFocus} onMouseDown={keepFocus}>
-              {(["task", "goal"] as const).map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  aria-pressed={kind === option}
-                  disabled={option === "goal" && !canAddGoal(target)}
-                  onClick={() => setKind(option)}
-                  className="composer-kind-option"
-                >
-                  {option === "task" ? "Task" : "Goal"}
-                </button>
-              ))}
+                    {cats.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        role="option"
+                        aria-selected={target === c.id}
+                        onClick={() => {
+                          setTarget(c.id);
+                          setListOpen(false);
+                        }}
+                        className="composer-list-item"
+                      >
+                        <span aria-hidden className="h-[8px] w-[8px] shrink-0 rounded-full" style={{ backgroundColor: catColor(c.color) }} />
+                        <span className="min-w-0 truncate">{c.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div
+                className="composer-kind"
+                data-kind={kind}
+                role="group"
+                aria-label="Item type"
+                onPointerDown={keepFocus}
+                onMouseDown={keepFocus}
+              >
+                <span aria-hidden className="composer-kind-thumb" />
+                {(["task", "goal"] as const).map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    aria-pressed={kind === option}
+                    disabled={option === "goal" && !canAddGoal(target)}
+                    onClick={() => setKind(option)}
+                    className="composer-kind-option"
+                  >
+                    {option === "task" ? "Task" : "Goal"}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }
