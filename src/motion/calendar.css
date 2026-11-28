@@ -211,8 +211,10 @@
   height: auto;
   pointer-events: auto;
 }
-/* Focusing synchronously on the tap expands the row even before React renders. */
-.cal-collapse:focus-within {
+/* Focusing synchronously on the tap expands the row even before React renders.
+   Never let focus force open a row that was explicitly closed: a focused
+   Remove button in a leaving entry must not hold space or catch another tap. */
+.cal-collapse[data-open="true"]:focus-within {
   grid-template-rows: 1fr;
   height: auto;
   pointer-events: auto;

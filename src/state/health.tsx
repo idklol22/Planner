@@ -27,6 +27,7 @@ import {
 } from "../lib/health";
 import { isIOS, readHealth } from "../native/planner-native";
 import type { HubOp } from "../storage/hub";
+import { HEALTH_REMOTE_EVENT } from "../sync/health-apply";
 import { useSync } from "./sync";
 
 interface HealthContextValue {
@@ -153,6 +154,25 @@ export function HealthProvider({ children }: { children: ReactNode }) {
     return load(true);
   }, [load]);
   const refresh = useCallback(async () => load(false), [load]);
+
+  // A pulled row is written to storage by the sync provider. Bring it into the
+  // live map synchronously (ref first, then React state) or the next local
+  // record would rebuild the map from a stale snapshot and push the old value
+  // back to the hub with a newer stamp.
+  useEffect(() => {
+    const onRemote = () => {
+      let next: HealthData;
+      try {
+        next = parseHealthData(localStorage.getItem(HEALTH_KEY));
+      } catch {
+        return;
+      }
+      daysRef.current = next;
+      setDays(next);
+    };
+    window.addEventListener(HEALTH_REMOTE_EVENT, onRemote);
+    return () => window.removeEventListener(HEALTH_REMOTE_EVENT, onRemote);
+  }, []);
 
   // A previous successful connect means Health is allowed: refresh on start.
   useEffect(() => {

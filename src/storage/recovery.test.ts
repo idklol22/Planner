@@ -61,6 +61,21 @@ describe("per-record loading", () => {
     expect(result.issue?.repairedSettings).toEqual(["dailyCalorieGoal"]);
   });
 
+  it("keeps two different damaged versions of the same record", () => {
+    const first = { ...v4(), tasks: [badTask()] };
+    const storage = memoryStorage();
+    const initial = recoverStored(JSON.stringify(first), storage);
+
+    const changedBad = { ...badTask(), order: "not-a-number" };
+    const later = recoverStored(JSON.stringify({ ...v4(), tasks: [changedBad] }), storage);
+
+    const keys = new Set([...initial.issue!.quarantinedKeys, ...later.issue!.quarantinedKeys]);
+    expect(keys.size).toBe(2);
+    const values = [...keys].map((key) => JSON.parse(storage.getItem(key)!));
+    expect(values).toContainEqual(first.tasks[0]);
+    expect(values).toContainEqual(changedBad);
+  });
+
   it("quarantines independently per record, not just per file", () => {
     const stored = {
       ...v4(),

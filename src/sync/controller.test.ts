@@ -102,6 +102,25 @@ function solvedEvent(over: Partial<EventRecord> = {}): EventRecord {
   };
 }
 
+describe("sync status", () => {
+  it("clears a stale push error once a later sync succeeds with an empty outbox", async () => {
+    const s = setup();
+    s.outbox.enqueue({ table: "task", row: taskToRow(makeTask(TODAY, "Queued", 0)) });
+    s.client.push.mockRejectedValueOnce(new Error("offline"));
+    s.client.pull.mockRejectedValueOnce(new Error("offline"));
+    await s.controller.syncNow();
+    expect(s.controller.status.error).toBe("offline");
+
+    // The next sync has nothing to push and a healthy pull: no client call can
+    // clear the sticky error unless syncNow resets it itself.
+    s.outbox.clear();
+    await s.controller.syncNow();
+    expect(s.controller.status.error).toBeNull();
+    expect(s.controller.status.lastSyncedAt).toBeTruthy();
+    s.controller.stop();
+  });
+});
+
 describe("local mutations feed the outbox", () => {
   it("queues task, category and meal ops, one per changed record", () => {
     const s = setup();

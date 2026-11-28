@@ -224,6 +224,10 @@ export class SyncController {
 
   async syncNow(): Promise<void> {
     if (this.status.syncing) return;
+    // A previous failure may have been drained by a fire-and-forget push while
+    // this sync has no ops of its own; do not leave a stale error pinned forever
+    // (the widget background-reload gate reads it).
+    this.lastError = null;
     this.emit({ syncing: true });
     try {
       await this.engine.syncNow();

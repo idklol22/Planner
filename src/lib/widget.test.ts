@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { defaultData, makeGoal } from "../domain/model";
 import { THEMES } from "../theme/themes";
 import {
+  BACKGROUND_RELOAD_WAIT_ANY,
   backgroundReloadDecision,
   buildWidgetProfile,
   emptyWidgetUploadState,
@@ -85,6 +86,19 @@ describe("widget upload queue", () => {
     expect(done.state.pending).toBeNull();
   });
 
+  it("drops a superseded queued profile when the live profile returns to the in-flight one", () => {
+    const first = item(2000);
+    const started = enqueueWidgetUpload(emptyWidgetUploadState(), first);
+    const queued = enqueueWidgetUpload(started.state, item(2100));
+    // A fast edit and undo while the first request is still in flight.
+    const back = enqueueWidgetUpload(queued.state, first);
+    expect(back.state.pending).toBeNull();
+
+    const settled = finishWidgetUpload(back.state, first.json, true);
+    expect(settled.start).toBeNull(); // must not push the undone 2100 profile
+    expect(settled.state.inFlight).toBeNull();
+  });
+
   it("does not resend an unchanged profile, but does not drop a newer one on failure", () => {
     const first = item(2000);
     const started = enqueueWidgetUpload(emptyWidgetUploadState(), first);
@@ -102,6 +116,18 @@ describe("widget upload queue", () => {
 });
 
 describe("backgroundReloadDecision", () => {
+  it("still waits for the first accepted push when no sync has succeeded yet", () => {
+    expect(
+      backgroundReloadDecision(BACKGROUND_RELOAD_WAIT_ANY, { lastSyncedAt: null, error: null }),
+    ).toEqual({ pending: BACKGROUND_RELOAD_WAIT_ANY, reload: false });
+
+    const released = backgroundReloadDecision(BACKGROUND_RELOAD_WAIT_ANY, {
+      lastSyncedAt: "2026-11-27T10:00:00.000Z",
+      error: null,
+    });
+    expect(released).toEqual({ pending: null, reload: true });
+  });
+
   it("waits for a successful sync after backgrounding and reloads only once", () => {
     expect(backgroundReloadDecision(null, { lastSyncedAt: null, error: null })).toEqual({
       pending: null,

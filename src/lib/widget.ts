@@ -62,6 +62,11 @@ export interface WidgetUploadItem {
   value: WidgetProfile;
 }
 
+/** Sentinel for "a background reload is armed but no sync has succeeded yet".
+ *  `null` keeps meaning "nothing armed"; using it for the first launch would
+ *  let a timer reload before the first push was accepted. */
+export const BACKGROUND_RELOAD_WAIT_ANY = "";
+
 export interface WidgetUploadState {
   inFlight: WidgetUploadItem | null;
   /** Only the newest profile seen during an upload is kept. */
@@ -80,7 +85,11 @@ export function enqueueWidgetUpload(
   item: WidgetUploadItem,
 ): { state: WidgetUploadState; start: WidgetUploadItem | null } {
   if (state.inFlight) {
-    if (state.inFlight.json === item.json) return { state, start: null };
+    // The profile is back to what is already on the wire: forget any queued
+    // intermediate edit or the hub would end up showing a superseded profile.
+    if (state.inFlight.json === item.json) {
+      return { state: { ...state, pending: null }, start: null };
+    }
     return { state: { ...state, pending: item }, start: null };
   }
   if (state.lastSent === item.json) {
@@ -118,7 +127,8 @@ export function backgroundReloadDecision(
   status: SyncStamp,
 ): { pending: string | null; reload: boolean } {
   if (pending === null) return { pending: null, reload: false };
-  if (status.error || !status.lastSyncedAt || status.lastSyncedAt === pending) {
+  if (status.error || !status.lastSyncedAt) return { pending, reload: false };
+  if (pending !== BACKGROUND_RELOAD_WAIT_ANY && status.lastSyncedAt === pending) {
     return { pending, reload: false };
   }
   return { pending: null, reload: true };

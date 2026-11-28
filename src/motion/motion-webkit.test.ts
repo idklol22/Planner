@@ -44,4 +44,27 @@ describe("WebKit-safe collapses", () => {
     expect(block).toContain("pointer-events: none");
     expect(block).toContain("height: 0");
   });
+
+  it("never lets focus reopen an explicitly closed calendar collapse", async () => {
+    const styles = await css("./calendar.css");
+    expect(styles).not.toMatch(/\.cal-collapse:focus-within\s*\{/);
+    const openFocus = /\.cal-collapse\[data-open="true"\]:focus-within\s*\{([^}]*)\}/.exec(styles)?.[1];
+    expect(openFocus).toBeTruthy();
+    expect(openFocus).toContain("height: auto");
+  });
+
+  it("a closing desktop task panel releases its flex width", async () => {
+    const pages = await css("./pages.css");
+    const closing = rule(pages, ".task-panel.is-closing");
+    expect(closing).toMatch(/\bwidth: 0;/);
+    expect(closing).toContain("overflow: hidden");
+  });
+
+  it("a leaving day row collapses instead of holding its full height", async () => {
+    const day = await css("./day.css");
+    const leaving = rule(day, ".day-slot.leave");
+    expect(leaving).toContain("height: 0");
+    expect(leaving).toContain("overflow: hidden");
+    expect(leaving).toContain("pointer-events: none");
+  });
 });

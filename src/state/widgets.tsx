@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { App } from "@capacitor/app";
 import { addDays, todayISO } from "../domain/dates";
 import {
+  BACKGROUND_RELOAD_WAIT_ANY,
   backgroundReloadDecision,
   buildWidgetProfile,
   emptyWidgetUploadState,
@@ -20,6 +21,8 @@ import { useSync } from "./sync";
 
 const UPLOAD_DELAY_MS = 2_000;
 const RELOAD_DELAY_MS = 400;
+/** A hung PUT must not pin the queue forever: the latest profile still gets sent. */
+const UPLOAD_TIMEOUT_MS = 10_000;
 
 /** Mounted once for the app session; renders nothing. */
 export function WidgetRunner() {
@@ -64,20 +67,20 @@ export function WidgetRunner() {
       const client = sync.client;
       if (!client) return;
       const gen = generation.current;
-      void client.putWidgetProfile(item.value).then(
-        () => {
-          if (gen !== generation.current) return;
-          const { state, start } = finishWidgetUpload(uploadState.current, item.json, true);
-          uploadState.current = state;
-          scheduleReload();
-          if (start) beginUpload(start);
-        },
-        () => {
-          if (gen !== generation.current) return;
-          const { state, start } = finishWidgetUpload(uploadState.current, item.json, false);
-          uploadState.current = state;
-          if (start) beginUpload(start);
-        },
+      const abort = typeof AbortController === "undefined" ? null : new AbortController();
+      const timeout =
+        abort === null ? null : setTimeout(() => abort.abort(), UPLOAD_TIMEOUT_MS);
+      const settle = (ok: boolean) => {
+        if (timeout !== null) clearTimeout(timeout);
+        if (gen !== generation.current) return;
+        const { state, start } = finishWidgetUpload(uploadState.current, item.json, ok);
+        uploadState.current = state;
+        if (ok) scheduleReload();
+        if (start) beginUpload(start);
+      };
+      void client.putWidgetProfile(item.value, abort?.signal).then(
+        () => settle(true),
+        () => settle(false),
       );
     },
     [sync.client, scheduleReload],
@@ -163,7 +166,7 @@ export function WidgetRunner() {
         return;
       }
       sync.flush();
-      pendingBackgroundReload.current = statusRef.current.lastSyncedAt;
+      pendingBackgroundReload.current = statusRef.current.lastSyncedAt ?? BACKGROUND_RELOAD_WAIT_ANY;
       // Fire and forget: neither the UI nor app backgrounding waits on the hub.
       // A successful sync advances lastSyncedAt, which releases the reload.
       void sync.syncNow().catch(() => {});

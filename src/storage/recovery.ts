@@ -58,10 +58,22 @@ function safeSegment(value: string): string {
   return value.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 64) || "unknown";
 }
 
-/** One key per rejected record (kind + id + index), so records never collide. */
+/** Short stable digest so two different damaged versions of the same record
+ *  never overwrite each other in quarantine. */
+function rawDigest(raw: string): string {
+  let hash = 2166136261;
+  for (let i = 0; i < raw.length; i += 1) {
+    hash ^= raw.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+/** One key per rejected value (kind + id + index + content), so neither
+ *  different records nor later damaged versions of one record collide. */
 export function quarantineKey(record: DroppedRecord): string {
   const position = record.index < 0 ? "field" : String(record.index);
-  return `${QUARANTINE_PREFIX}${safeSegment(record.kind)}.${safeSegment(record.id ?? "anonymous")}.${position}`;
+  return `${QUARANTINE_PREFIX}${safeSegment(record.kind)}.${safeSegment(record.id ?? "anonymous")}.${position}.${rawDigest(record.raw)}`;
 }
 
 export interface RecoveryPlan {

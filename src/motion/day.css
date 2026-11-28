@@ -37,6 +37,11 @@
 }
 .day-slot.leave {
   animation: day-row-close var(--motion) var(--ease-in) both;
+  /* Snap the slot shut instead of interpolating fr: WebKit can leave a leaving
+     row visible or stuck, and an invisible full-height gap eats taps/space. */
+  grid-template-rows: 0fr;
+  height: 0;
+  overflow: hidden;
   pointer-events: none;
 }
 

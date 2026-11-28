@@ -194,8 +194,13 @@
     transform: translateX(24px);
     opacity: 0;
     transition: transform var(--motion) var(--ease-in), opacity var(--motion) var(--ease-in);
-    /* A closing layer is already gone as far as the user is concerned. */
+    /* A closing layer is already gone: no taps and no space in the flex row. */
     pointer-events: none;
+    width: 0;
+    min-width: 0;
+    padding: 0;
+    border-width: 0;
+    overflow: hidden;
   }
 }
 

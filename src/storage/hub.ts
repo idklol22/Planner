@@ -300,11 +300,13 @@ export class HubClient {
     return result.token;
   }
 
-  /** Replace the single widget profile row. */
-  async putWidgetProfile(profile: WidgetProfile): Promise<void> {
+  /** Replace the single widget profile row. A signal lets callers abandon a
+   *  hung request so a newer profile is not stuck behind it forever. */
+  async putWidgetProfile(profile: WidgetProfile, signal?: AbortSignal): Promise<void> {
     await this.request("/widget/profile", {
       method: "PUT",
       body: JSON.stringify(profile),
+      signal,
     });
   }
 

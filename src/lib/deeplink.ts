@@ -8,27 +8,24 @@ export type DeepLink =
   | { kind: "calories" }
   | { kind: "health"; date: ISODate; values: HealthValues };
 
+/** How long a link stays "recently handled". iOS can deliver the same launch
+ *  link through both `appUrlOpen` and `getLaunchUrl`; a short window suppresses
+ *  that duplicate without swallowing a genuinely new tap minutes later. */
+export const DUPLICATE_WINDOW_MS = 2_000;
+
 export interface LaunchLinkState {
   /** `getLaunchUrl` has settled (its URL may be null). */
   resolved: boolean;
   /** Canonical URL the app was launched with, if any. */
   key: string | null;
-  /** A launch (or pre-launch open) link has already been handled once. */
-  handled: boolean;
-  /** The duplicate appUrlOpen for the launch link has been consumed. */
-  duplicateConsumed: boolean;
-  /** Last link handled by appUrlOpen before the launch URL was known. */
-  openedBeforeLaunch: string | null;
+  /** Recently handled links: one matching duplicate may be suppressed. */
+  suppressedUntil: Record<string, number>;
+  /** Links already handled this session (used when getLaunchUrl echoes one). */
+  handledUntil: Record<string, number>;
 }
 
 export function initialLaunchLinkState(): LaunchLinkState {
-  return {
-    resolved: false,
-    key: null,
-    handled: false,
-    duplicateConsumed: false,
-    openedBeforeLaunch: null,
-  };
+  return { resolved: false, key: null, suppressedUntil: {}, handledUntil: {} };
 }
 
 function linkKey(url: string): string {
@@ -39,44 +36,75 @@ function linkKey(url: string): string {
   }
 }
 
-/** An `appUrlOpen` event for the launch URL is the same link as `getLaunchUrl`.
- *  Only that first duplicate is suppressed; a later real tap still goes through. */
+function prune(entries: Record<string, number>, at: number): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [key, until] of Object.entries(entries)) if (until > at) out[key] = until;
+  return out;
+}
+
+/** Consume one pending duplicate for this exact link, if there is one. */
+function consumeDuplicate(
+  state: LaunchLinkState,
+  key: string,
+  at: number,
+): { state: LaunchLinkState; duplicate: boolean } {
+  const until = state.suppressedUntil[key];
+  if (until === undefined || until <= at) return { state, duplicate: false };
+  const suppressedUntil = { ...state.suppressedUntil };
+  delete suppressedUntil[key];
+  return { state: { ...state, suppressedUntil }, duplicate: true };
+}
+
+function markHandled(state: LaunchLinkState, key: string, at: number): LaunchLinkState {
+  const until = at + DUPLICATE_WINDOW_MS;
+  return {
+    ...state,
+    suppressedUntil: { ...state.suppressedUntil, [key]: until },
+    handledUntil: { ...state.handledUntil, [key]: until },
+  };
+}
+
+/** An `appUrlOpen` event for a recently handled link is the OS echo of that
+ *  link; consume it once. Any later tap of the same link is a real new tap. */
 export function decideAppOpen(
   state: LaunchLinkState,
   url: string,
+  at: number = Date.now(),
 ): { state: LaunchLinkState; handle: boolean } {
   const key = linkKey(url);
-  if (!state.resolved) {
-    return {
-      state: { ...state, openedBeforeLaunch: key, handled: true },
-      handle: true,
-    };
-  }
-  if (state.handled && state.key === key && !state.duplicateConsumed) {
-    return { state: { ...state, duplicateConsumed: true }, handle: false };
-  }
-  // Any other open ends the launch-duplicate window.
-  return { state: { ...state, duplicateConsumed: true }, handle: true };
+  const fresh = { ...state, suppressedUntil: prune(state.suppressedUntil, at) };
+  const duplicate = consumeDuplicate(fresh, key, at);
+  if (duplicate.duplicate) return { state: duplicate.state, handle: false };
+  return { state: markHandled(duplicate.state, key, at), handle: true };
 }
 
-/** Handle a `getLaunchUrl` result at most once, even under StrictMode remounts. */
+/** Handle a `getLaunchUrl` result at most once, even when it resolves null
+ *  after an `appUrlOpen` or under StrictMode remounts. */
 export function decideLaunchUrl(
   state: LaunchLinkState,
   url: string | null,
+  at: number = Date.now(),
 ): { state: LaunchLinkState; handle: boolean } {
   if (state.resolved) return { state, handle: false };
   const key = url ? linkKey(url) : null;
-  const alreadyHandled = key !== null && state.handled && state.openedBeforeLaunch === key;
-  return {
-    state: {
-      resolved: true,
-      key,
-      handled: alreadyHandled || key !== null,
-      duplicateConsumed: alreadyHandled,
-      openedBeforeLaunch: state.openedBeforeLaunch,
-    },
-    handle: !alreadyHandled && key !== null,
+  const base: LaunchLinkState = {
+    resolved: true,
+    key,
+    suppressedUntil: prune(state.suppressedUntil, at),
+    handledUntil: prune(state.handledUntil, at),
   };
+  // A null launch URL must not forget a link already handled by appUrlOpen,
+  // even if its one appUrlOpen echo was already consumed.
+  // Keep the suppression entry: the OS may still deliver that echo.
+  if (key !== null && (base.handledUntil[key] !== undefined || base.suppressedUntil[key] !== undefined)) {
+    const until = base.handledUntil[key] ?? base.suppressedUntil[key]!;
+    return {
+      state: { ...base, suppressedUntil: { ...base.suppressedUntil, [key]: until } },
+      handle: false,
+    };
+  }
+  if (key === null) return { state: base, handle: false };
+  return { state: markHandled(base, key, at), handle: true };
 }
 
 /** Accepts `planner://today`, `planner://calories` and `planner://health?...`.

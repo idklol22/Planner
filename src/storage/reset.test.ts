@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { BACKUP_KEY, QUARANTINE_PREFIX } from "./recovery";
 import { clearPlannerLocalData, KEPT_KEYS_EXAMPLE, RESET_KEYS } from "./reset";
 
 function fakeStorage(init: Record<string, string>) {
@@ -24,9 +25,22 @@ describe("reset all data", () => {
         "planner.mirror.v1",
         "planner.outbox.v1",
         "todomate.data",
+        "todomate.data.backup.v1",
       ].sort(),
     );
   });
+  it("clears recovery backups and quarantined records too", () => {
+    const s = fakeStorage({
+      [BACKUP_KEY]: "verbatim old data",
+      [`${QUARANTINE_PREFIX}task.bad.1`]: "rejected record",
+      "planner.theme": "keep",
+    });
+    clearPlannerLocalData(s);
+    expect(s.has(BACKUP_KEY)).toBe(false);
+    expect(s.has(`${QUARANTINE_PREFIX}task.bad.1`)).toBe(false);
+    expect(s.has("planner.theme")).toBe(true);
+  });
+
   it("clears data, outbox, cursor, mirror, letcode keys and hand-offs but keeps settings", () => {
     const s = fakeStorage({
       ...Object.fromEntries(RESET_KEYS.map((k) => [k, "x"])),
