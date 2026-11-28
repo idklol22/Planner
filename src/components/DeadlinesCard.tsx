@@ -1,5 +1,7 @@
+import { useMemo } from "react";
 import { addDays, type ISODate } from "../domain/dates";
 import { nearestCategoryColor } from "../domain/palette";
+import { MOTION_MS, usePresence } from "../lib/motion";
 import { useStore } from "../state/store";
 import { useSync } from "../state/sync";
 import { deadlinesForCategory } from "../sync/mirror-view";
@@ -7,33 +9,43 @@ import type { HDeadlineRow } from "../storage/hub";
 
 const WINDOW_DAYS = 14;
 
+type Group = { key: string; label: string; color: string | null; rows: HDeadlineRow[] };
+
 /** Read-only LearnHarness deadlines, grouped under the category linked to their subject. */
 export function DeadlinesCard({ date }: { date: ISODate }) {
   const { data } = useStore();
   const { mirror, configured } = useSync();
-  if (!configured || mirror.deadlines.length === 0) return null;
 
-  const last = addDays(date, WINDOW_DAYS);
-  const inWindow = (d: HDeadlineRow) => !d.done && d.due.slice(0, 10) >= date && d.due.slice(0, 10) <= last;
+  const groups = useMemo<Group[]>(() => {
+    if (!configured || mirror.deadlines.length === 0) return [];
+    const last = addDays(date, WINDOW_DAYS);
+    const inWindow = (d: HDeadlineRow) =>
+      !d.done && d.due.slice(0, 10) >= date && d.due.slice(0, 10) <= last;
+
+    const result: Group[] = [];
+    const used = new Set<string>();
+    for (const cat of data.categories.filter((c) => !c.archived && !c.deletedAt && c.linkedSubjectId)) {
+      const rows = deadlinesForCategory(mirror, cat.linkedSubjectId, cat.linkedTopicId).filter(
+        (d) => inWindow(d) && !used.has(d.id),
+      );
+      rows.forEach((d) => used.add(d.id));
+      if (rows.length) result.push({ key: cat.id, label: cat.name, color: cat.color, rows });
+    }
+    const rest = mirror.deadlines
+      .filter((d) => inWindow(d) && !used.has(d.id))
+      .sort((a, b) => a.due.localeCompare(b.due));
+    if (rest.length) result.push({ key: "__other", label: "Other deadlines", color: null, rows: rest });
+    return result;
+  }, [date, configured, mirror, data.categories]);
+
+  // The block rises in when deadlines appear and settles away when they leave.
+  const presence = usePresence(groups.length > 0, MOTION_MS.base);
+  if (!presence.mounted) return null;
+
   const subjectName = (id: string) => mirror.subjects.find((s) => s.id === id)?.name ?? "";
 
-  const groups: Array<{ key: string; label: string; color: string | null; rows: HDeadlineRow[] }> = [];
-  const used = new Set<string>();
-  for (const cat of data.categories.filter((c) => !c.archived && !c.deletedAt && c.linkedSubjectId)) {
-    const rows = deadlinesForCategory(mirror, cat.linkedSubjectId, cat.linkedTopicId).filter(
-      (d) => inWindow(d) && !used.has(d.id),
-    );
-    rows.forEach((d) => used.add(d.id));
-    if (rows.length) groups.push({ key: cat.id, label: cat.name, color: cat.color, rows });
-  }
-  const rest = mirror.deadlines
-    .filter((d) => inWindow(d) && !used.has(d.id))
-    .sort((a, b) => a.due.localeCompare(b.due));
-  if (rest.length) groups.push({ key: "__other", label: "Other deadlines", color: null, rows: rest });
-  if (groups.length === 0) return null;
-
   return (
-    <section aria-label="Deadlines" className="mt-4">
+    <section aria-label="Deadlines" className={`cal-block mt-4 ${presence.closing ? "is-closing" : ""}`}>
       <h2 className="px-1 text-[14px] font-semibold">Deadlines</h2>
       <div className="mt-2">
         {groups.map((group) => (

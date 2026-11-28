@@ -1,1 +1,246 @@
-/* Motion owned by the calendar area. */
+/* Motion owned by the calendar area. Durations/easings come from src/motion/index.css;
+   only transform and opacity move, plus a grid-row collapse where height must change. */
+
+/* ── Week <-> month, and paging ─────────────────────────────────────────── */
+
+.cal-pages {
+  display: grid;
+  /* Both pages stay mounted. Collapsing the inactive row animates the height
+     from exactly one page to the other without a layout jump. */
+  grid-template-rows: 1fr 0fr;
+  transition: grid-template-rows var(--motion-slow) var(--ease-out);
+}
+.cal-pages[data-mode="month"] {
+  grid-template-rows: 0fr 1fr;
+}
+
+.cal-page {
+  min-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity var(--motion) var(--ease-out);
+}
+.cal-page[data-active="true"] {
+  opacity: 1;
+}
+.cal-page-inner {
+  min-height: 0;
+  touch-action: pan-y;
+}
+
+.cal-grid-stage {
+  position: relative;
+  overflow: hidden;
+}
+.cal-grid {
+  position: relative;
+}
+.cal-layer--in {
+  position: relative;
+  z-index: 1;
+}
+.cal-layer--out {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+.cal-drag-drag {
+  transition: none;
+}
+.cal-drag-settle {
+  transition: transform var(--motion) var(--ease-spring);
+}
+
+@keyframes cal-enter-next {
+  from {
+    opacity: 0;
+    transform: translate3d(36px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+@keyframes cal-enter-prev {
+  from {
+    opacity: 0;
+    transform: translate3d(-36px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+@keyframes cal-exit-next {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(-36px, 0, 0);
+  }
+}
+@keyframes cal-exit-prev {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(36px, 0, 0);
+  }
+}
+.cal-enter-next {
+  animation: cal-enter-next var(--motion-slow) var(--ease-out) both;
+}
+.cal-enter-prev {
+  animation: cal-enter-prev var(--motion-slow) var(--ease-out) both;
+}
+.cal-exit-next {
+  animation: cal-exit-next var(--motion-slow) var(--ease-in) both;
+}
+.cal-exit-prev {
+  animation: cal-exit-prev var(--motion-slow) var(--ease-in) both;
+}
+
+/* ── Selection and day marks ────────────────────────────────────────────── */
+
+.cal-cell {
+  position: relative;
+  z-index: 1;
+}
+.cal-num {
+  position: relative;
+  z-index: 1;
+  opacity: 1;
+  transition: opacity var(--motion-fast) var(--ease-out);
+}
+.cal-num[data-selected="true"] {
+  opacity: 0;
+}
+.cal-select {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: var(--color-ink);
+  color: var(--color-canvas);
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.cal-select[data-week="false"] {
+  font-size: 14px;
+}
+.cal-select[data-animate="true"] {
+  transition: transform var(--motion) var(--ease-spring);
+}
+
+.cal-dots {
+  position: relative;
+  display: block;
+  flex: none;
+}
+.cal-dot {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--ease-out);
+}
+.cal-dot.is-on {
+  opacity: 1;
+}
+.cal-dot--open {
+  background: var(--color-muted);
+}
+.cal-dot--done {
+  border: 1px solid var(--color-faint);
+}
+
+.cal-mode-chevron {
+  transform: rotate(0deg);
+  transition: transform var(--motion) var(--ease-out);
+}
+.cal-mode-chevron[data-month="true"] {
+  transform: rotate(180deg);
+}
+
+/* ── Meters, logging form and entries ───────────────────────────────────── */
+
+.cal-meter-fill {
+  transform-origin: left center;
+  transition: transform var(--motion) var(--ease-out);
+}
+
+.cal-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--motion) var(--ease-out);
+}
+.cal-collapse[data-open="true"] {
+  grid-template-rows: 1fr;
+}
+/* Focusing synchronously on the tap expands the row even before React renders. */
+.cal-collapse:focus-within {
+  grid-template-rows: 1fr;
+}
+.cal-collapse > .cal-collapse-inner {
+  min-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--ease-out);
+}
+.cal-collapse[data-open="true"] > .cal-collapse-inner {
+  opacity: 1;
+}
+.cal-entry {
+  list-style: none;
+}
+
+/* ── Deadlines and summary blocks ───────────────────────────────────────── */
+
+@keyframes cal-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+@keyframes cal-fall {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(0, 6px, 0);
+  }
+}
+.cal-block {
+  animation: cal-rise var(--motion-slow) var(--ease-out) both;
+}
+.cal-block.is-closing {
+  animation: cal-fall var(--motion-fast) var(--ease-in) both;
+}
+
+/* ── Press feedback (instant down, quick release) ───────────────────────── */
+
+.cal-press {
+  transition: opacity var(--motion-fast) var(--ease-out), transform var(--motion-fast) var(--ease-out);
+}
+.cal-press:active {
+  opacity: 0.72;
+  transform: scale(0.97);
+  transition-duration: 0ms;
+}

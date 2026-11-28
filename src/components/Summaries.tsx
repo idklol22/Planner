@@ -52,18 +52,21 @@ export function WeekSummaryCard({ start }: { start: ISODate }) {
     return Math.round(sum / logged.length);
   }, [start, data.calories]);
   return (
-    <section aria-label="Week summary" className="animate-rise">
-      <h3 className="text-[14px] font-semibold">Week summary</h3>
-      <div className="mb-3 text-[12px] text-faint">
-        {formatDayTitle(start)} to {formatDayTitle(addDays(start, 6))}
+    <section aria-label="Week summary">
+      {/* Replayed when the week changes, without remounting the section itself. */}
+      <div key={start} className="cal-block">
+        <h3 className="text-[14px] font-semibold">Week summary</h3>
+        <div className="mb-3 text-[12px] text-faint">
+          {formatDayTitle(start)} to {formatDayTitle(addDays(start, 6))}
+        </div>
+        <div className="flex gap-4">
+          <Stat value={`${s.done}/${s.total}`} label="Tasks done" />
+          <Stat value={s.daysLogged ? fmt(s.kcalAverage) : "-"} label="Avg kcal" />
+          <Stat value={s.daysLogged ? `${fmt(proteinAverage)} g` : "-"} label="Avg protein" />
+          <Stat value={`${s.daysOnGoal}/${s.daysLogged}`} label="On goal" />
+        </div>
+        <Chips rows={s.perCategory} />
       </div>
-      <div className="flex gap-4">
-        <Stat value={`${s.done}/${s.total}`} label="Tasks done" />
-        <Stat value={s.daysLogged ? fmt(s.kcalAverage) : "-"} label="Avg kcal" />
-        <Stat value={s.daysLogged ? `${fmt(proteinAverage)} g` : "-"} label="Avg protein" />
-        <Stat value={`${s.daysOnGoal}/${s.daysLogged}`} label="On goal" />
-      </div>
-      <Chips rows={s.perCategory} />
     </section>
   );
 }
