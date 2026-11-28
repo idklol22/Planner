@@ -1,27 +1,24 @@
 /* Motion owned by the day area: the list, its rows, the completion mark and
-   the day's popovers. Only transform/opacity animate, plus a short 0fr↔1fr
-   height collapse where a row needs to open or close its space. Timings come
-   from src/motion/index.css; the global reduced-motion rule caps them all. */
+   the day's popovers. Only transform/opacity animate — no fr interpolation:
+   WebKit cannot reliably interpolate 0fr↔1fr and can leave a leaving row
+   visible or stuck. Timings come from src/motion/index.css; the global
+   reduced-motion rule caps them all. */
 
-/* ── Rows: open their space, then close it ──────────────────────────────── */
+/* ── Rows: fade/slide, without animating their height ───────────────────── */
 @keyframes day-row-open {
   from {
-    grid-template-rows: 0fr;
     opacity: 0;
   }
   to {
-    grid-template-rows: 1fr;
     opacity: 1;
   }
 }
 @keyframes day-row-close {
   from {
-    grid-template-rows: 1fr;
     opacity: 1;
     transform: translateX(0);
   }
   to {
-    grid-template-rows: 0fr;
     opacity: 0;
     transform: translateX(-28px);
   }

@@ -195,17 +195,27 @@
   transition: transform var(--motion) var(--ease-out);
 }
 
+/* Snap the 0fr↔1fr rows: WebKit interpolates `fr` unreliably and can leave a
+   collapsed panel visible or stuck. The inner opacity is the only animation,
+   and a closed panel takes no space and cannot be tapped. */
 .cal-collapse {
   display: grid;
   grid-template-rows: 0fr;
-  transition: grid-template-rows var(--motion) var(--ease-out);
+  /* Explicit zero height: WebKit cannot leave a closed form taking space. */
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
 }
 .cal-collapse[data-open="true"] {
   grid-template-rows: 1fr;
+  height: auto;
+  pointer-events: auto;
 }
 /* Focusing synchronously on the tap expands the row even before React renders. */
 .cal-collapse:focus-within {
   grid-template-rows: 1fr;
+  height: auto;
+  pointer-events: auto;
 }
 .cal-collapse > .cal-collapse-inner {
   min-height: 0;
@@ -246,7 +256,14 @@
   animation: cal-rise var(--motion-slow) var(--ease-out) both;
 }
 .cal-block.is-closing {
-  animation: cal-fall var(--motion-fast) var(--ease-in) both;
+  /* Release the space and the taps immediately instead of fading in place:
+     a closing block must not sit on top of what replaces it. */
+  animation: none;
+  height: 0;
+  margin: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* ── Press feedback (instant down, quick release) ───────────────────────── */
