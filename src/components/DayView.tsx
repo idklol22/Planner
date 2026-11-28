@@ -20,8 +20,21 @@ import { type Habit } from "../domain/model";
 import { CATEGORY_COLORS } from "../domain/palette";
 import { catColor } from "../theme/store";
 import { sectionsForDay, tasksForDay, unfinishedTopLevelOn, type Section } from "../domain/tasks";
-import { resolveSwipe, type SwipeState } from "../domain/swipe";
-import { partitionDaySections, sectionKey, type DaySectionRow } from "../domain/daySections";
+import {
+  resolveSwipe,
+  rubberBand,
+  SWIPE_COMMIT_PX,
+  SWIPE_MAX_PX,
+  type SwipeState,
+} from "../domain/swipe";
+import {
+  daySlideDirection,
+  partitionDaySections,
+  sectionKey,
+  type DaySectionRow,
+} from "../domain/daySections";
+import { MOTION_MS, usePresence } from "../lib/motion";
+import { MotionRow, useFlipRows, useMotionRows } from "../motion/dayMotion";
 import { useStore } from "../state/store";
 import { useToast } from "../state/toast";
 import { Calendar, type CalendarMode } from "./Calendar";
@@ -79,18 +92,18 @@ function GhostRow({
   onEdit: () => void;
 }) {
   return (
-    <div className="animate-row group flex min-h-11 items-center gap-1.5 opacity-70 transition-opacity hover:opacity-100">
-      <button onClick={onAccept} aria-label={`Add "${habit.title}" as a task`} className="mark-btn">
+    <div className="group flex min-h-11 items-center gap-1.5 opacity-70 transition-opacity hover:opacity-100">
+      <button onClick={onAccept} aria-label={`Add "${habit.title}" as a task`} className="mark-btn day-press">
         <TaskMark color={color} ghost />
       </button>
-      <button onClick={onAccept} className="flex min-w-0 flex-1 items-center gap-2 py-1.5 text-left">
+      <button onClick={onAccept} className="day-press flex min-w-0 flex-1 items-center gap-2 py-1.5 text-left">
         <span className="min-w-0 flex-1 truncate text-[14.5px] leading-snug text-faint">{habit.title}</span>
         <span className="shrink-0 text-[12px] text-faint">habit</span>
       </button>
       <button
         onClick={onEdit}
         aria-label={`Edit habit ${habit.title}`}
-        className="flex h-11 w-11 shrink-0 items-center justify-center text-[14px] text-faint hover:text-ink"
+        className="day-press flex h-11 w-11 shrink-0 items-center justify-center text-[14px] text-faint hover:text-ink"
       >
         ...
       </button>
@@ -118,6 +131,7 @@ function CategoryHeader({
   onArchive: () => void;
 }) {
   const [swipe, setSwipe] = useState<SwipeState>(SWIPE_REST);
+  const [rubber, setRubber] = useState(0);
   const [dragging, setDragging] = useState(false);
   const start = useRef<{ x: number; y: number } | null>(null);
   const axis = useRef<"x" | "y" | null>(null);
@@ -130,6 +144,7 @@ function CategoryHeader({
     if ((e.target as Element).closest("input,textarea,select")) return;
     start.current = { x: e.clientX, y: e.clientY };
     axis.current = null;
+    setRubber(0);
     setSwipe(
       resolveSwipe({
         pointerType: e.pointerType,
@@ -164,6 +179,7 @@ function CategoryHeader({
       }
       start.current = null;
       setDragging(false);
+      setRubber(0);
       setSwipe(SWIPE_REST);
       return;
     }
@@ -173,6 +189,7 @@ function CategoryHeader({
       swiped.current = true;
       e.currentTarget.setPointerCapture(e.pointerId);
     }
+    setRubber(rubberBand(e.clientX - from.x));
     setSwipe(next);
   }
 
@@ -180,6 +197,7 @@ function CategoryHeader({
     start.current = null;
     axis.current = null;
     setDragging(false);
+    setRubber(0);
     setSwipe(SWIPE_REST);
   }
 
@@ -190,6 +208,7 @@ function CategoryHeader({
     start.current = null;
     axis.current = null;
     setDragging(false);
+    setRubber(0);
     setSwipe(SWIPE_REST);
     if (e.currentTarget.hasPointerCapture(e.pointerId)) {
       e.currentTarget.releasePointerCapture(e.pointerId);
@@ -215,12 +234,13 @@ function CategoryHeader({
     e.stopPropagation();
   }
 
-  const width = Math.min(Math.abs(swipe.dx), 120);
-  const opacity = Math.min(1, Math.abs(swipe.dx) / 96);
+  const displayDx = dragging ? rubber : swipe.dx;
+  const width = Math.min(Math.abs(displayDx), SWIPE_MAX_PX);
+  const opacity = Math.min(1, Math.abs(displayDx) / SWIPE_COMMIT_PX);
 
   return (
     <div
-      className="module-head relative touch-pan-y"
+      className="module-head day-fade-in relative touch-pan-y"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={endSwipe}
@@ -231,13 +251,13 @@ function CategoryHeader({
         <div
           aria-hidden
           className="pointer-events-none absolute inset-y-0 right-0 z-0 flex items-center justify-end overflow-hidden"
-          style={{ width: swipe.dx < 0 ? width : 0, opacity: swipe.dx < 0 ? opacity : 0 }}
+          style={{ width: displayDx < 0 ? width : 0, opacity: displayDx < 0 ? opacity : 0 }}
         >
           <button
             type="button"
             tabIndex={-1}
             onClick={onArchive}
-            className="pointer-events-auto h-11 px-3 text-[13px] text-muted"
+            className="day-press pointer-events-auto h-11 px-3 text-[13px] text-muted"
           >
             Archive
           </button>
@@ -246,8 +266,8 @@ function CategoryHeader({
       <div
         className="relative z-10 flex w-full min-w-0 items-center gap-2"
         style={{
-          transform: `translateX(${swipe.dx}px)`,
-          transition: dragging ? "none" : "transform 180ms ease-out",
+          transform: `translateX(${displayDx}px)`,
+          transition: dragging ? "none" : "transform var(--motion) var(--ease-spring)",
         }}
       >
         <span aria-hidden className="h-[7px] w-[7px] shrink-0 rounded-full" style={{ backgroundColor: color }} />
@@ -255,7 +275,7 @@ function CategoryHeader({
           type="button"
           onClick={onAdd}
           aria-label={`Add task to ${name}`}
-          className="min-h-11 min-w-0 truncate text-left text-[13px] font-semibold text-muted"
+          className="day-press min-h-11 min-w-0 truncate text-left text-[13px] font-semibold text-muted"
         >
           {name}
         </button>
@@ -283,6 +303,8 @@ function CategorySection({
 }) {
   const { actions } = useStore();
   const notify = useToast();
+  const taskRows = useMotionRows(section.tasks);
+  const flip = useFlipRows(taskRows.rows.map((row) => row.item.id));
   const cat = section.category;
   const color = cat ? catColor(cat.color) : "var(--accent)";
   const name = cat?.name ?? "Inbox";
@@ -312,8 +334,17 @@ function CategorySection({
       />
       {cat && <CategoryGoals categoryId={cat.id} color={color} />}
       <div>
-        {section.tasks.map((task) => (
-          <TaskRow key={task.id} task={task} color={color} onOpen={onOpenTask} />
+        {taskRows.rows.map(({ item: task, present, entering }) => (
+          <MotionRow
+            key={task.id}
+            present={present}
+            entering={entering}
+            exitMs={taskRows.exitMs}
+            innerRef={flip(task.id)}
+            onExited={() => taskRows.drop(task.id)}
+          >
+            <TaskRow task={task} color={color} onOpen={onOpenTask} />
+          </MotionRow>
         ))}
         {ghosts.map((habit) => (
           <GhostRow
@@ -326,6 +357,49 @@ function CategorySection({
         ))}
       </div>
     </section>
+  );
+}
+
+/** The day's sections live in their own keyed component so a day change starts
+ *  a clean presence lifecycle: the whole list slides in, sections do not also
+ *  animate as if they were new. */
+function DaySectionList({
+  visible,
+  selected,
+  onAdd,
+  onOpenTask,
+  onEditHabit,
+}: {
+  visible: readonly DaySectionRow[];
+  selected: ISODate;
+  onAdd: (target: ComposerTargetId) => void;
+  onOpenTask: (id: string) => void;
+  onEditHabit: (habit: Habit) => void;
+}) {
+  const items = visible.map((row) => ({ id: sectionKey(row.section), ...row }));
+  const sections = useMotionRows(items);
+
+  return (
+    <div className="space-y-3.5">
+      {sections.rows.map(({ item, present, entering }) => (
+        <MotionRow
+          key={item.id}
+          present={present}
+          entering={entering}
+          exitMs={sections.exitMs}
+          onExited={() => sections.drop(item.id)}
+        >
+          <CategorySection
+            section={item.section}
+            ghosts={item.ghosts}
+            date={selected}
+            onAdd={onAdd}
+            onOpenTask={onOpenTask}
+            onEditHabit={onEditHabit}
+          />
+        </MotionRow>
+      ))}
+    </div>
   );
 }
 
@@ -364,6 +438,14 @@ export function DayView({
     typeof window !== "undefined" && window.matchMedia?.("(min-width: 1024px)").matches ? "month" : "week",
   );
   const [editor, setEditor] = useState<EditorState>(null);
+  const mainShown = usePresence(mainMenu, MOTION_MS.fast);
+  const optionsShown = usePresence(listMenu, MOTION_MS.fast);
+  const lastSelected = useRef(selected);
+  const direction = useRef<ReturnType<typeof daySlideDirection>>(null);
+  if (lastSelected.current !== selected) {
+    direction.current = daySlideDirection(lastSelected.current, selected);
+    lastSelected.current = selected;
+  }
 
   useEffect(() => {
     try {
@@ -457,7 +539,7 @@ export function DayView({
               {selected !== today && (
                 <button
                   onClick={() => onSelect(today)}
-                  className="animate-fade min-h-11 px-2 text-[13px] text-muted hover:text-ink"
+                  className="day-press min-h-11 px-2 text-[13px] text-muted hover:text-ink"
                 >
                   Today
                 </button>
@@ -467,20 +549,22 @@ export function DayView({
                 aria-label="Menu"
                 aria-expanded={mainMenu}
                 aria-haspopup="menu"
-                className="flex h-11 w-11 items-center justify-center text-muted hover:text-ink"
+                className="day-press flex h-11 w-11 items-center justify-center text-muted hover:text-ink"
               >
                 <Menu size={20} />
               </button>
-              {mainMenu && (
+              {mainShown.mounted && (
                 <>
                   <button
                     aria-label="Close menu"
-                    className="fixed inset-0 z-30 cursor-default"
+                    className={`day-backdrop fixed inset-0 z-30 cursor-default ${mainShown.closing ? "closing" : ""}`}
                     onClick={() => setMainMenu(false)}
                   />
                   <div
                     role="menu"
-                    className="animate-pop absolute right-0 top-12 z-40 w-44 origin-top-right overflow-hidden border border-line bg-[var(--pop)]"
+                    className={`day-pop absolute right-0 top-12 z-40 w-44 origin-top-right overflow-hidden border border-line bg-[var(--pop)] ${
+                      mainShown.closing ? "closing" : ""
+                    }`}
                   >
                     {MENU_ITEMS.map(([page, label]) => (
                       <button
@@ -490,7 +574,7 @@ export function DayView({
                           setMainMenu(false);
                           onOpenPage(page);
                         }}
-                        className="min-h-11 w-full px-4 text-left text-[13px] text-ink hover:text-accent"
+                        className="day-press min-h-11 w-full px-4 text-left text-[13px] text-ink hover:text-accent"
                       >
                         {label}
                       </button>
@@ -507,122 +591,131 @@ export function DayView({
 
       <div className="sheet mt-2 flex-1">
         <div className="mx-auto w-full max-w-[560px] px-3 pb-[calc(104px+var(--safe-bottom))] pt-3 md:px-6 lg:max-w-[1200px] lg:px-8">
-          <div className="relative mb-1.5 flex items-center justify-between gap-2 px-1">
-            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-              <div className="text-[12px] text-muted">
-                {dayTasks.length === 0
-                  ? "Nothing planned"
-                  : open === 0
-                    ? "All done. Nice work."
-                    : `${open} left of ${dayTasks.length}`}
+          <div
+            key={selected}
+            className={
+              direction.current === "next"
+                ? "day-list-next"
+                : direction.current === "prev"
+                  ? "day-list-prev"
+                  : undefined
+            }
+          >
+            <div className="day-fade-in relative mb-1.5 flex items-center justify-between gap-2 px-1">
+              <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                <div className="text-[12px] text-muted">
+                  {dayTasks.length === 0
+                    ? "Nothing planned"
+                    : open === 0
+                      ? "All done. Nice work."
+                      : `${open} left of ${dayTasks.length}`}
+                </div>
+                {canMoveAllToToday && (
+                  <button
+                    onClick={moveAllToToday}
+                    className="day-press min-h-11 px-1 text-[13px] text-muted hover:text-ink"
+                  >
+                    Move all to today
+                  </button>
+                )}
               </div>
-              {canMoveAllToToday && (
-                <button
-                  onClick={moveAllToToday}
-                  className="min-h-11 px-1 text-[13px] text-muted hover:text-ink"
-                >
-                  Move all to today
-                </button>
-              )}
-            </div>
-            {hasCategories && (
-              <>
-                <button
-                  onClick={() => setListMenu((v) => !v)}
-                  aria-expanded={listMenu}
-                  aria-label="List menu"
-                  title="List menu"
-                  className="min-h-11 px-2 text-[12px] text-faint hover:text-ink"
-                >
-                  Options
-                </button>
-                {listMenu && (
-                  <>
-                    <button
-                      aria-label="Close list menu"
-                      className="fixed inset-0 z-10 cursor-default"
-                      onClick={() => setListMenu(false)}
-                    />
-                    <div className="animate-pop absolute right-0 top-full z-20 mt-1 w-64 origin-top-right border border-line bg-[var(--pop)] py-1">
+              {hasCategories && (
+                <>
+                  <button
+                    onClick={() => setListMenu((v) => !v)}
+                    aria-expanded={listMenu}
+                    aria-label="List menu"
+                    title="List menu"
+                    className="day-press min-h-11 px-2 text-[12px] text-faint hover:text-ink"
+                  >
+                    Options
+                  </button>
+                  {optionsShown.mounted && (
+                    <>
                       <button
-                        onClick={() => setPrefs((p) => ({ ...p, showCompleted: !p.showCompleted }))}
-                        aria-pressed={prefs.showCompleted}
-                        className="flex min-h-11 w-full items-center justify-between px-3 text-left text-[13px] hover:text-ink"
+                        aria-label="Close list menu"
+                        className={`day-backdrop fixed inset-0 z-10 cursor-default ${optionsShown.closing ? "closing" : ""}`}
+                        onClick={() => setListMenu(false)}
+                      />
+                      <div
+                        className={`day-pop absolute right-0 top-full z-20 mt-1 w-64 origin-top-right border border-line bg-[var(--pop)] py-1 ${
+                          optionsShown.closing ? "closing" : ""
+                        }`}
                       >
-                        Show completed
-                        <span className="ml-3 text-[12px] text-faint">{prefs.showCompleted ? "On" : "Off"}</span>
-                      </button>
-                      {selected === today && (
+                        <button
+                          onClick={() => setPrefs((p) => ({ ...p, showCompleted: !p.showCompleted }))}
+                          aria-pressed={prefs.showCompleted}
+                          className="day-press flex min-h-11 w-full items-center justify-between px-3 text-left text-[13px] hover:text-ink"
+                        >
+                          Show completed
+                          <span className="ml-3 text-[12px] text-faint">{prefs.showCompleted ? "On" : "Off"}</span>
+                        </button>
+                        {selected === today && (
+                          <button
+                            onClick={() => {
+                              const n = actions.moveUnfinishedToTomorrow(selected);
+                              setListMenu(false);
+                              notify(
+                                n ? `Moved ${n} task${n === 1 ? "" : "s"} to tomorrow` : "No unfinished tasks to move",
+                                n ? "success" : "info",
+                              );
+                            }}
+                            className="day-press min-h-11 w-full px-3 text-left text-[13px] hover:text-ink"
+                          >
+                            Move unfinished to tomorrow
+                          </button>
+                        )}
                         <button
                           onClick={() => {
-                            const n = actions.moveUnfinishedToTomorrow(selected);
                             setListMenu(false);
-                            notify(
-                              n ? `Moved ${n} task${n === 1 ? "" : "s"} to tomorrow` : "No unfinished tasks to move",
-                              n ? "success" : "info",
-                            );
+                            onManageCategories();
                           }}
-                          className="min-h-11 w-full px-3 text-left text-[13px] hover:text-ink"
+                          className="day-press min-h-11 w-full border-t border-line px-3 text-left text-[13px] hover:text-ink"
                         >
-                          Move unfinished to tomorrow
+                          Reorder categories
                         </button>
-                      )}
-                      <button
-                        onClick={() => {
-                          setListMenu(false);
-                          onManageCategories();
-                        }}
-                        className="min-h-11 w-full border-t border-line px-3 text-left text-[13px] hover:text-ink"
-                      >
-                        Reorder categories
-                      </button>
-                    </div>
-                  </>
-                )}
-              </>
-            )}
-          </div>
-
-          {!hasCategories && (
-            <div className="animate-fade">
-              <h2 className="text-[16px] font-semibold">Start with a few categories</h2>
-              <p className="mt-1 max-w-[19rem] text-[13px] leading-relaxed text-muted">
-                Categories group your tasks each day. Pick some to begin, change them any time.
-              </p>
-              <div className="mt-3 flex flex-col items-start">
-                {SUGGESTIONS.map((name, i) => (
-                  <button
-                    key={name}
-                    onClick={() => actions.addCategory(name, CATEGORY_COLORS[[8, 4, 0, 6][i]])}
-                    className="flex min-h-11 items-center gap-1 text-[13px] text-muted hover:text-ink"
-                  >
-                    <span aria-hidden>+</span> {name}
-                  </button>
-                ))}
-              </div>
-              <button
-                onClick={onManageCategories}
-                className="mt-1 min-h-11 px-1 text-[13px] text-muted underline underline-offset-4 hover:text-ink"
-              >
-                Or create your own
-              </button>
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
             </div>
-          )}
 
-          <div className="space-y-3.5">
-            {visible.map(({ section, ghosts }) => (
-              <CategorySection
-                key={sectionKey(section)}
-                section={section}
-                ghosts={ghosts}
-                date={selected}
-                onAdd={(target) => setComposer({ target })}
-                onOpenTask={(id) => {
-                  window.location.hash = `#/task/${id}`;
-                }}
-                onEditHabit={(habit) => setEditor(habit)}
-              />
-            ))}
+            {!hasCategories && (
+              <div className="day-fade-in">
+                <h2 className="text-[16px] font-semibold">Start with a few categories</h2>
+                <p className="mt-1 max-w-[19rem] text-[13px] leading-relaxed text-muted">
+                  Categories group your tasks each day. Pick some to begin, change them any time.
+                </p>
+                <div className="mt-3 flex flex-col items-start">
+                  {SUGGESTIONS.map((name, i) => (
+                    <button
+                      key={name}
+                      onClick={() => actions.addCategory(name, CATEGORY_COLORS[[8, 4, 0, 6][i]])}
+                      className="day-press flex min-h-11 items-center gap-1 text-[13px] text-muted hover:text-ink"
+                    >
+                      <span aria-hidden>+</span> {name}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={onManageCategories}
+                  className="day-press mt-1 min-h-11 px-1 text-[13px] text-muted underline underline-offset-4 hover:text-ink"
+                >
+                  Or create your own
+                </button>
+              </div>
+            )}
+
+            <DaySectionList
+              visible={visible}
+              selected={selected}
+              onAdd={(target) => setComposer({ target })}
+              onOpenTask={(id) => {
+                window.location.hash = `#/task/${id}`;
+              }}
+              onEditHabit={(habit) => setEditor(habit)}
+            />
           </div>
 
           <DeadlinesCard date={selected} />
@@ -642,7 +735,12 @@ export function DayView({
       {showBar && (
         <div className="add-dock">
           <div className="add-dock-inner">
-            <button type="button" aria-label="Add a task" onClick={() => setComposer({})} className="add-task-button">
+            <button
+              type="button"
+              aria-label="Add a task"
+              onClick={() => setComposer({})}
+              className="add-task-button day-press"
+            >
               Add a task
             </button>
           </div>

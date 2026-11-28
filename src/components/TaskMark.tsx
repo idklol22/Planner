@@ -21,11 +21,11 @@ export function TaskMark({ done = false, size = 18, className, ghost = false }: 
       width={size}
       height={size}
       viewBox="0 0 24 24"
-      className={`task-mark ${done ? "on" : ""} ${ghost ? "ghost" : ""} ${className ?? ""}`}
+      className={`task-mark day-mark ${done ? "on" : ""} ${ghost ? "ghost" : ""} ${className ?? ""}`}
       aria-hidden="true"
       focusable="false"
     >
-      {!ghost && <circle className="task-mark-disk" {...RING} fill="var(--color-muted)" />}
+      {!ghost && <circle className="task-mark-disk day-disk" {...RING} fill="var(--color-muted)" />}
       <circle
         className="task-mark-ring"
         {...RING}
@@ -34,7 +34,15 @@ export function TaskMark({ done = false, size = 18, className, ghost = false }: 
         strokeWidth={1.5}
         strokeDasharray={ghost ? "3 3" : undefined}
       />
-      <path className="task-mark-tick" d={TICK} stroke="var(--color-canvas)" strokeWidth={2} />
+      {/* pathLength normalises the dash to one unit, so the tick always draws
+          itself from the same corner no matter how long the path is. */}
+      <path
+        className="task-mark-tick day-tick"
+        d={TICK}
+        stroke="var(--color-canvas)"
+        strokeWidth={2}
+        pathLength={1}
+      />
     </svg>
   );
 }
@@ -59,7 +67,7 @@ export function TaskCheck({
       role="checkbox"
       aria-checked={checked}
       aria-label={label ?? "Toggle done"}
-      className="mark-btn"
+      className="mark-btn day-press"
       onClick={(event) => {
         event.stopPropagation();
         if (!checked) navigator.vibrate?.(8);

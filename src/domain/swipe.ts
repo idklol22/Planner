@@ -5,6 +5,8 @@
 export const SWIPE_LOCK_PX = 10;
 export const SWIPE_COMMIT_PX = 96;
 export const SWIPE_MAX_PX = 120;
+/** How far past the drag limit a finger can pull before the row stops moving. */
+export const SWIPE_RUBBER_PX = 40;
 
 export type SwipeAxis = "x" | "y" | null;
 export type SwipeAction = "delete" | "archive" | null;
@@ -31,6 +33,20 @@ export interface SwipeState {
 }
 
 const clampDx = (dx: number) => Math.max(-SWIPE_MAX_PX, Math.min(SWIPE_MAX_PX, dx));
+
+/**
+ * Display-only resistance past the drag limit. The pointer still moves 1:1
+ * until `limit`; beyond it the offset creeps toward `limit + extra` but never
+ * reaches it, so the row feels tied to the finger without ever travelling off
+ * screen. `resolveSwipe` keeps using the hard-clamped value for commits.
+ */
+export function rubberBand(dx: number, limit = SWIPE_MAX_PX, extra = SWIPE_RUBBER_PX): number {
+  const travel = Math.abs(dx);
+  if (travel <= limit || extra <= 0) return dx;
+  const sign = dx < 0 ? -1 : 1;
+  const eased = extra * (1 - Math.exp(-(travel - limit) / Math.max(limit, 1)));
+  return sign * (limit + eased);
+}
 
 /**
  * Resolve one swipe sample. `axis` is sticky across calls so a gesture cannot
