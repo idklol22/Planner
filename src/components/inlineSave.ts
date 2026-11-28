@@ -94,8 +94,10 @@ export interface OutsideTapDecision {
  * the next real tap is never swallowed.
  */
 export function outsideTapDecision(fieldOpen: boolean, keepTap: boolean): OutsideTapDecision {
-  if (!fieldOpen) return { commit: false, blur: false, suppress: false };
-  return { commit: true, blur: true, suppress: !keepTap };
+  // Another "+" or "Add goal": leave the field alone until its click. Closing it now removes a row, the button
+  // moves, and the tap lands somewhere else. Opening the next field saves this one.
+  if (!fieldOpen || keepTap) return { commit: false, blur: false, suppress: false };
+  return { commit: true, blur: true, suppress: true };
 }
 
 /** The older, one-shot helper still used by the category and subtask fields. */

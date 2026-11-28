@@ -77,6 +77,9 @@ export function InlineAdd({
     [actions, date, kind, target],
   );
 
+  const saveRef = useRef(performSave);
+  saveRef.current = performSave;
+
   const dispatch = useCallback(
     (event: DraftEvent) => {
       const result = reduceDraft(draftRef.current, event);
@@ -115,10 +118,14 @@ export function InlineAdd({
   // still saves its draft, with the date it was opened for.
   useEffect(
     () => () => {
-      // An empty draft has nothing to save. Skipping it also keeps StrictMode's
-      // simulated unmount/remount from closing a field the user just opened.
-      if (!draftRef.current.value.trim()) return;
-      dispatchRef.current({ type: "commit", reason: "unmount" });
+      // Save only what is still unsaved, and never call onClose from here: when another field has just taken over
+      // (switching lists) that would close the new one. Nothing typed, or already saved, means nothing to do, which
+      // also keeps StrictMode's simulated unmount/remount harmless.
+      const draft = draftRef.current;
+      if (draft.settled || !draft.value.trim()) return;
+      const result = reduceDraft(draft, { type: "commit", reason: "unmount" });
+      draftRef.current = result.state;
+      if (result.save) saveRef.current(result.save);
     },
     [],
   );

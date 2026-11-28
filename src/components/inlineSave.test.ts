@@ -154,8 +154,8 @@ describe("outsideTapDecision", () => {
     expect(outsideTapDecision(true, false)).toEqual({ commit: true, blur: true, suppress: true });
   });
 
-  it("lets another '+' or 'Add goal' keep its click in the same tap", () => {
-    expect(outsideTapDecision(true, true)).toEqual({ commit: true, blur: true, suppress: false });
+  it("leaves the field in place for another '+' or 'Add goal' so the tap does not move", () => {
+    expect(outsideTapDecision(true, true)).toEqual({ commit: false, blur: false, suppress: false });
   });
 });
 

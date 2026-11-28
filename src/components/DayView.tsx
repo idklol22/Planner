@@ -64,6 +64,9 @@ import {
 } from "./InlineAdd";
 import { outsideTapDecision } from "./inlineSave";
 
+/** Pressing these must not blur the open add field before their click arrives. */
+const keepFieldFocus = (event: { preventDefault(): void }) => event.preventDefault();
+
 export type MenuPage = "categories" | "habits" | "archive" | "settings";
 
 const MENU_ITEMS: readonly (readonly [MenuPage, string])[] = [
@@ -324,6 +327,7 @@ function CategoryHeader({
         <button
           type="button"
           onClick={onAddTask}
+          onMouseDown={keepFieldFocus}
           aria-label={`Add task to ${name}`}
           data-inline-add-keep-tap
           className="day-press inline-add-trigger flex h-11 w-11 shrink-0 items-center justify-center text-[20px] leading-none text-muted hover:text-ink"
@@ -353,6 +357,7 @@ function CategoryHeader({
                 role="menuitem"
                 aria-label={`Add goal to ${name}`}
                 data-inline-add-keep-tap
+                onMouseDown={keepFieldFocus}
                 onClick={() => {
                   setMenu(false);
                   onAddGoal();
