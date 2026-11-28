@@ -6,6 +6,11 @@
  *  any save can replace it. An existing backup is only replaced by strictly
  *  better data (a salvageable original beats an unreadable one), so the
  *  earliest good copy survives.
+ *
+ *  A copy is only a copy once it has been read back. If any copy needed for a
+ *  load cannot be written (a full or blocked store), the pending copies are
+ *  remembered here and every save must first write and verify them. Until
+ *  then the data key must stay untouched, or the damaged original is lost.
  */
 
 import { inspectAppData, type AppData, type DroppedRecord } from "../domain/model";
@@ -29,7 +34,16 @@ export interface BackupEnvelope {
   at: string;
 }
 
+/** One verbatim value that must exist in storage before a save may proceed. */
+export interface SafetyCopy {
+  key: string;
+  value: string;
+}
+
 const RANK: Record<BackupQuality, number> = { unreadable: 0, partial: 1 };
+/** One gate per storage instance (localStorage in both web and native builds). */
+const pendingByStorage = new WeakMap<object, SafetyCopy[]>();
+const NO_PENDING: readonly SafetyCopy[] = [];
 
 export function readBackup(raw: string | null): BackupEnvelope | null {
   if (!raw) return null;
@@ -153,26 +167,89 @@ export function planRecovery(raw: string | null, existingBackup: string | null, 
   };
 }
 
-/** Apply a plan to storage. Backup first: no save may beat it. */
-export function recoverStored(raw: string | null, storage: RecoveryStorage): LoadResult {
-  const plan = planRecovery(raw, storage.getItem(BACKUP_KEY));
-  const write = (key: string, value: string) => {
-    try {
-      // Never replace an existing copy with the same or worse data.
-      if (storage.getItem(key) === null) storage.setItem(key, value);
-    } catch {
-      // Storage may be full or blocked; loading still continues with the salvage.
-    }
-  };
-  if (plan.backup) {
-    try {
-      if (backupRank(storage.getItem(BACKUP_KEY)) < RANK[plan.backup.quality]) {
-        storage.setItem(BACKUP_KEY, JSON.stringify(plan.backup));
-      }
-    } catch {
-      // ignored: the current session can still use the salvaged records
-    }
+// ── Safety-copy gate ────────────────────────────────────────────────────────
+
+/** Copies still missing for this storage. Empty means saves may proceed. */
+export function pendingSafetyCopies(storage: object): readonly SafetyCopy[] {
+  return pendingByStorage.get(storage) ?? NO_PENDING;
+}
+
+export function hasPendingSafetyCopies(storage: object): boolean {
+  return pendingSafetyCopies(storage).length > 0;
+}
+
+/** Drop the gate (tests, or an explicit new load that no longer needs it). */
+export function clearPendingSafetyCopies(storage: object): void {
+  pendingByStorage.delete(storage);
+}
+
+function copyIsThere(storage: RecoveryStorage, copy: SafetyCopy): boolean {
+  try {
+    return storage.getItem(copy.key) === copy.value;
+  } catch {
+    return false;
   }
-  for (const entry of plan.quarantine) write(entry.key, entry.value);
-  return { data: plan.data, issue: plan.issue };
+}
+
+/** Write a copy and verify it by reading it back; never trust setItem alone. */
+function writeCopy(storage: RecoveryStorage, copy: SafetyCopy): boolean {
+  if (copyIsThere(storage, copy)) return true;
+  try {
+    storage.setItem(copy.key, copy.value);
+  } catch {
+    return false;
+  }
+  return copyIsThere(storage, copy);
+}
+
+/** Later copies for the same key supersede earlier ones. */
+function mergeCopies(existing: readonly SafetyCopy[], added: readonly SafetyCopy[]): SafetyCopy[] {
+  const byKey = new Map<string, string>();
+  for (const copy of [...existing, ...added]) byKey.set(copy.key, copy.value);
+  return [...byKey].map(([key, value]) => ({ key, value }));
+}
+
+/** Try every missing copy again. Returns true only when all of them exist. */
+export function retrySafetyCopies(storage: RecoveryStorage): boolean {
+  const missing = pendingByStorage.get(storage);
+  if (!missing?.length) return true;
+  const stillMissing = missing.filter((copy) => !writeCopy(storage, copy));
+  if (stillMissing.length) pendingByStorage.set(storage, stillMissing);
+  else pendingByStorage.delete(storage);
+  return stillMissing.length === 0;
+}
+
+export const ensureSafetyCopies = retrySafetyCopies;
+
+/** Apply a plan to storage. Every needed copy must be verified before a save
+ *  is allowed to replace the data key. */
+export function recoverStored(raw: string | null, storage: RecoveryStorage): LoadResult {
+  let plan: RecoveryPlan;
+  let needed: SafetyCopy[] = [];
+  try {
+    // Reading the existing backup can fail too; then nothing may be saved over
+    // the original, because we cannot tell whether it was copied already.
+    const existingBackup = storage.getItem(BACKUP_KEY);
+    try {
+      plan = planRecovery(raw, existingBackup);
+    } catch {
+      plan = { data: null, quarantine: [], backup: null, issue: null };
+      needed = [{ key: BACKUP_KEY, value: existingBackup ?? "\u0000unverifiable-backup" }];
+    }
+    if (plan.backup) needed.push({ key: BACKUP_KEY, value: JSON.stringify(plan.backup) });
+    needed.push(...plan.quarantine);
+  } catch {
+    // get/set on the storage itself failed: hold every save.
+    needed = [{ key: BACKUP_KEY, value: "\u0000unverifiable-storage" }];
+    plan = { data: null, quarantine: [], backup: null, issue: null };
+  }
+
+  const all = mergeCopies(pendingSafetyCopies(storage), needed);
+  const failed = all.filter((copy) => !writeCopy(storage, copy));
+  if (failed.length) pendingByStorage.set(storage, failed);
+  else pendingByStorage.delete(storage);
+
+  const result: LoadResult = { data: plan.data, issue: plan.issue };
+  if (failed.length) result.blocked = true;
+  return result;
 }

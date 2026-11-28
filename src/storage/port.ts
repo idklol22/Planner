@@ -15,6 +15,30 @@ export interface LoadIssue {
 export interface LoadResult {
   data: AppData | null;
   issue: LoadIssue | null;
+  /** A safety copy needed for this load is missing: saves must be held. */
+  blocked?: true;
+  /** The stored value itself could not be read (e.g. a failed native read). */
+  readFailed?: true;
+}
+
+/** What is holding saves. `backup` means a copy could not be written;
+ *  `read` means the stored original could not be read at all. */
+export type SaveBlockReason = "backup" | "read";
+
+/** A save was refused so that an original without a usable safety copy is not
+ *  replaced. Adapters throw this before touching the data key. */
+export class SafetyCopyError extends Error {
+  readonly reason: SaveBlockReason;
+
+  constructor(reason: SaveBlockReason) {
+    super(reason === "read" ? "Stored data could not be read" : "Original data could not be backed up");
+    this.name = "SafetyCopyError";
+    this.reason = reason;
+  }
+}
+
+export function isSafetyCopyError(error: unknown): error is SafetyCopyError {
+  return error instanceof SafetyCopyError;
 }
 
 /** Persistence seam. The web adapter uses localStorage; the native adapter
@@ -23,6 +47,8 @@ export interface StorageAdapter {
   load(): Promise<AppData | null>;
   /** Same load, with the recovery report the store needs for its toast. */
   loadWithReport?(): Promise<LoadResult>;
+  /** Retry a failed read instead of starting from defaults. */
+  retryLoad?(): Promise<LoadResult>;
   save(data: AppData): Promise<void>;
   /** Write a finished note as Markdown to the handoff folder; return its path. */
   exportNote(fileName: string, contents: string, folder: string): Promise<string>;
