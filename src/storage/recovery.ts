@@ -86,6 +86,11 @@ export interface RecoveryPlan {
   issue: LoadIssue | null;
 }
 
+/** The untouched original of a store that could not be used at all. */
+function wholeStore(raw: string): { key: string; value: string } {
+  return { key: `${QUARANTINE_PREFIX}store.${rawDigest(raw)}`, value: raw };
+}
+
 /** Pure part of recovery: decide what to keep, back up and quarantine. */
 export function planRecovery(raw: string | null, existingBackup: string | null, at = new Date().toISOString()): RecoveryPlan {
   if (raw === null) {
@@ -101,14 +106,18 @@ export function planRecovery(raw: string | null, existingBackup: string | null, 
       repairedSettings: [],
       quarantinedKeys: [],
     };
+    const backup: BackupEnvelope | null =
+      existingBackup === null || backupRank(existingBackup) < RANK.unreadable
+        ? { version: 1, raw, quality: "unreadable", at }
+        : null;
+    // The one backup may already hold an older, better copy. This original is about to be saved over, so then it
+    // gets a copy of its own.
+    const copies = backup ? [] : [wholeStore(raw)];
     return {
       data: null,
-      backup:
-        existingBackup === null || backupRank(existingBackup) < RANK.unreadable
-          ? { version: 1, raw, quality: "unreadable", at }
-          : null,
-      quarantine: [],
-      issue,
+      backup,
+      quarantine: copies,
+      issue: { ...issue, quarantinedKeys: copies.map((entry) => entry.key) },
     };
   }
   const inspection = inspectAppData(parsed);
@@ -139,8 +148,8 @@ export function planRecovery(raw: string | null, existingBackup: string | null, 
   return {
     data: inspection.data,
     backup: candidate,
-    quarantine: usable ? quarantine : [],
-    issue,
+    quarantine: usable ? quarantine : candidate ? [] : [wholeStore(raw)],
+    issue: issue && !usable ? { ...issue, quarantinedKeys: candidate ? [] : [wholeStore(raw).key] } : issue,
   };
 }
 
