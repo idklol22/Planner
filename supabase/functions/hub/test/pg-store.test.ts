@@ -39,6 +39,86 @@ function storeFor(client: unknown): PgStore {
   return new PgStore(client as never);
 }
 
+function fakeHealthClient(existing: Record<string, unknown>) {
+  const upserts: Array<Record<string, unknown>> = [];
+  const healthBuilder = {
+    select: vi.fn(() => healthBuilder),
+    eq: vi.fn(() => healthBuilder),
+    maybeSingle: vi.fn(async () => ({ data: existing, error: null })),
+    upsert: vi.fn((row: Record<string, unknown>) => {
+      upserts.push(row);
+      return healthBuilder;
+    }),
+  };
+  const logBuilder = {
+    select: vi.fn(() => logBuilder),
+    insert: vi.fn(() => logBuilder),
+    order: vi.fn(() => logBuilder),
+    limit: vi.fn(async () => ({ data: [], error: null })),
+  };
+  const client = {
+    from: vi.fn((table: string) => (table === "health" ? healthBuilder : logBuilder)),
+  };
+  return { client, upserts };
+}
+
+const HEALTH_DAY = "2026-11-27";
+const HEALTH_ID = `health_${HEALTH_DAY}`;
+
+describe("PgStore.upsertRows health merge", () => {
+  const stored = {
+    id: HEALTH_ID,
+    date: HEALTH_DAY,
+    active_kcal: 410,
+    steps: 8000,
+    exercise_min: 45,
+    distance_km: 5.2,
+    sleep_hours: 7.5,
+    resting_hr: 58,
+    workouts_json: [{ type: "run", minutes: 45, kcal: 410 }],
+    source: "healthkit",
+    updated_at: "2026-11-27T10:00:00.000Z",
+    deleted_at: null,
+  };
+
+  it("writes stored fields that a partial push omitted", async () => {
+    const { client, upserts } = fakeHealthClient(stored);
+    await storeFor(client).upsertRows([{
+      table: "health",
+      row: {
+        id: HEALTH_ID,
+        date: HEALTH_DAY,
+        steps: 0,
+        updatedAt: "2026-11-27T11:00:00.000Z",
+      } as never,
+    }]);
+
+    expect(upserts).toHaveLength(1);
+    expect(upserts[0]).toMatchObject({
+      id: HEALTH_ID,
+      steps: 0,
+      active_kcal: 410,
+      exercise_min: 45,
+      workouts_json: stored.workouts_json,
+      updated_at: "2026-11-27T11:00:00.000Z",
+    });
+  });
+
+  it("skips a stale partial push without writing", async () => {
+    const { client, upserts } = fakeHealthClient(stored);
+    await storeFor(client).upsertRows([{
+      table: "health",
+      row: {
+        id: HEALTH_ID,
+        date: HEALTH_DAY,
+        steps: 1,
+        updatedAt: "2026-11-27T09:00:00.000Z",
+      } as never,
+    }]);
+    expect(upserts).toHaveLength(0);
+  });
+});
+
 describe("PgStore.completeCommand", () => {
   it("strips stored note photos on successful completion", async () => {
     const { client, patch } = fakeClient("harness.note");

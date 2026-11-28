@@ -15,7 +15,7 @@ import type { ISODate } from "../domain/dates";
 import {
   HEALTH_CONNECTED_KEY,
   HEALTH_KEY,
-  healthToRow,
+  healthToPatch,
   isISODate,
   mergeHealthDay,
   parseHealthData,
@@ -103,7 +103,8 @@ export function HealthProvider({ children }: { children: ReactNode }) {
       );
       if (!changed && daysRef.current[date]) return daysRef.current[date];
       const next = { ...daysRef.current, [date]: merged };
-      commit(next, connectedRef.current, [{ table: "health", row: healthToRow(merged) }]);
+      // Push only fields this device actually knows; the hub merges the rest.
+      commit(next, connectedRef.current, [{ table: "health", row: healthToPatch(merged) as HubOp["row"] }]);
       return merged;
     },
     [commit],
@@ -131,7 +132,7 @@ export function HealthProvider({ children }: { children: ReactNode }) {
 
           if (changed || !next[incoming.date]) {
             next[incoming.date] = merged;
-            ops.push({ table: "health", row: healthToRow(merged) });
+            ops.push({ table: "health", row: healthToPatch(merged) as HubOp["row"] });
           }
         }
         commit(next, markConnected || connectedRef.current, ops);

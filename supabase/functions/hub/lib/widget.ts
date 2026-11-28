@@ -76,11 +76,27 @@ export function newWidgetToken(): string {
 
 // ── Health rows ──────────────────────────────────────────────────────────────
 
+/** A validated push may omit fields. Absent means "keep what is stored";
+ *  an explicit `null` means "clear". The stores merge this onto the stored day. */
+export type HealthPushRow = Partial<HealthRow> &
+  Pick<HealthRow, "id" | "date" | "updatedAt">;
+
 export type HealthValidation =
-  | { ok: true; row: HealthRow }
+  | { ok: true; row: HealthPushRow }
   | { ok: false; error: string };
 
-/** Validate (and fill defaults for) a health sync row. */
+const HEALTH_METRICS = [
+  ["activeKcal", 50000, false],
+  ["steps", 1000000, true],
+  ["exerciseMin", 1440, false],
+  ["distanceKm", 1000, false],
+  ["sleepHours", 24, false],
+  ["restingHr", 400, false],
+] as const;
+
+/** Validate a health sync row. Unlike the old validator, a field that was not
+ *  supplied is left out of the result instead of being filled with null/[]:
+ *  callers must be able to tell "unknown" from "explicitly cleared". */
 export function validateHealthRow(value: unknown): HealthValidation {
   if (!isRecord(value)) return { ok: false, error: "row must be an object" };
   if (!isWidgetDate(value.date)) return { ok: false, error: "date must be YYYY-MM-DD" };
@@ -92,9 +108,10 @@ export function validateHealthRow(value: unknown): HealthValidation {
     return { ok: false, error: "updatedAt must be a non-empty string" };
   }
 
-  const number = (name: string, max: number, integer = false): number | null => {
+  const number = (name: string, max: number, integer = false): number | null | undefined => {
     const raw = value[name];
-    if (raw === undefined || raw === null) return null;
+    if (raw === undefined) return undefined;
+    if (raw === null) return null;
     if (
       typeof raw !== "number" ||
       !Number.isFinite(raw) ||
@@ -109,87 +126,122 @@ export function validateHealthRow(value: unknown): HealthValidation {
     return raw;
   };
 
-  let activeKcal: number | null;
-  let steps: number | null;
-  let exerciseMin: number | null;
-  let distanceKm: number | null;
-  let sleepHours: number | null;
-  let restingHr: number | null;
+  const row: Record<string, unknown> = { id: value.id, date, updatedAt: value.updatedAt };
   try {
-    activeKcal = number("activeKcal", 50000);
-    steps = number("steps", 1000000, true);
-    exerciseMin = number("exerciseMin", 1440);
-    distanceKm = number("distanceKm", 1000);
-    sleepHours = number("sleepHours", 24);
-    restingHr = number("restingHr", 400);
+    for (const [name, max, integer] of HEALTH_METRICS) {
+      const parsed = number(name, max, integer);
+      if (parsed !== undefined) row[name] = parsed;
+    }
   } catch (caught) {
     return { ok: false, error: (caught as Error).message };
   }
 
-  const rawWorkouts = value.workouts === undefined || value.workouts === null
-    ? []
-    : value.workouts;
-  if (!Array.isArray(rawWorkouts)) {
-    return { ok: false, error: "workouts must be an array" };
-  }
-  if (rawWorkouts.length > 50) {
-    return { ok: false, error: "workouts must have at most 50 entries" };
-  }
-  const workouts: HealthWorkout[] = [];
-  for (const item of rawWorkouts) {
-    if (!isRecord(item)) return { ok: false, error: "each workout must be an object" };
-    if (typeof item.type !== "string" || item.type === "") {
-      return { ok: false, error: "workout type must be a non-empty string" };
+  if (value.workouts !== undefined) {
+    const rawWorkouts = value.workouts === null ? [] : value.workouts;
+    if (!Array.isArray(rawWorkouts)) {
+      return { ok: false, error: "workouts must be an array" };
     }
-    if (
-      typeof item.minutes !== "number" ||
-      !Number.isFinite(item.minutes) ||
-      item.minutes < 0
-    ) {
-      return { ok: false, error: "workout minutes must be a finite non-negative number" };
+    if (rawWorkouts.length > 50) {
+      return { ok: false, error: "workouts must have at most 50 entries" };
     }
-    let kcal: number | null = null;
-    if (item.kcal !== undefined && item.kcal !== null) {
-      if (
-        typeof item.kcal !== "number" ||
-        !Number.isFinite(item.kcal) ||
-        item.kcal < 0
-      ) {
-        return { ok: false, error: "workout kcal must be a finite non-negative number or null" };
+    const workouts: HealthWorkout[] = [];
+    for (const item of rawWorkouts) {
+      if (!isRecord(item)) return { ok: false, error: "each workout must be an object" };
+      if (typeof item.type !== "string" || item.type === "") {
+        return { ok: false, error: "workout type must be a non-empty string" };
       }
-      kcal = item.kcal;
+      if (
+        typeof item.minutes !== "number" ||
+        !Number.isFinite(item.minutes) ||
+        item.minutes < 0
+      ) {
+        return { ok: false, error: "workout minutes must be a finite non-negative number" };
+      }
+      let kcal: number | null = null;
+      if (item.kcal !== undefined && item.kcal !== null) {
+        if (
+          typeof item.kcal !== "number" ||
+          !Number.isFinite(item.kcal) ||
+          item.kcal < 0
+        ) {
+          return { ok: false, error: "workout kcal must be a finite non-negative number or null" };
+        }
+        kcal = item.kcal;
+      }
+      workouts.push({ type: item.type, minutes: item.minutes, kcal });
     }
-    workouts.push({ type: item.type, minutes: item.minutes, kcal });
+    row.workouts = workouts;
   }
 
-  const source = value.source === undefined || value.source === null ? null : value.source;
-  if (source !== null && source !== "healthkit" && source !== "shortcut") {
-    return { ok: false, error: "source must be 'healthkit' or 'shortcut'" };
-  }
-  const deletedAt = value.deletedAt === undefined || value.deletedAt === null
-    ? null
-    : value.deletedAt;
-  if (deletedAt !== null && typeof deletedAt !== "string") {
-    return { ok: false, error: "deletedAt must be a string or null" };
+  if (value.source !== undefined) {
+    const source = value.source;
+    if (source !== null && source !== "healthkit" && source !== "shortcut") {
+      return { ok: false, error: "source must be 'healthkit' or 'shortcut'" };
+    }
+    row.source = source;
   }
 
-  return {
-    ok: true,
-    row: {
-      id: value.id as string,
-      date,
-      activeKcal,
-      steps,
-      exerciseMin,
-      distanceKm,
-      sleepHours,
-      restingHr,
-      workouts,
-      source: source as "healthkit" | "shortcut" | null,
-      updatedAt: value.updatedAt,
-      deletedAt: deletedAt as string | null,
-    },
+  if (value.deletedAt !== undefined) {
+    const deletedAt = value.deletedAt;
+    if (deletedAt !== null && typeof deletedAt !== "string") {
+      return { ok: false, error: "deletedAt must be a string or null" };
+    }
+    row.deletedAt = deletedAt;
+  }
+
+  return { ok: true, row: row as HealthPushRow };
+}
+
+function toWorkoutList(value: unknown): HealthWorkout[] {
+  if (Array.isArray(value)) return value as HealthWorkout[];
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed as HealthWorkout[];
+    } catch {
+      // A corrupt legacy JSON cell is treated as an empty list.
+    }
+  }
+  return [];
+}
+
+/** Merge a partial push onto the stored day. Fields missing from `incoming`
+ *  keep their stored value; explicit values (0, null, [], ...) are applied.
+ *  The stores call this only after their last-write-wins check has passed. */
+export function mergeHealthPush(
+  stored: HealthRow | null | undefined,
+  incoming: HealthPushRow,
+): HealthRow {
+  const has = (key: string): boolean => Object.prototype.hasOwnProperty.call(incoming, key);
+  const fields = incoming as Record<string, unknown>;
+  const base: HealthRow = stored ?? {
+    id: incoming.id,
+    date: incoming.date,
+    activeKcal: null,
+    steps: null,
+    exerciseMin: null,
+    distanceKm: null,
+    sleepHours: null,
+    restingHr: null,
+    workouts: [],
+    source: null,
+    updatedAt: incoming.updatedAt,
+    deletedAt: null,
   };
+  const next: HealthRow = {
+    ...base,
+    id: incoming.id,
+    date: incoming.date,
+    updatedAt: incoming.updatedAt,
+    workouts: toWorkoutList(base.workouts),
+  };
+  for (const [name] of HEALTH_METRICS) {
+    if (has(name)) (next as unknown as Record<string, unknown>)[name] = fields[name] ?? null;
+  }
+  if (has("workouts")) next.workouts = toWorkoutList(fields.workouts);
+  if (has("source")) next.source = (fields.source ?? null) as HealthRow["source"];
+  if (has("deletedAt")) next.deletedAt = (fields.deletedAt ?? null) as string | null;
+  return next;
 }
 
 // ── Widget profile ───────────────────────────────────────────────────────────

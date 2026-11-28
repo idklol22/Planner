@@ -12,6 +12,7 @@ import type {
   EventRow,
   EventsResult,
   FileMeta,
+  HealthRow,
   FileObject,
   FileStore,
   HubOp,
@@ -27,6 +28,7 @@ import type {
 } from "./db.ts";
 import { redactCommandPayload, shouldRedactCommand } from "./command-payload.ts";
 import { compareUpdatedAt, normalize, sha256Hex } from "./logic.ts";
+import { mergeHealthPush, type HealthPushRow } from "./widget.ts";
 
 interface StoredDevice extends Device {
   tokenHash: string;
@@ -88,10 +90,18 @@ export class MemoryStore implements HubStore {
       }
       const existing = table.get(id);
       if (existing && compareUpdatedAt(updatedAt, existing.updatedAt) < 0) continue;
-      table.set(id, row);
+      // A health push may be partial: keep stored metrics/workouts that the
+      // request did not mention. LWW was already checked above.
+      const stored = op.table === "health"
+        ? mergeHealthPush(
+            existing ? (existing as unknown as HealthRow) : null,
+            row as unknown as HealthPushRow,
+          )
+        : row;
+      table.set(id, stored);
       this.seq += 1;
       this.changeLog.push({ seq: this.seq, table: op.table, rowId: id, updatedAt });
-      applied.push({ table: op.table, row: row as unknown as SyncChange["row"] });
+      applied.push({ table: op.table, row: stored as unknown as SyncChange["row"] });
     }
     return { applied: applied.length, cursor: this.seq, rows: applied };
   }

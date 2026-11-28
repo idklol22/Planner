@@ -8,6 +8,7 @@ import {
   parseHealthUrl,
   sanitizeHealthData,
   serializeHealthData,
+  toHealthPatch,
   toHealthRow,
   type HealthRecord,
 } from "./health";
@@ -113,6 +114,42 @@ describe("mergeHealthDay", () => {
       updatedAt: NOW,
       deletedAt: null,
     });
+  });
+});
+
+describe("toHealthPatch", () => {
+  it("omits unknown values so the hub keeps its stored fields", () => {
+    const record: HealthRecord = {
+      date: DAY,
+      source: "shortcut",
+      updatedAt: NOW,
+      steps: 8000,
+      activeKcal: null,
+      sleepHours: 0,
+      workouts: [],
+    };
+    expect(toHealthPatch(record)).toEqual({
+      id: `health_${DAY}`,
+      date: DAY,
+      updatedAt: NOW,
+      source: "shortcut",
+      deletedAt: null,
+      steps: 8000,
+      sleepHours: 0,
+    });
+  });
+
+  it("sends workouts only when the device knows some", () => {
+    const record: HealthRecord = {
+      date: DAY,
+      source: "healthkit",
+      updatedAt: NOW,
+      workouts: [{ type: "Run", minutes: 30, kcal: 250 }],
+    };
+    expect(toHealthPatch(record)).toMatchObject({
+      workouts: [{ type: "Run", minutes: 30, kcal: 250 }],
+    });
+    expect(toHealthPatch({ ...record, workouts: [] })).not.toHaveProperty("workouts");
   });
 });
 
